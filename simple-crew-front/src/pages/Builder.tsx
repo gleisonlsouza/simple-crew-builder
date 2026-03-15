@@ -57,10 +57,16 @@ function FlowBuilder() {
   const theme = useStore((state) => state.theme);
   const resetProject = useStore((state) => state.resetProject);
 
+  const lastLoadedId = useRef<string | null>(null);
+
   useEffect(() => {
     if (id && id !== 'new') {
-      loadProject(id);
+      if (lastLoadedId.current !== id) {
+        lastLoadedId.current = id;
+        loadProject(id);
+      }
     } else {
+      lastLoadedId.current = null;
       resetProject();
     }
   }, [id, loadProject, resetProject]);
@@ -71,10 +77,10 @@ function FlowBuilder() {
 
   const handleRunCrew = () => {
     if (!validateGraph()) {
-      showNotification("Existem erros no seu fluxo. Corrija os nós marcados em vermelho antes de prosseguir.", "error");
+      showNotification("There are errors in your flow. Fix the nodes marked in red before proceeding.", "error");
       return;
     }
-    showNotification("Simulação iniciada com sucesso. Acompanhe a execução.", "info");
+    showNotification("Agent execution started successfully. Follow the execution.", "info");
     startRealExecution();
   };
 
@@ -173,7 +179,7 @@ function FlowBuilder() {
     <div className="w-screen h-screen bg-brand-bg flex flex-col font-sans overflow-hidden transition-colors duration-300">
       <header className="h-16 bg-brand-card border-b border-brand-border flex items-center justify-between px-6 z-10 shadow-sm transition-colors duration-300">
         <div className="flex items-center gap-4">
-          <button 
+          <button
             onClick={() => navigate('/')}
             className="p-2 hover:bg-brand-bg rounded-full transition-colors text-brand-muted hover:text-brand-text"
           >
@@ -186,7 +192,7 @@ function FlowBuilder() {
             <div className="flex flex-col">
               <div className="flex items-center gap-2">
                 {isEditingTitle ? (
-                  <input 
+                  <input
                     autoFocus
                     value={editedTitle}
                     onChange={(e) => setEditedTitle(e.target.value)}
@@ -195,7 +201,7 @@ function FlowBuilder() {
                     className="bg-brand-bg border border-brand-border rounded px-2 py-0.5 text-lg font-bold text-brand-text outline-none focus:border-indigo-500"
                   />
                 ) : (
-                  <h1 
+                  <h1
                     onClick={() => id !== 'new' && setIsEditingTitle(true)}
                     className={`text-xl font-bold text-brand-text tracking-tight ${id !== 'new' ? 'cursor-pointer hover:text-indigo-500 border-b border-transparent hover:border-indigo-500/30' : ''}`}
                   >
@@ -224,8 +230,8 @@ function FlowBuilder() {
             onClick={handleRunCrew}
             disabled={isExecuting}
             className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all shadow-sm ${isExecuting
-                ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
-                : 'bg-emerald-500 hover:bg-emerald-600 text-white hover:shadow'
+              ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+              : 'bg-emerald-500 hover:bg-emerald-600 text-white hover:shadow'
               }`}
           >
             <Play className="w-4 h-4 fill-current" />
@@ -234,14 +240,12 @@ function FlowBuilder() {
 
           <button
             onClick={() => {
-              const crewNode = nodes.find(n => n.type === 'crew');
-              const name = (crewNode?.data as any)?.name || "Nova Crew";
-              saveProject(name);
+              saveProject(editedTitle, currentProject?.description);
             }}
             disabled={isSaving}
             className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all shadow-sm ${isSaving
-                ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
-                : 'bg-indigo-500 hover:bg-indigo-600 text-white hover:shadow'
+              ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+              : 'bg-indigo-500 hover:bg-indigo-600 text-white hover:shadow'
               }`}
           >
             {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
@@ -275,10 +279,10 @@ function FlowBuilder() {
               animated: true
             }}
           >
-            <Background 
-              gap={16} 
-              size={1} 
-              color="var(--canvas-dots)" 
+            <Background
+              gap={16}
+              size={1}
+              color="var(--canvas-dots)"
               style={{ backgroundColor: 'var(--bg-main)' }}
               variant={BackgroundVariant.Dots}
             />

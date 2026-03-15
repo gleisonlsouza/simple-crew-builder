@@ -29,7 +29,11 @@ const Dashboard = () => {
   const [openMenuId, setOpenMenuId] = React.useState<string | null>(null);
   const [isSettingsMenuOpen, setIsSettingsMenuOpen] = React.useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = React.useState(false);
+  const [isCreateModalOpen, setIsCreateModalOpen] = React.useState(false);
   const [editingProject, setEditingProject] = React.useState<{id: string, name: string, description: string} | null>(null);
+  const [newProject, setNewProject] = React.useState({ name: '', description: '' });
+
+  const createNewProject = useStore((state) => state.createNewProject);
 
   useEffect(() => {
     fetchProjects();
@@ -44,7 +48,20 @@ const Dashboard = () => {
   }, []);
 
   const handleNewWorkflow = () => {
-    navigate('/workflow/new');
+    setNewProject({ name: '', description: '' });
+    setIsCreateModalOpen(true);
+  };
+
+  const handleConfirmCreate = async () => {
+    if (!newProject.name.trim()) {
+      alert("Por favor, informe um nome para o workflow.");
+      return;
+    }
+    const created = await createNewProject(newProject.name, newProject.description);
+    if (created) {
+      setIsCreateModalOpen(false);
+      navigate(`/workflow/${created.id}`);
+    }
   };
 
   const handleEditWorkflow = (id: string) => {
@@ -300,6 +317,58 @@ const Dashboard = () => {
                 className="px-6 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-sm font-bold shadow-lg shadow-indigo-500/20 transition-all active:scale-95"
               >
                 Save Changes
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* Create Modal */}
+      {isCreateModalOpen && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-slate-950/40 backdrop-blur-sm transition-opacity" onClick={() => setIsCreateModalOpen(false)} />
+          <div className="bg-brand-card w-full max-w-md rounded-2xl border border-brand-border shadow-2xl relative z-10 animate-in fade-in zoom-in duration-200">
+            <div className="px-6 py-4 border-b border-brand-border flex items-center justify-between">
+              <h2 className="text-lg font-bold text-brand-text">Create New Workflow</h2>
+              <button onClick={() => setIsCreateModalOpen(false)} className="p-2 hover:bg-brand-bg rounded-lg text-brand-muted transition-colors">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            
+            <div className="p-6 space-y-4">
+              <div>
+                <label className="block text-sm font-semibold text-brand-text mb-1.5">Name</label>
+                <input 
+                  type="text"
+                  autoFocus
+                  value={newProject.name}
+                  onChange={(e) => setNewProject({...newProject, name: e.target.value})}
+                  className="w-full px-4 py-2.5 bg-brand-bg border border-brand-border rounded-xl focus:border-indigo-500 outline-none text-brand-text transition-all"
+                  placeholder="Marketing Strategy, Research Lab..."
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-semibold text-brand-text mb-1.5">Description (Optional)</label>
+                <textarea 
+                  value={newProject.description}
+                  onChange={(e) => setNewProject({...newProject, description: e.target.value})}
+                  className="w-full px-4 py-2.5 bg-brand-bg border border-brand-border rounded-xl focus:border-indigo-500 outline-none text-brand-text transition-all min-h-[100px] resize-none"
+                  placeholder="Briefly describe what this workflow will do..."
+                />
+              </div>
+            </div>
+
+            <div className="px-6 py-4 border-t border-brand-border flex justify-end gap-3">
+              <button 
+                onClick={() => setIsCreateModalOpen(false)}
+                className="px-4 py-2 text-sm font-semibold text-brand-muted hover:text-brand-text transition-colors"
+              >
+                Cancel
+              </button>
+              <button 
+                onClick={handleConfirmCreate}
+                className="px-6 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-sm font-bold shadow-lg shadow-indigo-500/20 transition-all active:scale-95"
+              >
+                Create Workflow
               </button>
             </div>
           </div>

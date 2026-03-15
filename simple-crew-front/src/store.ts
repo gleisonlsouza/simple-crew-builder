@@ -181,6 +181,7 @@ export const useStore = create<AppState>((set, get) => ({
         edges: data.edges,
         isExecuting: false,
         activeNodeId: null,
+        currentProjectId: null,
         nodeStatuses: {},
         nodeErrors: {}
       });
@@ -483,6 +484,7 @@ export const useStore = create<AppState>((set, get) => ({
     set({ activeNodeId: id });
   },
   loadProject: async (projectId: string) => {
+    if (projectId === get().currentProjectId) return;
     try {
       const response = await fetch(`http://localhost:8000/api/v1/projects/${projectId}`);
       if (!response.ok) throw new Error('Falha ao carregar projeto');
@@ -581,7 +583,6 @@ export const useStore = create<AppState>((set, get) => ({
   addNode: (node: AppNode) => {
     set({
       nodes: [...get().nodes, node],
-      currentProjectId: null // Resetar ID ao começar um novo rascunho
     });
   },
   toggleCollapse: (nodeId: string) => {
@@ -696,6 +697,47 @@ export const useStore = create<AppState>((set, get) => ({
     } catch (error: any) {
       console.error("Duplicate project error:", error);
       toast.error("Error duplicating project");
+    }
+  },
+  createNewProject: async (name: string, description: string) => {
+    const initialCrewNode: AppNode = {
+      id: `dndnode_${crypto.randomUUID()}`,
+      type: 'crew',
+      position: { x: 50, y: 50 },
+      data: { name, process: 'sequential', isCollapsed: false },
+    };
+
+    const payload = {
+      name,
+      description,
+      canvas_data: {
+        nodes: [initialCrewNode],
+        edges: [],
+        version: "1.0"
+      }
+    };
+
+    try {
+      const response = await fetch('http://localhost:8000/api/v1/projects', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+
+      if (!response.ok) throw new Error('Failed to create project');
+      const saved = await response.json();
+
+      set((state) => ({
+        savedProjects: [...state.savedProjects, saved],
+        currentProjectId: saved.id,
+        nodes: saved.canvas_data.nodes,
+        edges: saved.canvas_data.edges,
+      }));
+
+      return saved;
+    } catch (error: any) {
+      toast.error(error.message);
+      return null;
     }
   },
   updateProjectMetadata: async (id: string, name: string, description: string) => {

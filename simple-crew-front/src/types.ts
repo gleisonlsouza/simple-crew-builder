@@ -119,6 +119,7 @@ export interface AppState {
   resetProject: () => void;
   duplicateProject: (id: string) => Promise<void>;
   updateProjectMetadata: (id: string, name: string, description: string) => Promise<void>;
+  createNewProject: (name: string, description: string) => Promise<{id: string} | null>;
   credentials: Credential[];
   fetchCredentials: () => Promise<void>;
   addCredential: (credential: Omit<Credential, 'id' | 'created_at'>) => void;
