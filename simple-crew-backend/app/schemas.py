@@ -90,3 +90,37 @@ class CredentialUpdate(BaseModel):
     description: Optional[str] = None
     key: Optional[str] = None
     provider: Optional[str] = None
+
+# Schemas para CRUD de Modelos de AI (LLM Models)
+class LLMModelBase(BaseModel):
+    name: str
+    model_name: str
+    description: Optional[str] = None
+    base_url: Optional[str] = "default"
+    temperature: Optional[float] = 0.7
+    max_tokens: Optional[int] = 4096
+    max_completion_tokens: Optional[int] = 2048
+    is_default: Optional[bool] = False
+    credential_id: Any # UUID
+
+class LLMModelCreate(LLMModelBase):
+    pass
+
+class LLMModelRead(LLMModelBase):
+    id: Any # UUID
+    created_at: Any
+    updated_at: Any
+
+    class Config:
+        from_attributes = True
+
+class LLMModelUpdate(BaseModel):
+    name: Optional[str] = None
+    model_name: Optional[str] = None
+    description: Optional[str] = None
+    base_url: Optional[str] = None
+    temperature: Optional[float] = None
+    max_tokens: Optional[int] = None
+    max_completion_tokens: Optional[int] = None
+    is_default: Optional[bool] = None
+    credential_id: Optional[Any] = None

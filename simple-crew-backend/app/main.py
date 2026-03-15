@@ -6,8 +6,12 @@ from fastapi.responses import StreamingResponse
 from sqlmodel import Session, select
 from .crew_builder import run_crew_stream
 from .database import init_db, get_session
-from .models import CrewProject, User, Credential
-from .schemas import GraphData, ProjectCreate, ProjectRead, ProjectUpdate, CredentialCreate, CredentialRead, CredentialUpdate
+from .models import CrewProject, User, Credential, LLMModel
+from .schemas import (
+    GraphData, ProjectCreate, ProjectRead, ProjectUpdate, 
+    CredentialCreate, CredentialRead, CredentialUpdate,
+    LLMModelCreate, LLMModelRead, LLMModelUpdate
+)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -165,3 +169,84 @@ async def delete_credential(credential_id: str, session: Session = Depends(get_s
     session.delete(credential)
     session.commit()
     return {"message": "Credencial removida com sucesso"}
+
+# --- CRUD de Modelos de AI (LLM Models) ---
+
+@app.get("/api/v1/models", response_model=List[LLMModelRead])
+async def list_models(session: Session = Depends(get_session)):
+    statement = select(LLMModel).where(LLMModel.user_id == ROOT_USER_ID).order_by(LLMModel.created_at.desc())
+    models = session.exec(statement).all()
+    return models
+
+@app.post("/api/v1/models", response_model=LLMModelRead)
+async def create_model(model: LLMModelCreate, session: Session = Depends(get_session)):
+    # Se for default, remove default de outros do mesmo usuário
+    if model.is_default:
+        statement = select(LLMModel).where(LLMModel.user_id == ROOT_USER_ID, LLMModel.is_default == True)
+        existing_defaults = session.exec(statement).all()
+        for d in existing_defaults:
+            d.is_default = False
+            session.add(d)
+
+    new_model = LLMModel(
+        **model.model_dump(),
+        user_id=ROOT_USER_ID
+    )
+    session.add(new_model)
+    session.commit()
+    session.refresh(new_model)
+    return new_model
+
+@app.patch("/api/v1/models/{model_id}", response_model=LLMModelRead)
+@app.put("/api/v1/models/{model_id}", response_model=LLMModelRead)
+async def update_model(model_id: str, model_update: LLMModelUpdate, session: Session = Depends(get_session)):
+    db_model = session.get(LLMModel, model_id)
+    if not db_model:
+        raise HTTPException(status_code=404, detail="Modelo não encontrado")
+    
+    update_data = model_update.model_dump(exclude_unset=True)
+    
+    # Lógica de Default Único
+    if update_data.get("is_default"):
+        statement = select(LLMModel).where(LLMModel.user_id == ROOT_USER_ID, LLMModel.is_default == True)
+        existing_defaults = session.exec(statement).all()
+        for d in existing_defaults:
+            if str(d.id) != model_id:
+                d.is_default = False
+                session.add(d)
+
+    for key, value in update_data.items():
+        setattr(db_model, key, value)
+    
+    session.add(db_model)
+    session.commit()
+    session.refresh(db_model)
+    return db_model
+
+@app.delete("/api/v1/models/{model_id}")
+async def delete_model(model_id: str, session: Session = Depends(get_session)):
+    model = session.get(LLMModel, model_id)
+    if not model:
+        raise HTTPException(status_code=404, detail="Modelo não encontrado")
+    session.delete(model)
+    session.commit()
+    return {"message": "Modelo removido com sucesso"}
+
+@app.post("/api/v1/models/{model_id}/set-default", response_model=LLMModelRead)
+async def set_default_model(model_id: str, session: Session = Depends(get_session)):
+    db_model = session.get(LLMModel, model_id)
+    if not db_model:
+        raise HTTPException(status_code=404, detail="Modelo não encontrado")
+    
+    # Remove outros defaults
+    statement = select(LLMModel).where(LLMModel.user_id == ROOT_USER_ID, LLMModel.is_default == True)
+    existing_defaults = session.exec(statement).all()
+    for d in existing_defaults:
+        d.is_default = False
+        session.add(d)
+    
+    db_model.is_default = True
+    session.add(db_model)
+    session.commit()
+    session.refresh(db_model)
+    return db_model

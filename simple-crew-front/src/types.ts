@@ -59,6 +59,19 @@ export interface AppNotification {
   visible: boolean;
 }
 
+export interface ModelConfig {
+  id: string;
+  name: string;
+  model_name: string;
+  description?: string;
+  credentialId: string;
+  baseUrl?: string;
+  temperature?: number;
+  maxTokens?: number;
+  maxCompletionTokens?: number;
+  isDefault: boolean;
+}
+
 export interface AppState {
   nodes: AppNode[];
   edges: AppEdge[];
@@ -107,8 +120,17 @@ export interface AppState {
   updateProjectMetadata: (id: string, name: string, description: string) => Promise<void>;
   credentials: Credential[];
   fetchCredentials: () => Promise<void>;
-  defaultModel: string;
   addCredential: (credential: Omit<Credential, 'id' | 'created_at'>) => void;
   deleteCredential: (id: string) => void;
+  
+  models: ModelConfig[];
+  fetchModels: () => Promise<void>;
+  addModel: (model: Omit<ModelConfig, 'id'>) => void;
+  duplicateModel: (id: string) => void;
+  updateModel: (id: string, model: Partial<ModelConfig>) => void;
+  deleteModel: (id: string) => void;
+  setDefaultModelConfig: (id: string) => void;
+  
+  defaultModel: string;
   setDefaultModel: (model: string) => void;
 }

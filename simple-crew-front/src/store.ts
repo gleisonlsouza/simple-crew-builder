@@ -8,7 +8,7 @@ import {
   applyNodeChanges,
   applyEdgeChanges,
 } from '@xyflow/react';
-import type { AppState, AppNode, AppEdge, NodeStatus } from './types';
+import type { AppState, AppNode, AppEdge, NodeStatus, ModelConfig } from './types';
 
 // Initial example nodes to show on the canvas
 const initialNodes: AppNode[] = [
@@ -122,6 +122,7 @@ export const useStore = create<AppState>((set, get) => ({
   theme: (localStorage.getItem('theme') as 'light' | 'dark') || 'light',
   isSettingsOpen: false,
   credentials: [],
+  models: JSON.parse(localStorage.getItem('models') || '[]'),
   defaultModel: localStorage.getItem('default_model') || 'gpt-4o',
   setIsSettingsOpen: (open) => set({ isSettingsOpen: open }),
   toggleTheme: () => {
@@ -733,6 +734,137 @@ export const useStore = create<AppState>((set, get) => ({
     } catch (error: any) {
       console.error("Delete credential error:", error);
       toast.error("Error deleting credential");
+    }
+  },
+  fetchModels: async () => {
+    try {
+      const response = await fetch('http://localhost:8000/api/v1/models');
+      if (!response.ok) throw new Error('Failed to fetch models');
+      const data = await response.json();
+      
+      const mappedModels = data.map((m: any) => ({
+        id: m.id,
+        name: m.name,
+        model_name: m.model_name,
+        description: m.description,
+        credentialId: m.credential_id,
+        baseUrl: m.base_url,
+        temperature: m.temperature,
+        maxTokens: m.max_tokens,
+        maxCompletionTokens: m.max_completion_tokens,
+        isDefault: m.is_default
+      }));
+      
+      set({ models: mappedModels });
+    } catch (error: any) {
+      console.error("Fetch models error:", error);
+    }
+  },
+  duplicateModel: (id) => {
+    const original = get().models.find(m => m.id === id);
+    if (!original) return;
+
+    const copy: Omit<ModelConfig, 'id'> = {
+      ...original,
+      name: `${original.name} (Copy)`,
+      isDefault: false // Nunca duplica como default por segurança
+    };
+
+    get().addModel(copy);
+  },
+  addModel: async (modelConfig) => {
+    const modelData = {
+      name: modelConfig.name,
+      model_name: modelConfig.model_name,
+      description: modelConfig.description,
+      credential_id: modelConfig.credentialId,
+      base_url: modelConfig.baseUrl,
+      temperature: modelConfig.temperature,
+      max_tokens: modelConfig.maxTokens,
+      max_completion_tokens: modelConfig.maxCompletionTokens,
+      is_default: modelConfig.isDefault
+    };
+
+    try {
+      const response = await fetch('http://localhost:8000/api/v1/models', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(modelData),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        console.error("Add model error response:", errorData);
+        throw new Error('Failed to add model');
+      }
+
+      get().showNotification("Model added successfully", "success");
+      await get().fetchModels();
+    } catch (error: any) {
+      console.error("Add model error:", error);
+      get().showNotification("Error adding model. Check console for details.", "error");
+    }
+  },
+  updateModel: async (id, modelUpdate) => {
+    const mappedUpdate: any = {};
+    if (modelUpdate.name !== undefined) mappedUpdate.name = modelUpdate.name;
+    if (modelUpdate.model_name !== undefined) mappedUpdate.model_name = modelUpdate.model_name;
+    if (modelUpdate.description !== undefined) mappedUpdate.description = modelUpdate.description;
+    if (modelUpdate.credentialId !== undefined) mappedUpdate.credential_id = modelUpdate.credentialId;
+    if (modelUpdate.baseUrl !== undefined) mappedUpdate.base_url = modelUpdate.baseUrl;
+    if (modelUpdate.temperature !== undefined) mappedUpdate.temperature = modelUpdate.temperature;
+    if (modelUpdate.maxTokens !== undefined) mappedUpdate.max_tokens = modelUpdate.maxTokens;
+    if (modelUpdate.maxCompletionTokens !== undefined) mappedUpdate.max_completion_tokens = modelUpdate.maxCompletionTokens;
+    if (modelUpdate.isDefault !== undefined) mappedUpdate.is_default = modelUpdate.isDefault;
+
+    try {
+      const response = await fetch(`http://localhost:8000/api/v1/models/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(mappedUpdate),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        console.error("Update model error response:", errorData);
+        throw new Error('Failed to update model');
+      }
+
+      get().showNotification("Model updated successfully", "success");
+      await get().fetchModels();
+    } catch (error: any) {
+      console.error("Update model error:", error);
+      get().showNotification("Error updating model", "error");
+    }
+  },
+  deleteModel: async (id) => {
+    try {
+      const response = await fetch(`http://localhost:8000/api/v1/models/${id}`, {
+        method: 'DELETE',
+      });
+
+      if (!response.ok) throw new Error('Failed to delete model');
+
+      toast.success("Model removed");
+      await get().fetchModels();
+    } catch (error: any) {
+      console.error("Delete model error:", error);
+      toast.error("Error deleting model");
+    }
+  },
+  setDefaultModelConfig: async (id) => {
+    try {
+      const response = await fetch(`http://localhost:8000/api/v1/models/${id}/set-default`, {
+        method: 'POST',
+      });
+
+      if (!response.ok) throw new Error('Failed to set default model');
+
+      toast.success("Default model updated");
+      await get().fetchModels();
+    } catch (error: any) {
+      console.error("Set default model error:", error);
+      toast.error("Error updating default model");
     }
   },
   setDefaultModel: (model: string) => {
