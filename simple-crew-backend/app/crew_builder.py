@@ -4,7 +4,11 @@ import queue
 import json
 from typing import Dict, List, Iterator
 from crewai import Agent, Task, Crew, Process
+from crewai.llm import LLM
 from .schemas import GraphData
+from .models import LLMModel, Credential
+from .database import engine
+from sqlmodel import Session, select
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -54,18 +58,58 @@ def run_crew_stream(graph_data: GraphData) -> Iterator[str]:
         goal = node.data.goal
         backstory = node.data.backstory
         name = node.data.name or f"Agent_{node.id}"
+        model_id = getattr(node.data, 'modelId', None)
         
         if not all([role, goal, backstory]):
             yield json.dumps({"type": "error", "error": f"O Agente '{name}' está incompleto. Preencha Role, Goal e Backstory."}) + "\n"
             return
+
+        # 2.1 Busca o Modelo de LLM
+        agent_llm = None
+        with Session(engine) as session:
+            llm_config = None
+            if model_id:
+                llm_config = session.get(LLMModel, model_id)
             
+            if not llm_config:
+                # Fallback para o default do usuário (GLEISON_ID por enquanto)
+                llm_config = session.exec(
+                    select(LLMModel).where(LLMModel.is_default == True)
+                ).first()
+            
+            if llm_config:
+                credential = session.get(Credential, llm_config.credential_id)
+                if credential:
+                    llm_params = {
+                        "model": llm_config.model_name,
+                        "api_key": credential.key,
+                    }
+                    
+                    if llm_config.temperature is not None:
+                        llm_params["temperature"] = llm_config.temperature
+                    
+                    if llm_config.max_tokens is not None:
+                        llm_params["max_tokens"] = llm_config.max_tokens
+                        
+                    if llm_config.max_completion_tokens is not None:
+                        llm_params["max_completion_tokens"] = llm_config.max_completion_tokens
+                    
+                    if llm_config.base_url and llm_config.base_url != "default":
+                        llm_params["base_url"] = llm_config.base_url
+                    
+                    if credential.provider:
+                        llm_params["provider"] = credential.provider
+                        
+                    agent_llm = LLM(**llm_params)
+
         agent = Agent(
             role=role,
             goal=goal,
             backstory=backstory,
             verbose=True,
-            allow_delegation=False, # Pode ser parametrizado no BD futuramente
-            step_callback=make_agent_step_callback(node.id) 
+            allow_delegation=False, 
+            step_callback=make_agent_step_callback(node.id),
+            llm=agent_llm
         )
         agents_map[node.id] = agent
         

@@ -96,10 +96,10 @@ class LLMModelBase(BaseModel):
     name: str
     model_name: str
     description: Optional[str] = None
-    base_url: Optional[str] = "default"
-    temperature: Optional[float] = 0.7
-    max_tokens: Optional[int] = 4096
-    max_completion_tokens: Optional[int] = 2048
+    base_url: Optional[str] = None
+    temperature: Optional[float] = None
+    max_tokens: Optional[int] = None
+    max_completion_tokens: Optional[int] = None
     is_default: Optional[bool] = False
     credential_id: Any # UUID
 

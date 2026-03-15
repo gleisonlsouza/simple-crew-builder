@@ -100,15 +100,15 @@ const SettingsPage = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isModelModalOpen, setIsModelModalOpen] = useState(false);
   const [newCred, setNewCred] = useState({ name: '', description: '', key: '', provider: '' });
-  const [newModel, setNewModel] = useState({ 
+  const [newModel, setNewModel] = useState<Omit<ModelConfig, 'id'>>({ 
     name: '', 
     model_name: '',
     description: '', 
     credentialId: '', 
-    baseUrl: 'default', 
-    temperature: 0.7, 
-    maxTokens: 4096, 
-    maxCompletionTokens: 2048, 
+    baseUrl: '', 
+    temperature: undefined, 
+    maxTokens: undefined, 
+    maxCompletionTokens: undefined, 
     isDefault: false 
   });
   const [editingModelId, setEditingModelId] = useState<string | null>(null);
@@ -136,20 +136,29 @@ const SettingsPage = () => {
 
   const handleAddModel = () => {
     if (newModel.name && newModel.credentialId) {
+      // Limpa valores vazios para serem nulos no backend
+      const modelToSave = {
+        ...newModel,
+        baseUrl: newModel.baseUrl === '' ? undefined : newModel.baseUrl,
+        temperature: newModel.temperature === undefined || isNaN(newModel.temperature) ? undefined : newModel.temperature,
+        maxTokens: newModel.maxTokens === undefined || isNaN(newModel.maxTokens) ? undefined : newModel.maxTokens,
+        maxCompletionTokens: newModel.maxCompletionTokens === undefined || isNaN(newModel.maxCompletionTokens) ? undefined : newModel.maxCompletionTokens,
+      };
+
       if (editingModelId) {
-        updateModel(editingModelId, newModel);
+        updateModel(editingModelId, modelToSave);
       } else {
-        addModel(newModel);
+        addModel(modelToSave);
       }
       setNewModel({ 
         name: '', 
         model_name: '',
         description: '', 
         credentialId: '', 
-        baseUrl: 'default', 
-        temperature: 0.7, 
-        maxTokens: 4096, 
-        maxCompletionTokens: 2048, 
+        baseUrl: '', 
+        temperature: undefined, 
+        maxTokens: undefined, 
+        maxCompletionTokens: undefined, 
         isDefault: false 
       });
       setEditingModelId(null);
@@ -163,10 +172,10 @@ const SettingsPage = () => {
       model_name: model.model_name,
       description: model.description || '',
       credentialId: model.credentialId,
-      baseUrl: model.baseUrl || 'default',
-      temperature: model.temperature ?? 0.7,
-      maxTokens: model.maxTokens ?? 4096,
-      maxCompletionTokens: model.maxCompletionTokens ?? 2048,
+      baseUrl: model.baseUrl === 'default' ? '' : (model.baseUrl || ''),
+      temperature: model.temperature,
+      maxTokens: model.maxTokens,
+      maxCompletionTokens: model.maxCompletionTokens,
       isDefault: model.isDefault
     });
     setEditingModelId(model.id);
@@ -549,33 +558,49 @@ const SettingsPage = () => {
               <div>
                 <label className="block text-xs font-bold text-brand-muted uppercase tracking-wider mb-2">Base URL</label>
                 <input 
-                  placeholder="default"
+                  placeholder="Leave empty for default"
                   className="w-full bg-brand-bg border border-brand-border rounded-xl px-4 py-3 text-brand-text outline-none focus:ring-2 focus:ring-indigo-600 transition-all text-sm font-mono"
-                  value={newModel.baseUrl}
+                  value={newModel.baseUrl || ''}
                   onChange={(e) => setNewModel({...newModel, baseUrl: e.target.value})}
                 />
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-brand-muted uppercase tracking-wider mb-2">Temperature ({newModel.temperature})</label>
-                <input 
-                  type="range"
-                  min="0"
-                  max="2"
-                  step="0.1"
-                  className="w-full h-2 bg-brand-bg border border-brand-border rounded-lg appearance-none cursor-pointer accent-indigo-600 mt-4"
-                  value={newModel.temperature}
-                  onChange={(e) => setNewModel({...newModel, temperature: parseFloat(e.target.value)})}
-                />
+                <div className="flex justify-between items-center mb-2">
+                  <label className="block text-xs font-bold text-brand-muted uppercase tracking-wider">Temperature</label>
+                  <span className="text-[10px] font-bold text-indigo-500 bg-indigo-50 dark:bg-indigo-500/10 px-2 py-0.5 rounded-md">
+                    {newModel.temperature !== undefined ? newModel.temperature : 'Provider Default'}
+                  </span>
+                </div>
+                <div className="flex items-center gap-3">
+                  <input 
+                    type="range"
+                    min="0"
+                    max="2"
+                    step="0.1"
+                    className="flex-1 h-2 bg-brand-bg border border-brand-border rounded-lg appearance-none cursor-pointer accent-indigo-600 mt-2"
+                    value={newModel.temperature ?? 0.7}
+                    onChange={(e) => setNewModel({...newModel, temperature: parseFloat(e.target.value)})}
+                  />
+                  {newModel.temperature !== undefined && (
+                    <button 
+                      onClick={() => setNewModel({...newModel, temperature: undefined})}
+                      className="mt-2 text-[10px] uppercase font-bold text-slate-400 hover:text-red-500 transition-colors"
+                    >
+                      Reset
+                    </button>
+                  )}
+                </div>
               </div>
 
               <div>
                 <label className="block text-xs font-bold text-brand-muted uppercase tracking-wider mb-2">Max Tokens</label>
                 <input 
                   type="number"
+                  placeholder="Provider Default"
                   className="w-full bg-brand-bg border border-brand-border rounded-xl px-4 py-3 text-brand-text outline-none focus:ring-2 focus:ring-indigo-600 transition-all text-sm"
-                  value={newModel.maxTokens}
-                  onChange={(e) => setNewModel({...newModel, maxTokens: parseInt(e.target.value)})}
+                  value={newModel.maxTokens ?? ''}
+                  onChange={(e) => setNewModel({...newModel, maxTokens: e.target.value === '' ? undefined : parseInt(e.target.value)})}
                 />
               </div>
 
@@ -583,9 +608,10 @@ const SettingsPage = () => {
                 <label className="block text-xs font-bold text-brand-muted uppercase tracking-wider mb-2">Max Completion Tokens</label>
                 <input 
                   type="number"
+                  placeholder="Provider Default"
                   className="w-full bg-brand-bg border border-brand-border rounded-xl px-4 py-3 text-brand-text outline-none focus:ring-2 focus:ring-indigo-600 transition-all text-sm"
-                  value={newModel.maxCompletionTokens}
-                  onChange={(e) => setNewModel({...newModel, maxCompletionTokens: parseInt(e.target.value)})}
+                  value={newModel.maxCompletionTokens ?? ''}
+                  onChange={(e) => setNewModel({...newModel, maxCompletionTokens: e.target.value === '' ? undefined : parseInt(e.target.value)})}
                 />
               </div>
 
