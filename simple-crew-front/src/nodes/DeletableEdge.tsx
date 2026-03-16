@@ -63,6 +63,7 @@ export function DeletableEdge({
   return (
     <>
       <BaseEdge path={edgePath} markerEnd={markerEnd} style={edgeStyle} />
+      {/* Invisible wider path to make hovering easier and more stable */}
       <path
         d={edgePath}
         fill="none"
@@ -71,28 +72,34 @@ export function DeletableEdge({
         onMouseEnter={() => setHovered(true)}
         onMouseLeave={() => setHovered(false)}
         className="transition-all cursor-pointer"
+        style={{ pointerEvents: 'stroke' }}
       />
       <EdgeLabelRenderer>
-        {hovered && (
-          <div
-            style={{
-              position: 'absolute',
-              transform: `translate(-50%, -50%) translate(${labelX}px,${labelY}px)`,
-              pointerEvents: 'all',
-            }}
-          >
+        <div
+          style={{
+            position: 'absolute',
+            transform: `translate(-50%, -50%) translate(${labelX}px,${labelY}px)`,
+            pointerEvents: 'all',
+            opacity: hovered ? 1 : 0,
+            transition: 'opacity 0.2s ease',
+          }}
+          onMouseEnter={() => setHovered(true)}
+          onMouseLeave={() => setHovered(false)}
+        >
+          {hovered && (
             <button
               onClick={(event) => {
                 event.stopPropagation();
                 deleteEdge(id);
               }}
-              className="bg-white border border-gray-200 shadow-sm rounded p-0.5 text-gray-400 hover:text-red-500 hover:bg-red-50 hover:border-red-300 transition-all cursor-pointer flex items-center justify-center pointer-events-auto"
+              className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-xl rounded-md p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/30 hover:border-red-300 transition-all cursor-pointer flex items-center justify-center pointer-events-auto translate-y-0 active:scale-90"
               title="Delete connection"
+              aria-label="Excluir conexão"
             >
-              <Trash2 className="w-3 h-3" />
+              <Trash2 className="w-3.5 h-3.5" />
             </button>
-          </div>
-        )}
+          )}
+        </div>
       </EdgeLabelRenderer>
     </>
   );

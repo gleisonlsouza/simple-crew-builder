@@ -54,7 +54,7 @@ const Dashboard = () => {
 
   const handleConfirmCreate = async () => {
     if (!newProject.name.trim()) {
-      alert("Por favor, informe um nome para o workflow.");
+      alert("Please enter a name for the workflow.");
       return;
     }
     const created = await createNewProject(newProject.name, newProject.description);
@@ -88,7 +88,7 @@ const Dashboard = () => {
 
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
-    return new Intl.DateTimeFormat('pt-BR', {
+    return new Intl.DateTimeFormat('en-US', {
       day: '2-digit',
       month: 'short',
       year: 'numeric'

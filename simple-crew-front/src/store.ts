@@ -42,9 +42,25 @@ const initialNodes: AppNode[] = [
   }
 ];
 
-const initialEdges = [
-  { id: 'e1-2', source: 'agent-1', target: 'task-1', type: 'deletable' }
-];
+const migrateEdges = (edges: any[]): AppEdge[] => {
+  return edges.map(edge => ({
+    ...edge,
+    // Add type if missing
+    type: edge.type || 'deletable',
+    // Migrate source handle: 'right' -> 'right-source'
+    sourceHandle: edge.sourceHandle 
+      ? (edge.sourceHandle.includes('-source') ? edge.sourceHandle : `${edge.sourceHandle}-source`)
+      : 'right-source',
+    // Migrate target handle: 'left' -> 'left-target'
+    targetHandle: edge.targetHandle
+      ? (edge.targetHandle.includes('-target') ? edge.targetHandle : `${edge.targetHandle}-target`)
+      : 'left-target'
+  }));
+};
+
+const initialEdges: AppEdge[] = migrateEdges([
+  { id: 'e1-2', source: 'agent-1', target: 'task-1' }
+]);
 
 // Retorna TODOS os descendentes recursivamente (para colapsar)
 function getDescendantsToHide(nodeId: string, edges: AppEdge[]): string[] {
@@ -559,7 +575,7 @@ export const useStore = create<AppState>((set, get) => ({
 
       set({
         nodes: project.canvas_data.nodes,
-        edges: project.canvas_data.edges,
+        edges: migrateEdges(project.canvas_data.edges || []),
         currentProjectId: project.id,
         nodeStatuses: {},
         nodeErrors: {}
@@ -651,6 +667,41 @@ export const useStore = create<AppState>((set, get) => ({
     set({
       nodes: [...get().nodes, node],
     });
+  },
+  addNodeWithAutoPosition: (type: 'agent' | 'task' | 'crew', data: any) => {
+    const state = get();
+    const existingNodes = state.nodes;
+    
+    // Grid configuration
+    const startX = 600;
+    const startY = 100;
+    const spacingX = 350; // Increased spacing for cards (w-56 = 224px)
+    const spacingY = 220; // Increased height spacing
+    const nodesPerRow = 3;
+
+    // We count all nodes to determine the grid position to avoid overlaps
+    const gridIndex = existingNodes.length;
+    
+    const row = Math.floor(gridIndex / nodesPerRow);
+    const col = gridIndex % nodesPerRow;
+
+    const position = {
+      x: startX + (col * spacingX),
+      y: startY + (row * spacingY),
+    };
+
+    const newNode: AppNode = {
+      id: `dndnode_${crypto.randomUUID()}`,
+      type,
+      position,
+      data,
+    } as AppNode;
+
+    set({
+      nodes: [...existingNodes, newNode],
+    });
+    
+    state.validateGraph();
   },
   toggleCollapse: (nodeId: string) => {
     set((state) => {
@@ -767,18 +818,11 @@ export const useStore = create<AppState>((set, get) => ({
     }
   },
   createNewProject: async (name: string, description: string) => {
-    const initialCrewNode: AppNode = {
-      id: `dndnode_${crypto.randomUUID()}`,
-      type: 'crew',
-      position: { x: 50, y: 50 },
-      data: { name, process: 'sequential', isCollapsed: false },
-    };
-
     const payload = {
       name,
       description,
       canvas_data: {
-        nodes: [initialCrewNode],
+        nodes: [],
         edges: [],
         version: "1.0"
       }

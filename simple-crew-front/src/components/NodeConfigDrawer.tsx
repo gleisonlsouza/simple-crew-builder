@@ -230,6 +230,9 @@ export function NodeConfigDrawer() {
           {type} Configuration
         </h2>
         <button
+          id="btn-close-drawer"
+          data-testid="btn-close-drawer"
+          aria-label="Close configuration"
           onClick={() => setActiveNode(null)}
           className="p-2 hover:bg-brand-bg rounded-lg transition-colors group"
         >
@@ -430,6 +433,9 @@ export function NodeConfigDrawer() {
       
       <div className="p-4 border-t border-brand-border bg-brand-bg/50 flex gap-3">
         <button
+          id="btn-delete-node"
+          data-testid="btn-delete-node"
+          aria-label="Delete node"
           onClick={() => deleteNode(activeNode.id)}
           className="flex items-center gap-2 text-rose-500 dark:text-rose-400 hover:bg-rose-500/10 px-4 py-2 rounded-lg text-sm font-medium transition-all cursor-pointer active:scale-95"
         >
@@ -437,6 +443,9 @@ export function NodeConfigDrawer() {
           Delete
         </button>
         <button
+          id="btn-done-config"
+          data-testid="btn-done-config"
+          aria-label="Complete configuration"
           onClick={() => setActiveNode(null)}
           className="flex-1 bg-slate-900 dark:bg-blue-600 border border-slate-700 dark:border-blue-500 hover:bg-slate-800 dark:hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-bold transition-all shadow-md active:scale-95"
         >

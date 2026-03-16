@@ -34,7 +34,7 @@ const getId = () => `dndnode_${crypto.randomUUID()}`;
 // 1. O Canvas Isolado (Re-renderiza 60x/seg no drag de forma ultra-leve)
 const FlowCanvas = () => {
   const { screenToFlowPosition } = useReactFlow();
-  const { nodes, edges, onNodesChange, onEdgesChange, onConnect, addNode, setActiveNode, validateGraph, theme } = useStore(
+  const { nodes, edges, onNodesChange, onEdgesChange, onConnect, addNode, validateGraph, theme } = useStore(
     useShallow((state) => ({
       nodes: state.nodes,
       edges: state.edges,
@@ -42,7 +42,6 @@ const FlowCanvas = () => {
       onEdgesChange: state.onEdgesChange,
       onConnect: state.onConnect,
       addNode: state.addNode,
-      setActiveNode: state.setActiveNode,
       validateGraph: state.validateGraph,
       theme: state.theme
     }))
@@ -61,23 +60,22 @@ const FlowCanvas = () => {
       const position = screenToFlowPosition({ x: event.clientX, y: event.clientY });
       let data = {};
       const timestamp = Date.now().toString().slice(-4);
-      if (type === 'agent') data = { name: `Novo Agente ${timestamp}`, role: '', goal: '', backstory: '', isCollapsed: false };
-      else if (type === 'task') data = { name: `Nova Tarefa ${timestamp}`, description: '', expected_output: '' };
+      if (type === 'agent') data = { name: `New Agent ${timestamp}`, role: '', goal: '', backstory: '', isCollapsed: false };
+      else if (type === 'task') data = { name: `New Task ${timestamp}`, description: '', expected_output: '' };
       else if (type === 'crew') data = { process: 'sequential', isCollapsed: false };
 
       addNode({ id: getId(), type, position, data } as any);
       validateGraph();
   }, [screenToFlowPosition, addNode, validateGraph]);
 
-  const onNodeDoubleClick = useCallback((_event: React.MouseEvent, node: any) => {
-      setActiveNode(node.id);
-  }, [setActiveNode]);
 
   return (
     <ReactFlow
       nodes={nodes} edges={edges} onNodesChange={onNodesChange} onEdgesChange={onEdgesChange} onConnect={onConnect}
-      onNodeDoubleClick={onNodeDoubleClick} nodeTypes={nodeTypes} edgeTypes={edgeTypes}
-      onDragOver={onDragOver} onDrop={onDrop} fitView minZoom={0.2} maxZoom={4}
+      nodeTypes={nodeTypes} edgeTypes={edgeTypes}
+      onDragOver={onDragOver} onDrop={onDrop} fitView 
+      fitViewOptions={{ padding: 0.3, maxZoom: 1.0 }}
+      minZoom={0.2} maxZoom={4}
       defaultEdgeOptions={{ type: 'deletable', style: { strokeWidth: 2, stroke: theme === 'dark' ? '#334155' : '#94a3b8' }, animated: true }}
     >
       <Background gap={16} size={1} color="var(--canvas-dots)" style={{ backgroundColor: 'var(--bg-main)' }} variant={BackgroundVariant.Dots} />

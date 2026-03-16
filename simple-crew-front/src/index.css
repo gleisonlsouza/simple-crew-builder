@@ -48,6 +48,12 @@ body,
 /* Node Styling & Contrast Enhancement */
 .react-flow__node {
   transition: box-shadow 0.3s ease;
+  backface-visibility: hidden;
+  transform-style: preserve-3d;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+  image-rendering: -webkit-optimize-contrast;
 }
 
 .react-flow__node > div {

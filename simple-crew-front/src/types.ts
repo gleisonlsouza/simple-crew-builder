@@ -118,6 +118,7 @@ export interface AppState {
   deleteNode: (nodeId: string) => void;
   updateNodeData: (nodeId: string, data: Partial<any>) => void;
   addNode: (node: AppNode) => void;
+  addNodeWithAutoPosition: (type: 'agent' | 'task' | 'crew', data: any) => void;
   fetchProjects: () => Promise<void>;
   saveProject: (name: string, description?: string) => Promise<void>;
   loadProject: (projectId: string) => Promise<void>;
