@@ -10,16 +10,18 @@ function App() {
 
   const fetchModels = useStore((state) => state.fetchModels);
   const fetchCredentials = useStore((state) => state.fetchCredentials);
+  const fetchMCPServers = useStore((state) => state.fetchMCPServers);
 
   useEffect(() => {
     fetchModels();
     fetchCredentials();
+    fetchMCPServers();
     if (theme === 'dark') {
       document.documentElement.classList.add('dark');
     } else {
       document.documentElement.classList.remove('dark');
     }
-  }, [theme, fetchModels, fetchCredentials]);
+  }, [theme, fetchModels, fetchCredentials, fetchMCPServers]);
 
   return (
     <BrowserRouter>

@@ -147,7 +147,29 @@ export const useStore = create<AppState>((set, get) => ({
     { id: 'file_read', name: 'File System Reader', description: 'Read local files from the workspace.', isEnabled: true, requiresKey: false },
   ])),
   customTools: JSON.parse(localStorage.getItem('custom_tools') || '[]'),
-  mcpServers: JSON.parse(localStorage.getItem('mcp_servers') || '[]'),
+  mcpServers: [], // Will be fetched from backend
+
+  fetchMCPServers: async () => {
+    try {
+      const response = await fetch('http://localhost:8000/api/v1/mcp-servers');
+      if (!response.ok) throw new Error('Failed to fetch MCP servers');
+      const servers = await response.json();
+      // Map backend snake_case to frontend camelCase
+      const mappedServers = servers.map((s: any) => ({
+        id: s.id,
+        name: s.name,
+        transportType: s.transport_type,
+        command: s.command,
+        args: s.args,
+        envVars: s.env_vars,
+        url: s.url,
+        headers: s.headers
+      }));
+      set({ mcpServers: mappedServers });
+    } catch (error) {
+      console.error(error);
+    }
+  },
 
   setIsSettingsOpen: (open) => set({ isSettingsOpen: open }),
   toggleTheme: () => {
@@ -191,29 +213,65 @@ export const useStore = create<AppState>((set, get) => ({
     });
   },
 
-  addMCPServer: (server) => {
-    set((state) => {
-      const newServer = { ...server, id: crypto.randomUUID() };
-      const newServers = [...state.mcpServers, newServer];
-      localStorage.setItem('mcp_servers', JSON.stringify(newServers));
-      return { mcpServers: newServers };
-    });
+  addMCPServer: async (server) => {
+    try {
+      const payload = {
+        name: server.name,
+        transport_type: server.transportType,
+        command: server.command,
+        args: server.args,
+        env_vars: server.envVars,
+        url: server.url,
+        headers: server.headers
+      };
+      const response = await fetch('http://localhost:8000/api/v1/mcp-servers', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      if (!response.ok) throw new Error('Failed to add MCP server');
+      await get().fetchMCPServers();
+      toast.success('MCP Server added!');
+    } catch (error: any) {
+      toast.error(error.message);
+    }
   },
 
-  updateMCPServer: (id, config) => {
-    set((state) => {
-      const newServers = state.mcpServers.map(s => s.id === id ? { ...s, ...config } : s);
-      localStorage.setItem('mcp_servers', JSON.stringify(newServers));
-      return { mcpServers: newServers };
-    });
+  updateMCPServer: async (id, config) => {
+    try {
+      const payload: any = {};
+      if (config.name !== undefined) payload.name = config.name;
+      if (config.transportType !== undefined) payload.transport_type = config.transportType;
+      if (config.command !== undefined) payload.command = config.command;
+      if (config.args !== undefined) payload.args = config.args;
+      if (config.envVars !== undefined) payload.env_vars = config.envVars;
+      if (config.url !== undefined) payload.url = config.url;
+      if (config.headers !== undefined) payload.headers = config.headers;
+
+      const response = await fetch(`http://localhost:8000/api/v1/mcp-servers/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      if (!response.ok) throw new Error('Failed to update MCP server');
+      await get().fetchMCPServers();
+      toast.success('MCP Server updated!');
+    } catch (error: any) {
+      toast.error(error.message);
+    }
   },
 
-  deleteMCPServer: (id) => {
-    set((state) => {
-      const newServers = state.mcpServers.filter(s => s.id !== id);
-      localStorage.setItem('mcp_servers', JSON.stringify(newServers));
-      return { mcpServers: newServers };
-    });
+  deleteMCPServer: async (id) => {
+    try {
+      const response = await fetch(`http://localhost:8000/api/v1/mcp-servers/${id}`, {
+        method: 'DELETE'
+      });
+      if (!response.ok) throw new Error('Failed to delete MCP server');
+      await get().fetchMCPServers();
+      toast.success('MCP Server removed.');
+    } catch (error: any) {
+      toast.error(error.message);
+    }
   },
   setExecutionResult: (result) => set({ executionResult: result }),
   showNotification: (message, type) => {

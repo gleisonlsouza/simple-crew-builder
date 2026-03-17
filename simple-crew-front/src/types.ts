@@ -9,12 +9,14 @@ export interface AgentNodeData extends Record<string, unknown> {
   backstory: string;
   isCollapsed?: boolean;
   modelId?: string;
+  mcpServerIds?: string[];
 }
 
 export interface TaskNodeData extends Record<string, unknown> {
   name: string;
   description: string;
   expected_output: string;
+  context?: string[];
 }
 
 export interface CrewNodeData extends Record<string, unknown> {
@@ -66,10 +68,10 @@ export interface ModelConfig {
   model_name: string;
   description?: string;
   credentialId: string;
-  baseUrl?: string;
-  temperature?: number;
-  maxTokens?: number;
-  maxCompletionTokens?: number;
+  baseUrl?: string | null;
+  temperature?: number | null;
+  maxTokens?: number | null;
+  maxCompletionTokens?: number | null;
   isDefault: boolean;
 }
 
@@ -175,6 +177,7 @@ export interface AppState {
   deleteCustomTool: (id: string) => void;
 
   mcpServers: MCPServer[];
+  fetchMCPServers: () => Promise<void>;
   addMCPServer: (server: Omit<MCPServer, 'id'>) => void;
   updateMCPServer: (id: string, server: Partial<MCPServer>) => void;
   deleteMCPServer: (id: string) => void;

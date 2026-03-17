@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 from typing import List, Dict, Optional, Any
 
 class NodeData(BaseModel):
@@ -10,6 +10,8 @@ class NodeData(BaseModel):
     description: Optional[str] = None
     expected_output: Optional[str] = None
     process: Optional[str] = None
+    context: Optional[List[str]] = None
+    mcpServerIds: Optional[List[str]] = None
     # Permitir chaves adicionais como isCollapsed de forma crua, caso necessite depois
     class Config:
         extra = "allow"
@@ -103,6 +105,13 @@ class LLMModelBase(BaseModel):
     is_default: Optional[bool] = False
     credential_id: Any # UUID
 
+    @field_validator('temperature', 'max_tokens', 'max_completion_tokens', mode='before')
+    @classmethod
+    def empty_string_to_none(cls, v):
+        if v == "" or v is None:
+            return None
+        return v
+
 class LLMModelCreate(LLMModelBase):
     pass
 
@@ -124,3 +133,40 @@ class LLMModelUpdate(BaseModel):
     max_completion_tokens: Optional[int] = None
     is_default: Optional[bool] = None
     credential_id: Optional[Any] = None
+
+    @field_validator('temperature', 'max_tokens', 'max_completion_tokens', mode='before')
+    @classmethod
+    def empty_string_to_none(cls, v):
+        if v == "" or v is None:
+            return None
+        return v
+
+# Schemas para Gerenciamento de MCP Servers
+class MCPServerBase(BaseModel):
+    name: str
+    transport_type: str # 'stdio' | 'sse'
+    command: Optional[str] = None
+    args: Optional[List[str]] = None
+    env_vars: Optional[Dict[str, str]] = None
+    url: Optional[str] = None
+    headers: Optional[Dict[str, str]] = None
+
+class MCPServerCreate(MCPServerBase):
+    pass
+
+class MCPServerRead(MCPServerBase):
+    id: Any # UUID
+    created_at: Any
+    updated_at: Any
+
+    class Config:
+        from_attributes = True
+
+class MCPServerUpdate(BaseModel):
+    name: Optional[str] = None
+    transport_type: Optional[str] = None
+    command: Optional[str] = None
+    args: Optional[List[str]] = None
+    env_vars: Optional[Dict[str, str]] = None
+    url: Optional[str] = None
+    headers: Optional[Dict[str, str]] = None

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, Trash2, GripVertical, Cpu } from 'lucide-react';
+import { X, Trash2, GripVertical, Cpu, Plus } from 'lucide-react';
 import { useStore } from '../store';
 import type { AppState, ProcessType, AppNode } from '../types';
 import {
@@ -68,9 +68,12 @@ export function NodeConfigDrawer() {
   const updateCrewAgentOrder = useStore((state: AppState) => state.updateCrewAgentOrder);
   const updateAgentTaskOrder = useStore((state: AppState) => state.updateAgentTaskOrder);
   const models = useStore((state: AppState) => state.models);
+  const mcpServers = useStore((state: AppState) => state.mcpServers);
 
   const [localName, setLocalName] = useState('');
   const [nameError, setNameError] = useState(false);
+  const [isContextSelectorOpen, setIsContextSelectorOpen] = useState(false);
+  const [isMcpSelectorOpen, setIsMcpSelectorOpen] = useState(false);
 
   useEffect(() => {
     if (activeNodeId) {
@@ -78,6 +81,8 @@ export function NodeConfigDrawer() {
       if (node) {
         setLocalName((node.data as any).name || '');
         setNameError(false);
+        setIsContextSelectorOpen(false);
+        setIsMcpSelectorOpen(false);
       }
     }
   }, [activeNodeId, nodes]);
@@ -316,6 +321,87 @@ export function NodeConfigDrawer() {
               </p>
             </div>
 
+            {/* -- MCP Tool Servers Selection -- */}
+            <div className="flex flex-col gap-2 pt-4 border-t border-brand-border/50">
+              <label className="text-xs font-bold text-brand-muted uppercase tracking-wider">MCP Tool Servers</label>
+              <p className="text-[11px] text-brand-muted opacity-80 mb-2">
+                Enable custom MCP tool servers for this agent.
+              </p>
+              
+              <div className="flex flex-wrap gap-2" data-testid="input-agent-mcp-servers">
+                {((data as any).mcpServerIds || []).map((serverId: string) => {
+                  const server = mcpServers.find(s => s.id === serverId);
+                  if (!server) return null;
+                  return (
+                    <div key={serverId} className="flex items-center gap-1.5 px-2 py-1 bg-indigo-500/10 border border-indigo-500/20 text-indigo-600 dark:text-indigo-400 rounded-lg text-xs font-medium group">
+                      <span className="truncate max-w-[120px]">{server.name}</span>
+                      <button 
+                        type="button"
+                        onClick={() => {
+                          const currentIds = (data as any).mcpServerIds || [];
+                          const newIds = currentIds.filter((id: string) => id !== serverId);
+                          updateNodeData(activeNode.id, { mcpServerIds: newIds });
+                        }}
+                        className="hover:bg-indigo-500/20 p-0.5 rounded transition-colors"
+                      >
+                        <X className="w-2.5 h-2.5" />
+                      </button>
+                    </div>
+                  );
+                })}
+                
+                <div className="relative">
+                  <button 
+                    type="button"
+                    data-testid="btn-add-mcp-server"
+                    onClick={() => setIsMcpSelectorOpen(!isMcpSelectorOpen)}
+                    className="flex items-center gap-1.5 px-2.5 py-1 border border-dashed border-brand-border hover:border-indigo-400 rounded-lg text-xs font-medium text-brand-muted hover:text-indigo-500 transition-all bg-brand-bg/50"
+                  >
+                    <Plus className="w-3 h-3" />
+                    Add MCP Server
+                  </button>
+
+                  {isMcpSelectorOpen && (
+                    <>
+                      <div 
+                        className="fixed inset-0 z-[55]" 
+                        onClick={() => setIsMcpSelectorOpen(false)}
+                      />
+                      <div className="absolute left-0 top-full mt-2 w-56 bg-brand-card border border-brand-border rounded-xl shadow-xl z-[60] py-2 animate-in fade-in zoom-in duration-200">
+                        <div className="px-3 py-1.5 border-b border-brand-border mb-1">
+                          <span className="text-[10px] font-bold text-brand-muted uppercase tracking-wider">Select MCP Server</span>
+                        </div>
+                        <div className="max-h-48 overflow-y-auto px-1">
+                          {mcpServers
+                            .filter(s => !((data as any).mcpServerIds || []).includes(s.id))
+                            .map(server => (
+                              <button
+                                key={server.id}
+                                onClick={() => {
+                                  const currentIds = (data as any).mcpServerIds || [];
+                                  const newIds = [...currentIds, server.id];
+                                  updateNodeData(activeNode.id, { mcpServerIds: newIds });
+                                  setIsMcpSelectorOpen(false);
+                                }}
+                                className="w-full flex items-center justify-between px-3 py-2 text-xs text-brand-text hover:bg-brand-bg rounded-lg transition-colors text-left group"
+                              >
+                                <span className="truncate">{server.name}</span>
+                                <Plus className="w-3 h-3 text-brand-muted group-hover:text-indigo-500" />
+                              </button>
+                            ))}
+                          {mcpServers.filter(s => !((data as any).mcpServerIds || []).includes(s.id)).length === 0 && (
+                            <div className="px-3 py-4 text-center">
+                              <p className="text-[10px] text-brand-muted italic">No more servers available.</p>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </>
+                  )}
+                </div>
+              </div>
+            </div>
+
             {/* -- Tasks Execution Order Ranking -- */}
             <div className="flex flex-col gap-2 pt-4 border-t border-brand-border/50">
               <h3 className="text-xs font-bold text-brand-muted uppercase tracking-wider mb-1">Execution (Tasks)</h3>
@@ -372,6 +458,86 @@ export function NodeConfigDrawer() {
                 onChange={(e) => updateNodeData(activeNode.id, { expected_output: e.target.value })}
                 placeholder="What should this task produce?"
               />
+            </div>
+
+            <div className="flex flex-col gap-2 pt-4 border-t border-brand-border/50">
+              <label className="text-xs font-bold text-brand-muted uppercase tracking-wider">Context (Optional)</label>
+              <p className="text-[11px] text-brand-muted opacity-80 mb-2">
+                Outputs of these tasks will be used as context.
+              </p>
+              
+              <div className="flex flex-wrap gap-2" data-testid="input-task-context">
+                {((data as any).context || []).map((contextId: string) => {
+                  const taskNode = nodes.find(n => n.id === contextId);
+                  if (!taskNode) return null;
+                  return (
+                    <div key={contextId} className="flex items-center gap-1.5 px-2 py-1 bg-blue-500/10 border border-blue-500/20 text-blue-600 dark:text-blue-400 rounded-lg text-xs font-medium group">
+                      <span className="truncate max-w-[120px]">{(taskNode.data as any).name || 'Task'}</span>
+                      <button 
+                        type="button"
+                        onClick={() => {
+                          const currentContext = (data as any).context || [];
+                          const newContext = currentContext.filter((id: string) => id !== contextId);
+                          updateNodeData(activeNode.id, { context: newContext });
+                        }}
+                        className="hover:bg-blue-500/20 p-0.5 rounded transition-colors"
+                      >
+                        <X className="w-2.5 h-2.5" />
+                      </button>
+                    </div>
+                  );
+                })}
+                
+                <div className="relative">
+                  <button 
+                    type="button"
+                    data-testid="btn-add-context"
+                    onClick={() => setIsContextSelectorOpen(!isContextSelectorOpen)}
+                    className="flex items-center gap-1.5 px-2.5 py-1 border border-dashed border-brand-border hover:border-blue-400 rounded-lg text-xs font-medium text-brand-muted hover:text-blue-500 transition-all bg-brand-bg/50"
+                  >
+                    <Plus className="w-3 h-3" />
+                    Add Context
+                  </button>
+
+                  {isContextSelectorOpen && (
+                    <>
+                      <div 
+                        className="fixed inset-0 z-[55]" 
+                        onClick={() => setIsContextSelectorOpen(false)}
+                      />
+                      <div className="absolute left-0 top-full mt-2 w-56 bg-brand-card border border-brand-border rounded-xl shadow-xl z-[60] py-2 animate-in fade-in zoom-in duration-200">
+                        <div className="px-3 py-1.5 border-b border-brand-border mb-1">
+                          <span className="text-[10px] font-bold text-brand-muted uppercase tracking-wider">Select Tasks</span>
+                        </div>
+                        <div className="max-h-48 overflow-y-auto px-1">
+                          {nodes
+                            .filter(n => n.type === 'task' && n.id !== activeNode.id && !((data as any).context || []).includes(n.id))
+                            .map(taskNode => (
+                              <button
+                                key={taskNode.id}
+                                onClick={() => {
+                                  const currentContext = (data as any).context || [];
+                                  const newContext = [...currentContext, taskNode.id];
+                                  updateNodeData(activeNode.id, { context: newContext });
+                                  setIsContextSelectorOpen(false);
+                                }}
+                                className="w-full flex items-center justify-between px-3 py-2 text-xs text-brand-text hover:bg-brand-bg rounded-lg transition-colors text-left group"
+                              >
+                                <span className="truncate">{(taskNode.data as any).name || 'Unnamed Task'}</span>
+                                <Plus className="w-3 h-3 text-brand-muted group-hover:text-blue-500" />
+                              </button>
+                            ))}
+                          {nodes.filter(n => n.type === 'task' && n.id !== activeNode.id && !((data as any).context || []).includes(n.id)).length === 0 && (
+                            <div className="px-3 py-4 text-center">
+                              <p className="text-[10px] text-brand-muted italic">No more tasks available.</p>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </>
+                  )}
+                </div>
+              </div>
             </div>
           </div>
         )}

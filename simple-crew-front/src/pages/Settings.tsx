@@ -177,10 +177,10 @@ const SettingsPage = () => {
       // Limpa valores vazios para serem nulos no backend
       const modelToSave = {
         ...newModel,
-        baseUrl: newModel.baseUrl === '' ? undefined : newModel.baseUrl,
-        temperature: newModel.temperature === undefined || isNaN(newModel.temperature) ? undefined : newModel.temperature,
-        maxTokens: newModel.maxTokens === undefined || isNaN(newModel.maxTokens) ? undefined : newModel.maxTokens,
-        maxCompletionTokens: newModel.maxCompletionTokens === undefined || isNaN(newModel.maxCompletionTokens) ? undefined : newModel.maxCompletionTokens,
+        baseUrl: newModel.baseUrl === '' ? null : newModel.baseUrl,
+        temperature: (newModel.temperature === undefined || newModel.temperature === null || isNaN(newModel.temperature)) ? null : newModel.temperature,
+        maxTokens: (newModel.maxTokens === undefined || newModel.maxTokens === null || isNaN(newModel.maxTokens)) ? null : newModel.maxTokens,
+        maxCompletionTokens: (newModel.maxCompletionTokens === undefined || newModel.maxCompletionTokens === null || isNaN(newModel.maxCompletionTokens)) ? null : newModel.maxCompletionTokens,
       };
 
       if (editingModelId) {
@@ -970,9 +970,9 @@ def my_custom_tool(argument: str) -> str:
                     value={newModel.temperature ?? 0.7}
                     onChange={(e) => setNewModel({...newModel, temperature: parseFloat(e.target.value)})}
                   />
-                  {newModel.temperature !== undefined && (
+                  {newModel.temperature !== undefined && newModel.temperature !== null && (
                     <button 
-                      onClick={() => setNewModel({...newModel, temperature: undefined})}
+                      onClick={() => setNewModel({...newModel, temperature: null})}
                       className="mt-2 text-[10px] uppercase font-bold text-slate-400 hover:text-red-500 transition-colors"
                     >
                       Reset
@@ -988,7 +988,7 @@ def my_custom_tool(argument: str) -> str:
                   placeholder="Provider Default"
                   className="w-full bg-brand-bg border border-brand-border rounded-xl px-4 py-3 text-brand-text outline-none focus:ring-2 focus:ring-indigo-600 transition-all text-sm"
                   value={newModel.maxTokens ?? ''}
-                  onChange={(e) => setNewModel({...newModel, maxTokens: e.target.value === '' ? undefined : parseInt(e.target.value)})}
+                  onChange={(e) => setNewModel({...newModel, maxTokens: e.target.value === '' ? null : parseInt(e.target.value)})}
                 />
               </div>
 
@@ -999,7 +999,7 @@ def my_custom_tool(argument: str) -> str:
                   placeholder="Provider Default"
                   className="w-full bg-brand-bg border border-brand-border rounded-xl px-4 py-3 text-brand-text outline-none focus:ring-2 focus:ring-indigo-600 transition-all text-sm"
                   value={newModel.maxCompletionTokens ?? ''}
-                  onChange={(e) => setNewModel({...newModel, maxCompletionTokens: e.target.value === '' ? undefined : parseInt(e.target.value)})}
+                  onChange={(e) => setNewModel({...newModel, maxCompletionTokens: e.target.value === '' ? null : parseInt(e.target.value)})}
                 />
               </div>
 

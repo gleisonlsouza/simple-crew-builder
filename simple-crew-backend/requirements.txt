@@ -2,3 +2,5 @@ fastapi==0.109.2
 uvicorn==0.27.1
 pydantic==2.6.1
 crewai
+crewai-tools
+mcp

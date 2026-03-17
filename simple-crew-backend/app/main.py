@@ -6,11 +6,12 @@ from fastapi.responses import StreamingResponse
 from sqlmodel import Session, select
 from .crew_builder import run_crew_stream
 from .database import init_db, get_session
-from .models import CrewProject, User, Credential, LLMModel
+from .models import CrewProject, User, Credential, LLMModel, MCPServer
 from .schemas import (
     GraphData, ProjectCreate, ProjectRead, ProjectUpdate, 
     CredentialCreate, CredentialRead, CredentialUpdate,
-    LLMModelCreate, LLMModelRead, LLMModelUpdate
+    LLMModelCreate, LLMModelRead, LLMModelUpdate,
+    MCPServerCreate, MCPServerRead, MCPServerUpdate
 )
 
 @asynccontextmanager
@@ -250,3 +251,53 @@ async def set_default_model(model_id: str, session: Session = Depends(get_sessio
     session.commit()
     session.refresh(db_model)
     return db_model
+
+# --- CRUD de Gerenciamento de MCP Servers ---
+@app.post("/api/v1/mcp-servers", response_model=MCPServerRead)
+async def create_mcp_server(mcp: MCPServerCreate, session: Session = Depends(get_session)):
+    new_mcp = MCPServer(
+        **mcp.model_dump(),
+        user_id=ROOT_USER_ID
+    )
+    session.add(new_mcp)
+    session.commit()
+    session.refresh(new_mcp)
+    return new_mcp
+
+@app.get("/api/v1/mcp-servers", response_model=List[MCPServerRead])
+async def list_mcp_servers(session: Session = Depends(get_session)):
+    statement = select(MCPServer).where(MCPServer.user_id == ROOT_USER_ID).order_by(MCPServer.created_at.desc())
+    servers = session.exec(statement).all()
+    return servers
+
+@app.get("/api/v1/mcp-servers/{mcp_id}", response_model=MCPServerRead)
+async def get_mcp_server(mcp_id: str, session: Session = Depends(get_session)):
+    mcp = session.get(MCPServer, mcp_id)
+    if not mcp:
+        raise HTTPException(status_code=404, detail="Servidor MCP não encontrado")
+    return mcp
+
+@app.patch("/api/v1/mcp-servers/{mcp_id}", response_model=MCPServerRead)
+@app.put("/api/v1/mcp-servers/{mcp_id}", response_model=MCPServerRead)
+async def update_mcp_server(mcp_id: str, mcp_update: MCPServerUpdate, session: Session = Depends(get_session)):
+    db_mcp = session.get(MCPServer, mcp_id)
+    if not db_mcp:
+        raise HTTPException(status_code=404, detail="Servidor MCP não encontrado")
+    
+    update_data = mcp_update.model_dump(exclude_unset=True)
+    for key, value in update_data.items():
+        setattr(db_mcp, key, value)
+    
+    session.add(db_mcp)
+    session.commit()
+    session.refresh(db_mcp)
+    return db_mcp
+
+@app.delete("/api/v1/mcp-servers/{mcp_id}")
+async def delete_mcp_server(mcp_id: str, session: Session = Depends(get_session)):
+    mcp = session.get(MCPServer, mcp_id)
+    if not mcp:
+        raise HTTPException(status_code=404, detail="Servidor MCP não encontrado")
+    session.delete(mcp)
+    session.commit()
+    return {"message": "Servidor MCP removido com sucesso"}

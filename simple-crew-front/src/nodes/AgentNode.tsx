@@ -1,12 +1,12 @@
 import { memo, useState } from 'react';
 import { Handle, Position, type NodeProps, type Node } from '@xyflow/react';
 import { useShallow } from 'zustand/shallow';
-import { User, Trash2, ChevronDown, ChevronUp, CheckSquare, Loader2, CheckCircle2, AlertCircle, Cpu, Link, Settings } from 'lucide-react';
+import { User, Trash2, ChevronDown, ChevronUp, CheckSquare, Loader2, CheckCircle2, AlertCircle, Cpu, Link, Settings, Package } from 'lucide-react';
 import { useStore } from '../store';
 import type { AgentNodeData, NodeStatus } from '../types';
 
 export const AgentNode = memo(({ id, data }: NodeProps<Node<AgentNodeData, 'agent'>>) => {
-  const { deleteNode, toggleCollapse, updateNodeData, nodes, onConnect, setActiveNode } = useStore(
+  const { deleteNode, toggleCollapse, updateNodeData, nodes, onConnect, setActiveNode, mcpServers } = useStore(
     useShallow((state) => ({
       deleteNode: state.deleteNode,
       toggleCollapse: state.toggleCollapse,
@@ -14,6 +14,7 @@ export const AgentNode = memo(({ id, data }: NodeProps<Node<AgentNodeData, 'agen
       nodes: state.nodes,
       onConnect: state.onConnect,
       setActiveNode: state.setActiveNode,
+      mcpServers: state.mcpServers,
     }))
   );
 
@@ -158,6 +159,30 @@ export const AgentNode = memo(({ id, data }: NodeProps<Node<AgentNodeData, 'agen
               <option key={model.id} value={model.id}>{model.name}</option>
             ))}
           </select>
+
+          {data.mcpServerIds && data.mcpServerIds.length > 0 && (
+            <div className="mt-2 space-y-1.5">
+              <div className="flex items-center gap-2">
+                <Package className="w-3.5 h-3.5 text-amber-500" />
+                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">MCP Servers</span>
+              </div>
+              <div className="flex flex-wrap gap-1">
+                {data.mcpServerIds.map(mid => {
+                  const server = mcpServers.find(s => s.id === mid);
+                  if (!server) return null;
+                  return (
+                    <span 
+                      key={mid} 
+                      className="px-1.5 py-0.5 bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-400 text-[10px] font-medium rounded border border-amber-100 dark:border-amber-800/50 truncate max-w-full"
+                      title={server.name}
+                    >
+                      {server.name}
+                    </span>
+                  );
+                })}
+              </div>
+            </div>
+          )}
         </div>
 
         {childCount > 0 && (
