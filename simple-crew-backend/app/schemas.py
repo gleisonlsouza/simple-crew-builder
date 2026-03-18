@@ -1,6 +1,12 @@
 from pydantic import BaseModel, field_validator
 from typing import List, Dict, Optional, Any
 
+class CustomTool(BaseModel):
+    id: str
+    name: str
+    description: str
+    code: str
+
 class NodeData(BaseModel):
     # Campos que transitam desde o Canvas do React Flow
     name: Optional[str] = None
@@ -12,6 +18,7 @@ class NodeData(BaseModel):
     process: Optional[str] = None
     context: Optional[List[str]] = None
     mcpServerIds: Optional[List[str]] = None
+    customToolIds: Optional[List[str]] = None
     # Permitir chaves adicionais como isCollapsed de forma crua, caso necessite depois
     class Config:
         extra = "allow"
@@ -34,6 +41,7 @@ class GraphData(BaseModel):
     version: Optional[str] = "1.0"
     nodes: List[Node]
     edges: List[Edge]
+    customTools: Optional[List[CustomTool]] = []
 
 # Schemas para CRUD de Projetos (Sprint 38)
 class ProjectBase(BaseModel):
@@ -170,6 +178,28 @@ class MCPServerUpdate(BaseModel):
     env_vars: Optional[Dict[str, str]] = None
     url: Optional[str] = None
     headers: Optional[Dict[str, str]] = None
+
+# Schemas para Gerenciamento de Custom Tools
+class CustomToolBase(BaseModel):
+    name: str
+    description: Optional[str] = None
+    code: str
+
+class CustomToolCreate(CustomToolBase):
+    pass
+
+class CustomToolRead(CustomToolBase):
+    id: Any # UUID
+    created_at: Any
+    updated_at: Any
+
+    class Config:
+        from_attributes = True
+
+class CustomToolUpdate(BaseModel):
+    name: Optional[str] = None
+    description: Optional[str] = None
+    code: Optional[str] = None
 
 # Schemas para Configurações do App
 class AppSettingsBase(BaseModel):

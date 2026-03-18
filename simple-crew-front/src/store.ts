@@ -146,7 +146,7 @@ export const useStore = create<AppState>((set, get) => ({
     { id: 'scrape', name: 'Website Scraper', description: 'Extract clean content from any website URL.', isEnabled: false, requiresKey: false },
     { id: 'file_read', name: 'File System Reader', description: 'Read local files from the workspace.', isEnabled: true, requiresKey: false },
   ])),
-  customTools: JSON.parse(localStorage.getItem('custom_tools') || '[]'),
+  customTools: [],
   mcpServers: [], // Will be fetched from backend
   systemAiModelId: null,
 
@@ -183,6 +183,17 @@ export const useStore = create<AppState>((set, get) => ({
     }
   },
 
+  fetchCustomTools: async () => {
+    try {
+      const response = await fetch('http://localhost:8000/api/v1/custom-tools');
+      if (!response.ok) throw new Error('Failed to fetch custom tools');
+      const tools = await response.json();
+      set({ customTools: tools });
+    } catch (error) {
+      console.error(error);
+    }
+  },
+
   setIsSettingsOpen: (open) => set({ isSettingsOpen: open }),
   toggleTheme: () => {
     set((state) => {
@@ -200,29 +211,47 @@ export const useStore = create<AppState>((set, get) => ({
     });
   },
 
-  addCustomTool: (tool) => {
-    set((state) => {
-      const newTool = { ...tool, id: crypto.randomUUID() };
-      const newTools = [...state.customTools, newTool];
-      localStorage.setItem('custom_tools', JSON.stringify(newTools));
-      return { customTools: newTools };
-    });
+  addCustomTool: async (tool) => {
+    try {
+      const response = await fetch('http://localhost:8000/api/v1/custom-tools', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(tool)
+      });
+      if (!response.ok) throw new Error('Failed to add custom tool');
+      await get().fetchCustomTools();
+      toast.success('Custom Tool added!');
+    } catch (error: any) {
+      toast.error(error.message);
+    }
   },
 
-  updateCustomTool: (id, config) => {
-    set((state) => {
-      const newTools = state.customTools.map(t => t.id === id ? { ...t, ...config } : t);
-      localStorage.setItem('custom_tools', JSON.stringify(newTools));
-      return { customTools: newTools };
-    });
+  updateCustomTool: async (id, config) => {
+    try {
+      const response = await fetch(`http://localhost:8000/api/v1/custom-tools/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(config)
+      });
+      if (!response.ok) throw new Error('Failed to update custom tool');
+      await get().fetchCustomTools();
+      toast.success('Custom Tool updated!');
+    } catch (error: any) {
+      toast.error(error.message);
+    }
   },
 
-  deleteCustomTool: (id) => {
-    set((state) => {
-      const newTools = state.customTools.filter(t => t.id !== id);
-      localStorage.setItem('custom_tools', JSON.stringify(newTools));
-      return { customTools: newTools };
-    });
+  deleteCustomTool: async (id) => {
+    try {
+      const response = await fetch(`http://localhost:8000/api/v1/custom-tools/${id}`, {
+        method: 'DELETE'
+      });
+      if (!response.ok) throw new Error('Failed to delete custom tool');
+      await get().fetchCustomTools();
+      toast.success('Custom Tool removed.');
+    } catch (error: any) {
+      toast.error(error.message);
+    }
   },
 
   addMCPServer: async (server) => {
@@ -728,6 +757,7 @@ export const useStore = create<AppState>((set, get) => ({
         canvas_data: {
           nodes: state.nodes,
           edges: state.edges,
+          customTools: state.customTools,
           version: "1.0"
         }
       };

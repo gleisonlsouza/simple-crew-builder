@@ -11,11 +11,13 @@ function App() {
   const fetchModels = useStore((state) => state.fetchModels);
   const fetchCredentials = useStore((state) => state.fetchCredentials);
   const fetchMCPServers = useStore((state) => state.fetchMCPServers);
+  const fetchCustomTools = useStore((state) => state.fetchCustomTools);
 
   useEffect(() => {
     fetchModels();
     fetchCredentials();
     fetchMCPServers();
+    fetchCustomTools();
     if (theme === 'dark') {
       document.documentElement.classList.add('dark');
     } else {

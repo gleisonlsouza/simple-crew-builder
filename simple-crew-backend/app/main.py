@@ -7,12 +7,13 @@ from fastapi.responses import StreamingResponse
 from sqlmodel import Session, select
 from .crew_builder import run_crew_stream
 from .database import init_db, get_session
-from .models import CrewProject, User, Credential, LLMModel, MCPServer, AppSettings
+from .models import CrewProject, User, Credential, LLMModel, MCPServer, AppSettings, CustomTool
 from .schemas import (
     GraphData, ProjectCreate, ProjectRead, ProjectUpdate, 
     CredentialCreate, CredentialRead, CredentialUpdate,
     LLMModelCreate, LLMModelRead, LLMModelUpdate,
     MCPServerCreate, MCPServerRead, MCPServerUpdate,
+    CustomToolCreate, CustomToolRead, CustomToolUpdate,
     AppSettingsRead, AppSettingsUpdate,
     AiSuggestionRequest, AiSuggestionResponse,
     AiBulkSuggestionRequest, AiBulkSuggestionResponse,
@@ -77,6 +78,9 @@ async def execute_crew(
                 session.commit()
                 print(f"--- Crew '{crew_name}' persistida no banco! ---")
 
+        # Resolve Custom Tools do Banco de Dados
+        graph_data = resolve_custom_tools(graph_data, session)
+
         # Despacha as dependências e payload JSON para a magia do nosso Parser local CrewAI Stream
         return StreamingResponse(
             run_crew_stream(graph_data), 
@@ -92,6 +96,41 @@ async def execute_crew(
 # --- CRUD de Projetos (Sprint 38) ---
 
 ROOT_USER_ID = "00000000-0000-0000-0000-000000000000"
+
+def resolve_custom_tools(graph_data: GraphData, session: Session):
+    """
+    Busca no banco de dados todas as Custom Tools referenciadas pelos agentes no grafo
+    e popula a lista graph_data.customTools com os dados completos (incluindo o código).
+    """
+    used_tool_ids = set()
+    for node in graph_data.nodes:
+        if node.type == 'agent' and hasattr(node.data, 'customToolIds') and node.data.customToolIds:
+            for tid in node.data.customToolIds:
+                used_tool_ids.add(tid)
+    
+    if not used_tool_ids:
+        return graph_data
+    
+    # Busca as tools no banco
+    statement = select(CustomTool).where(CustomTool.id.in_(list(used_tool_ids)))
+    db_tools = session.exec(statement).all()
+    
+    # Converte modelos do banco para schemas (CustomTool schema interno do GraphData)
+    from .schemas import CustomTool as GraphCustomTool
+    resolved_tools = [
+        GraphCustomTool(id=str(t.id), name=t.name, description=t.description or "", code=t.code)
+        for t in db_tools
+    ]
+    
+    # Adiciona as tools resolvidas ao graph_data (mesclando com as que já existem se houver)
+    existing_ids = {t.id for t in (graph_data.customTools or [])}
+    final_tools = list(graph_data.customTools or [])
+    for rt in resolved_tools:
+        if rt.id not in existing_ids:
+            final_tools.append(rt)
+            
+    graph_data.customTools = final_tools
+    return graph_data
 
 @app.post("/api/v1/projects", response_model=ProjectRead)
 async def create_project(project: ProjectCreate, session: Session = Depends(get_session)):
@@ -152,6 +191,9 @@ async def export_project_python(project_id: str, session: Session = Depends(get_
     try:
         # Reconstrói GraphData a partir do canvas_data persistido
         graph_data = GraphData(**project.canvas_data)
+        
+        # Resolve Custom Tools vinculadas
+        graph_data = resolve_custom_tools(graph_data, session)
         
         # Obtém autor do projeto (usuário vinculado)
         author_name = "SimpleCrew"
@@ -392,6 +434,57 @@ async def delete_mcp_server(mcp_id: str, session: Session = Depends(get_session)
     session.delete(mcp)
     session.commit()
     return {"message": "Servidor MCP removido com sucesso"}
+    
+# --- CRUD de Gerenciamento de Custom Tools ---
+
+@app.post("/api/v1/custom-tools", response_model=CustomToolRead)
+async def create_custom_tool(tool: CustomToolCreate, session: Session = Depends(get_session)):
+    new_tool = CustomTool(
+        **tool.model_dump(),
+        user_id=ROOT_USER_ID
+    )
+    session.add(new_tool)
+    session.commit()
+    session.refresh(new_tool)
+    return new_tool
+
+@app.get("/api/v1/custom-tools", response_model=List[CustomToolRead])
+async def list_custom_tools(session: Session = Depends(get_session)):
+    statement = select(CustomTool).where(CustomTool.user_id == ROOT_USER_ID).order_by(CustomTool.created_at.desc())
+    tools = session.exec(statement).all()
+    return tools
+
+@app.get("/api/v1/custom-tools/{tool_id}", response_model=CustomToolRead)
+async def get_custom_tool(tool_id: str, session: Session = Depends(get_session)):
+    tool = session.get(CustomTool, tool_id)
+    if not tool:
+        raise HTTPException(status_code=404, detail="Custom Tool não encontrada")
+    return tool
+
+@app.patch("/api/v1/custom-tools/{tool_id}", response_model=CustomToolRead)
+@app.put("/api/v1/custom-tools/{tool_id}", response_model=CustomToolRead)
+async def update_custom_tool(tool_id: str, tool_update: CustomToolUpdate, session: Session = Depends(get_session)):
+    db_tool = session.get(CustomTool, tool_id)
+    if not db_tool:
+        raise HTTPException(status_code=404, detail="Custom Tool não encontrada")
+    
+    update_data = tool_update.model_dump(exclude_unset=True)
+    for key, value in update_data.items():
+        setattr(db_tool, key, value)
+    
+    session.add(db_tool)
+    session.commit()
+    session.refresh(db_tool)
+    return db_tool
+
+@app.delete("/api/v1/custom-tools/{tool_id}")
+async def delete_custom_tool(tool_id: str, session: Session = Depends(get_session)):
+    tool = session.get(CustomTool, tool_id)
+    if not tool:
+        raise HTTPException(status_code=404, detail="Custom Tool não encontrada")
+    session.delete(tool)
+    session.commit()
+    return {"message": "Custom Tool removida com sucesso"}
 
 # --- Settings Endpoints ---
 @app.get("/api/v1/settings", response_model=AppSettingsRead)

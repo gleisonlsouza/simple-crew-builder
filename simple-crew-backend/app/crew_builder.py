@@ -4,6 +4,7 @@ import queue
 import json
 from typing import Dict, List, Iterator
 from crewai import Agent, Task, Crew, Process
+from crewai.tools import tool, BaseTool
 from crewai.llm import LLM
 import os
 from pydantic import BaseModel, Field
@@ -181,14 +182,14 @@ def run_crew_stream(graph_data: GraphData) -> Iterator[str]:
                             processed_tools = []
                             if is_playwright:
                                 allowed_suffixes = list(playwright_schemas.keys())
-                                for tool in raw_tools:
-                                    match = next((s for s in allowed_suffixes if tool.name.endswith(s)), None)
+                                for mcp_tool in raw_tools:
+                                    match = next((s for s in allowed_suffixes if mcp_tool.name.endswith(s)), None)
                                     if match:
-                                        log_debug(f"Injecting schema for Playwright tool: {tool.name}")
-                                        tool.args_schema = playwright_schemas[match]
-                                        processed_tools.append(tool)
+                                        log_debug(f"Injecting schema for Playwright tool: {mcp_tool.name}")
+                                        mcp_tool.args_schema = playwright_schemas[match]
+                                        processed_tools.append(mcp_tool)
                                     else:
-                                        log_debug(f"Skipping non-essential Playwright tool: {tool.name}")
+                                        log_debug(f"Skipping non-essential Playwright tool: {mcp_tool.name}")
                             else:
                                 processed_tools = raw_tools
                                         
@@ -197,6 +198,79 @@ def run_crew_stream(graph_data: GraphData) -> Iterator[str]:
                             log_debug(f"Connection failed for {mcp_record.name}: {str(e)}")
 
                 # --- 2. Instanciação de Agentes (Agora com ferramentas) ---
+                def resolve_node_tools(node_data, node_name, include_mcp=True):
+                    node_tools = []
+                    if include_mcp:
+                        mcp_ids = getattr(node_data, 'mcpServerIds', []) or []
+                        for mid in mcp_ids:
+                            if mid in mcp_adapters_cache:
+                                tools_to_add = mcp_adapters_cache[mid]
+                                if isinstance(tools_to_add, list):
+                                    node_tools.extend(tools_to_add)
+                                log_debug(f"Node {node_name} received {len(tools_to_add)} tools from MCP {mid}")
+                    
+                    custom_ids = getattr(node_data, 'customToolIds', []) or []
+                    for cid in custom_ids:
+                        tool_def = next((t for t in (graph_data.customTools or []) if t.id == cid), None)
+                        if not tool_def:
+                            log_debug(f"Warning: Custom tool {cid} code not found in graph_data.")
+                            continue
+                        
+                        try:
+                            # Use a different name for the decorator in the namespace if needed, 
+                            # but "tool" matches what's in the boilerplate.
+                            tool_namespace = {
+                                "tool": tool,
+                                "BaseModel": BaseModel,
+                                "Field": Field,
+                                "os": os,
+                                "json": json
+                            }
+                            exec(tool_def.code, tool_namespace)
+                            found_tool = None
+                            
+                            for obj in tool_namespace.values():
+                                if isinstance(obj, BaseTool):
+                                    found_tool = obj
+                                    break
+                            
+                            if not found_tool:
+                                for obj in tool_namespace.values():
+                                    if callable(obj) and hasattr(obj, 'name') and not isinstance(obj, type):
+                                        found_tool = obj
+                                        break
+                            
+                            if not found_tool:
+                                normalized_db_name = tool_def.name.lower().replace(" ", "_")
+                                for t_name, obj in tool_namespace.items():
+                                    if callable(obj) and not isinstance(obj, type) and t_name.lower() == normalized_db_name:
+                                        found_tool = tool(obj)
+                                        break
+                                        
+                            if not found_tool:
+                                for t_name, obj in tool_namespace.items():
+                                    if callable(obj) and not isinstance(obj, type) and t_name not in ["tool", "BaseModel", "Field", "os", "json"]:
+                                        found_tool = tool(obj)
+                                        break
+                            
+                            if found_tool:
+                                try:
+                                    # Ensure metadata
+                                    if not hasattr(found_tool, 'name') or not found_tool.name:
+                                        found_tool.name = tool_def.name.lower().replace(" ", "_")
+                                    if not hasattr(found_tool, 'description') or not found_tool.description or found_tool.description == "None":
+                                        found_tool.description = tool_def.description or f"Custom tool {tool_def.name}"
+                                except Exception:
+                                    pass
+                                
+                                node_tools.append(found_tool)
+                                log_debug(f"Custom tool '{getattr(found_tool, 'name', 'unnamed')}' successfully injected into {node_name}.")
+                            else:
+                                log_debug(f"Error: No valid function or tool found in code for '{tool_def.name}'.")
+                        except Exception as te:
+                            log_debug(f"Failed to execute custom tool '{tool_def.name}' for {node_name}: {str(te)}")
+                    return node_tools
+
                 agents_map: Dict[str, Agent] = {}
                 for node in agent_nodes:
                     role = node.data.role
@@ -204,21 +278,11 @@ def run_crew_stream(graph_data: GraphData) -> Iterator[str]:
                     backstory = node.data.backstory
                     name = node.data.name or f"Agent_{node.id}"
                     model_id = getattr(node.data, 'modelId', None)
-                    mcp_server_ids = getattr(node.data, 'mcpServerIds', [])
                     
                     # Coleta ferramentas deste agente
-                    this_agent_tools = []
-                    mcp_server_ids = getattr(node.data, 'mcpServerIds', []) or []
-                    for mid in mcp_server_ids:
-                        if mid in mcp_adapters_cache:
-                            tools_to_add = mcp_adapters_cache[mid]
-                            this_agent_tools.extend(tools_to_add)
-                            q.put(json.dumps({"type": "log", "data": f"DEBUG: Agent {name} received {len(tools_to_add)} tools from MCP {mid}\n"}) + "\n")
-                        else:
-                            q.put(json.dumps({"type": "log", "data": f"DEBUG: MCP {mid} not found in cache for agent {name}\n"}) + "\n")
+                    this_agent_tools = resolve_node_tools(node.data, f"Agent {name}")
 
-                    # LLM Setup (já estava no generator mas vamos mover para cá ou reutilizar lógica)
-                    # Para simplificar, vou extrair a lógica de LLM para ser reusável ou mantê-la aqui
+                    # LLM Setup
                     agent_llm = None
                     with Session(engine) as session:
                         llm_config = None
@@ -254,7 +318,9 @@ def run_crew_stream(graph_data: GraphData) -> Iterator[str]:
                         max_execution_time=getattr(node.data, 'max_execution_time', 300)
                     )
                     agents_map[node.id] = agent
-                    log_debug(f"Agent {name} (ID: {node.id}) successfully initialized with {len(this_agent_tools)} tools. (max_iter={agent.max_iter})")
+                    
+                    tool_names = [getattr(t, 'name', str(t)) for t in this_agent_tools]
+                    log_debug(f"Agent {name} (ID: {node.id}) successfully initialized with {len(this_agent_tools)} tools: {tool_names}")
 
                 # --- 3. Instanciação de Tasks (Re-regrando links com agentes criados) ---
                 tasks_list: List[Task] = []
@@ -263,6 +329,7 @@ def run_crew_stream(graph_data: GraphData) -> Iterator[str]:
                 for node in task_nodes:
                     description = node.data.description
                     expected_output = node.data.expected_output
+                    task_name = node.data.name or f"Task_{node.id}"
                     
                     # Encontra o agente vinculado a esta task (borda onde a origem é um agente)
                     agent_ids = {n.id for n in agent_nodes}
@@ -278,16 +345,24 @@ def run_crew_stream(graph_data: GraphData) -> Iterator[str]:
                         continue
                     
                     target_agent = agents_map[source_agent_id]
-                    log_debug(f"Task {node.data.name or node.id} assigned to Agent {target_agent.role if hasattr(target_agent, 'role') else source_agent_id}")
+                    log_debug(f"Task {task_name} assigned to Agent {target_agent.role if hasattr(target_agent, 'role') else source_agent_id}")
+                    
+                    # Resolve ferramentas da Task (Apenas Custom Tools, sem MCP para Tasks)
+                    this_task_tools = resolve_node_tools(node.data, f"Task {task_name}", include_mcp=False)
                         
                     task = Task(
                         description=description,
                         expected_output=expected_output,
                         agent=agents_map[source_agent_id],
+                        tools=this_task_tools,
                         callback=make_task_callback(node.id)
                     )
                     tasks_list.append(task)
                     tasks_dict[node.id] = task
+
+                    tool_names = [getattr(t, 'name', str(t)) for t in this_task_tools]
+                    if this_task_tools:
+                        log_debug(f"Task {task_name} initialized with {len(this_task_tools)} tools: {tool_names}")
 
                 # --- 4. Ordenação e Vinculação de Contexto ---
                 # Precisamos garantir que as tasks sejam executadas na ordem correta

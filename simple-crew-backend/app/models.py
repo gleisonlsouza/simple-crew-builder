@@ -25,7 +25,29 @@ class User(SQLModel, table=True):
     credentials: list["Credential"] = Relationship(back_populates="user")
     models: list["LLMModel"] = Relationship(back_populates="user")
     mcp_servers: list["MCPServer"] = Relationship(back_populates="user")
+    custom_tools: list["CustomTool"] = Relationship(back_populates="user")
     settings: Optional["AppSettings"] = Relationship(back_populates="user", sa_relationship_kwargs={"uselist": False})
+
+class CustomTool(SQLModel, table=True):
+    id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
+    name: str
+    description: Optional[str] = None
+    code: str
+    
+    # Relationship
+    user_id: uuid.UUID = Field(foreign_key="user.id")
+    user: User = Relationship(back_populates="custom_tools")
+    
+    created_at: datetime = Field(
+        sa_column=Column(DateTime(timezone=True), server_default=func.now())
+    )
+    updated_at: datetime = Field(
+        sa_column=Column(
+            DateTime(timezone=True), 
+            server_default=func.now(), 
+            onupdate=func.now()
+        )
+    )
 
 class CrewProject(SQLModel, table=True):
     id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)

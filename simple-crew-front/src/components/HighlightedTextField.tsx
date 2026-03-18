@@ -1,13 +1,35 @@
-import React, { useRef, useEffect, useState } from 'react';
+import React from 'react';
+// @ts-ignore
+import * as EditorModule from 'react-simple-code-editor';
+import Prism from 'prismjs';
+
+// Robust way to get the Editor component from various module formats (CJS, ESM, etc.)
+let Editor: any = EditorModule;
+// Recursive unwrap if there's a .default property (common in Vite/ESM/CJS interop)
+while (Editor && Editor.default && Editor !== Editor.default) {
+  Editor = Editor.default;
+}
+
+// Special case for some builds where it's named 'Editor' specifically
+if (!Editor || (typeof Editor !== 'function' && typeof Editor !== 'string' && !(Editor && Editor.$$typeof))) {
+  if (EditorModule.Editor) Editor = EditorModule.Editor;
+}
+
+// Import all required languages explicitly to avoid missing peer dependency issues in some environments
+import 'prismjs/components/prism-python';
+import 'prismjs/components/prism-javascript';
+import 'prismjs/components/prism-markup'; // HTML
+import 'prismjs/components/prism-bash';
 
 interface HighlightedTextFieldProps {
   type: 'input' | 'textarea';
   value: string;
-  onChange: (e: React.ChangeEvent<HTMLTextAreaElement | HTMLInputElement | any>) => void;
+  onChange: (e: any) => void;
   onKeyDown?: (e: React.KeyboardEvent<HTMLTextAreaElement | HTMLInputElement | any>) => void;
   placeholder?: string;
   className?: string;
   highlightClassName?: string;
+  language?: 'none' | 'python';
   rows?: number;
 }
 
@@ -18,104 +40,84 @@ export const HighlightedTextField: React.FC<HighlightedTextFieldProps> = ({
   onKeyDown,
   placeholder,
   className = '',
-  highlightClassName = 'text-blue-500',
+  language = 'none',
   rows = 3
 }) => {
-  const textareaRef = useRef<HTMLTextAreaElement | HTMLInputElement>(null);
-  const backdropRef = useRef<HTMLDivElement>(null);
-  const [scrollTop, setScrollTop] = useState(0);
+  const [isFocused, setIsFocused] = React.useState(false);
 
-  // Sincroniza o scroll entre o textarea e o div de fundo
-  const handleScroll = (e: React.UIEvent<HTMLTextAreaElement | HTMLInputElement>) => {
-    setScrollTop(e.currentTarget.scrollTop);
-  };
+  const highlightWithPrism = (code: string) => {
+    if (!code && !isFocused) return ''; // Let placeholder show
+    if (!code) return '';
 
-  useEffect(() => {
-    if (backdropRef.current) {
-      backdropRef.current.scrollTop = scrollTop;
-    }
-  }, [scrollTop]);
-
-  const renderHighlightedText = (text: string) => {
-    if (!text) return <span className="text-brand-muted opacity-50">{placeholder}</span>;
-    
-    // Regex para encontrar variáveis no formato {variavel}
-    const parts = text.split(/(\{[^}]+\})/g);
-    return parts.map((part, i) => {
-      if (part.startsWith('{') && part.endsWith('}')) {
-        return (
-          <span key={i} className={highlightClassName}>
-            {part}
-          </span>
-        );
+    try {
+      if (language === 'python' && Prism.languages.python) {
+        return Prism.highlight(code, Prism.languages.python, 'python');
       }
-      return <span key={i}>{part}</span>;
-    });
+
+      // Default template variable highlighting
+      const escapedCode = code
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
+        
+      return escapedCode.replace(/(\{[^}]+\})/g, '<span class="text-indigo-500 font-bold">$1</span>');
+    } catch (e) {
+      console.error('Prism highlighting error:', e);
+      return code; // Fallback to plain text
+    }
   };
 
-  const commonStyles: React.CSSProperties = {
-    fontFamily: 'ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji"',
-    fontSize: '14px',
-    lineHeight: '20px',
-    padding: '8px 12px',
-    whiteSpace: 'pre-wrap',
-    wordBreak: 'break-word',
-    overflowWrap: 'break-word',
-    boxSizing: 'border-box',
-  };
+  if (!Editor || (typeof Editor !== 'function' && typeof Editor !== 'string' && !(Editor && Editor.$$typeof))) {
+    return (
+      <div className="p-4 bg-red-500/10 border border-red-500 rounded-xl text-red-500 text-xs font-mono">
+        <div>Error: Editor is invalid type: {typeof Editor}</div>
+        <div>Keys: {JSON.stringify(Object.keys(EditorModule))}</div>
+        <div>Default Keys: {EditorModule.default ? JSON.stringify(Object.keys(EditorModule.default)) : 'null'}</div>
+      </div>
+    );
+  }
 
   return (
-    <div className={`relative w-full ${className}`}>
-      {/* Camada de Fundo (Highlight) */}
-      <div
-        ref={backdropRef}
-        aria-hidden="true"
-        className="absolute inset-0 pointer-events-none overflow-hidden whitespace-pre-wrap break-words text-brand-text"
-        style={{
-          ...commonStyles,
-          border: '1px solid transparent',
-          zIndex: 0,
-        }}
-      >
-        <div className="w-full">
-          {renderHighlightedText(value)}
-          {/* Adiciona um caractere extra para lidar com quebras de linha no final no textarea */}
-          {type === 'textarea' && value.endsWith('\n') && '\n'}
-        </div>
-      </div>
-
-      {/* Camada de Frente (Input Real) */}
+    <div className={`
+      relative w-full rounded-xl border transition-all duration-200 overflow-hidden bg-brand-bg/30
+      ${isFocused ? 'border-indigo-500 ring-4 ring-indigo-500/10' : 'border-brand-border'} 
+      ${className}
+    `}>
       {type === 'textarea' ? (
-        <textarea
-          ref={textareaRef as React.RefObject<HTMLTextAreaElement>}
+        <Editor
           value={value}
-          onChange={onChange}
+          onValueChange={(code: string) => onChange({ target: { value: code } })}
+          highlight={(code: string) => highlightWithPrism(code) as any}
+          padding={16}
           onKeyDown={onKeyDown}
-          onScroll={handleScroll}
-          placeholder={placeholder}
-          rows={rows}
-          className="relative z-10 w-full h-full bg-transparent text-brand-text focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 border border-brand-border rounded-lg text-sm transition-all resize-none block caret-brand-text"
+          onFocus={() => setIsFocused(true)}
+          onBlur={() => setIsFocused(false)}
+          placeholder={isFocused ? '' : placeholder}
+          className="code-editor-wrapper min-h-full"
+          textareaClassName="code-editor-textarea"
           style={{
-            ...commonStyles,
-            color: 'transparent',
-            caretColor: 'var(--text-main)',
+            fontSize: 14,
+            lineHeight: '1.5rem',
+            minHeight: rows ? `${rows * 1.5}rem` : 'inherit',
           }}
         />
       ) : (
-        <input
-          ref={textareaRef as React.RefObject<HTMLInputElement>}
-          type="text"
-          value={value}
-          onChange={onChange}
-          onKeyDown={onKeyDown}
-          placeholder={placeholder}
-          className="relative z-10 w-full bg-transparent text-brand-text focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 border border-brand-border rounded-lg text-sm transition-all block caret-brand-text"
-          style={{
-            ...commonStyles,
-            color: 'transparent',
-            caretColor: 'var(--text-main)',
-          }}
-        />
+        /* For simple input, we still use the manual way but simpler, or just a regular input if highlighting isn't critical */
+        <div className="relative">
+             <input
+                value={value}
+                onChange={onChange}
+                onKeyDown={onKeyDown}
+                onFocus={() => setIsFocused(true)}
+                onBlur={() => setIsFocused(false)}
+                placeholder={placeholder}
+                className="w-full bg-transparent border-none px-4 py-3 text-sm text-brand-text outline-none focus:ring-0"
+                spellCheck={false}
+             />
+             {/* Simple inputs usually don't need complex highlighting for code, but if we need it for {vars}, we can add it back later */}
+        </div>
       )}
     </div>
   );

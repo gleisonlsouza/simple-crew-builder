@@ -10,6 +10,7 @@ export interface AgentNodeData extends Record<string, unknown> {
   isCollapsed?: boolean;
   modelId?: string;
   mcpServerIds?: string[];
+  customToolIds?: string[];
 }
 
 export interface TaskNodeData extends Record<string, unknown> {
@@ -17,6 +18,7 @@ export interface TaskNodeData extends Record<string, unknown> {
   description: string;
   expected_output: string;
   context?: string[];
+  customToolIds?: string[];
 }
 
 export interface CrewNodeData extends Record<string, unknown> {
@@ -174,9 +176,10 @@ export interface AppState {
   updateToolConfig: (id: string, config: Partial<ToolConfig>) => void;
   
   customTools: CustomTool[];
-  addCustomTool: (tool: Omit<CustomTool, 'id'>) => void;
-  updateCustomTool: (id: string, tool: Partial<CustomTool>) => void;
-  deleteCustomTool: (id: string) => void;
+  fetchCustomTools: () => Promise<void>;
+  addCustomTool: (tool: Omit<CustomTool, 'id'>) => Promise<void>;
+  updateCustomTool: (id: string, tool: Partial<CustomTool>) => Promise<void>;
+  deleteCustomTool: (id: string) => Promise<void>;
 
   mcpServers: MCPServer[];
   fetchMCPServers: () => Promise<void>;

@@ -16,7 +16,6 @@ import {
   Copy,
   Wrench,
   Server,
-  ToggleLeft as Toggle,
   Settings2,
   PlusCircle,
   Hash,
@@ -30,7 +29,8 @@ import {
   FileCode
 } from 'lucide-react';
 import { useStore } from '../store';
-import { type ModelConfig, type ToolConfig, type MCPServer, type CustomTool } from '../types';
+import { HighlightedTextField } from '../components/HighlightedTextField';
+import { type ModelConfig, type MCPServer, type CustomTool } from '../types';
 
 interface CustomSelectProps {
   options: { label: string; value: string }[];
@@ -106,7 +106,6 @@ const SettingsPage = () => {
     globalTools, updateToolConfig,
     customTools, addCustomTool, updateCustomTool, deleteCustomTool,
     mcpServers, addMCPServer, updateMCPServer, deleteMCPServer,
-    theme,
     systemAiModelId, setSystemAiModelId, fetchSettings
   } = useStore();
 
@@ -266,10 +265,7 @@ const SettingsPage = () => {
   };
 
 
-  const pythonBoilerplate = `from crewai.tools import tool
-
-@tool("Tool Name")
-def my_custom_tool(argument: str) -> str:
+  const pythonBoilerplate = `def my_custom_tool(argument: str) -> str:
     """Description of what this tool does."""
     # Your python code here
     return "Success"`;
@@ -1336,16 +1332,16 @@ def my_custom_tool(argument: str) -> str:
                   <span>Python Script (CrewAI @tool pattern)</span>
                   <span className="text-[10px] text-brand-muted">Uses Python 3.12</span>
                 </label>
-                <div className={`relative rounded-2xl overflow-hidden border border-brand-border bg-slate-950 p-1`}>
-                  <div className="absolute top-0 right-0 p-3 pointer-events-none opacity-40">
+                <div className="relative group">
+                  <div className="absolute top-0 right-0 p-4 pointer-events-none opacity-20 z-20 group-hover:opacity-40 transition-opacity">
                     <FileCode className="w-8 h-8 text-emerald-500" />
                   </div>
-                  <textarea 
-                    placeholder="# Write your python code here..."
-                    className="w-full bg-transparent p-6 text-emerald-400 font-mono text-sm min-h-[300px] outline-none resize-none spellcheck-false"
-                    style={{ 
-                      lineHeight: '1.6'
-                    }}
+                  <HighlightedTextField
+                    type="textarea"
+                    language="python"
+                    placeholder="def my_tool(arg: str): ..."
+                    className="min-h-[450px]"
+                    rows={15}
                     value={newCustomTool.code}
                     onChange={(e) => setNewCustomTool({...newCustomTool, code: e.target.value})}
                   />

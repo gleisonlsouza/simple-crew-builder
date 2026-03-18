@@ -74,11 +74,13 @@ export function NodeConfigDrawer() {
   const suggestAiContent = useStore((state: AppState) => state.suggestAiContent);
   const suggestBulkAiContent = useStore((state: AppState) => state.suggestBulkAiContent);
   const suggestTaskBulkAiContent = useStore((state: AppState) => state.suggestTaskBulkAiContent);
+  const customTools = useStore((state: AppState) => state.customTools);
 
   const [localName, setLocalName] = useState('');
   const [nameError, setNameError] = useState(false);
   const [isContextSelectorOpen, setIsContextSelectorOpen] = useState(false);
   const [isMcpSelectorOpen, setIsMcpSelectorOpen] = useState(false);
+  const [isCustomToolSelectorOpen, setIsCustomToolSelectorOpen] = useState(false);
   const [loadingFields, setLoadingFields] = useState<Record<string, boolean>>({});
 
   // -- Autocomplete State --
@@ -106,6 +108,7 @@ export function NodeConfigDrawer() {
         setNameError(false);
         setIsContextSelectorOpen(false);
         setIsMcpSelectorOpen(false);
+        setIsCustomToolSelectorOpen(false);
       }
     }
   }, [activeNodeId, nodes]);
@@ -667,6 +670,89 @@ export function NodeConfigDrawer() {
                 </div>
               </div>
             </div>
+            {/* -- Custom Python Tools Selection -- */}
+            <div className="flex flex-col gap-2 pt-4 border-t border-brand-border/50">
+              <label className="text-xs font-bold text-brand-muted uppercase tracking-wider">Custom Python Tools</label>
+              <p className="text-[11px] text-brand-muted opacity-80 mb-2">
+                Enable your own Python logic for this agent.
+              </p>
+              
+              <div className="flex flex-wrap gap-2">
+                {((data as any).customToolIds || []).map((toolId: string) => {
+                  const tool = customTools.find(t => t.id === toolId);
+                  if (!tool) return null;
+                  return (
+                    <div key={toolId} className="flex items-center gap-1.5 px-2 py-1 bg-emerald-500/10 border border-emerald-500/20 text-emerald-600 dark:text-emerald-400 rounded-lg text-xs font-medium group">
+                      <span className="truncate max-w-[120px]">{tool.name}</span>
+                      <button 
+                        type="button"
+                        onClick={() => {
+                          const currentIds = (data as any).customToolIds || [];
+                          const newIds = currentIds.filter((id: string) => id !== toolId);
+                          updateNodeData(activeNode.id, { customToolIds: newIds });
+                        }}
+                        className="hover:bg-emerald-500/20 p-0.5 rounded transition-colors"
+                      >
+                        <X className="w-2.5 h-2.5" />
+                      </button>
+                    </div>
+                  );
+                })}
+                
+                <div className="relative">
+                  <button 
+                    type="button"
+                    onClick={() => setIsCustomToolSelectorOpen(!isCustomToolSelectorOpen)}
+                    className="flex items-center gap-1.5 px-2.5 py-1 border border-dashed border-brand-border hover:border-emerald-400 rounded-lg text-xs font-medium text-brand-muted hover:text-emerald-500 transition-all bg-brand-bg/50"
+                  >
+                    <Plus className="w-3 h-3" />
+                    Add Custom Tool
+                  </button>
+
+                  {isCustomToolSelectorOpen && (
+                    <>
+                      <div 
+                        className="fixed inset-0 z-[55]" 
+                        onClick={() => setIsCustomToolSelectorOpen(false)}
+                      />
+                      <div className="absolute left-0 top-full mt-2 w-56 bg-brand-card border border-brand-border rounded-xl shadow-xl z-[60] py-2 animate-in fade-in zoom-in duration-200">
+                        <div className="px-3 py-1.5 border-b border-brand-border mb-1">
+                          <span className="text-[10px] font-bold text-brand-muted uppercase tracking-wider">Select Custom Tool</span>
+                        </div>
+                        <div className="max-h-48 overflow-y-auto px-1">
+                          {customTools
+                            .filter(t => !((data as any).customToolIds || []).includes(t.id))
+                            .map(tool => (
+                              <button
+                                key={tool.id}
+                                onClick={() => {
+                                  const currentIds = (data as any).customToolIds || [];
+                                  const newIds = [...currentIds, tool.id];
+                                  updateNodeData(activeNode.id, { customToolIds: newIds });
+                                  setIsCustomToolSelectorOpen(false);
+                                }}
+                                className="w-full flex items-center justify-between px-3 py-2 text-xs text-brand-text hover:bg-brand-bg rounded-lg transition-colors text-left group"
+                              >
+                                <span className="truncate">{tool.name}</span>
+                                <Plus className="w-3 h-3 text-brand-muted group-hover:text-emerald-500" />
+                              </button>
+                            ))}
+                          {customTools.filter(t => !((data as any).customToolIds || []).includes(t.id)).length === 0 && (
+                            <div className="px-3 py-4 text-center">
+                              <p className="px-2 text-[10px] text-brand-muted italic">
+                                {customTools.length === 0 
+                                  ? 'No custom tools defined. Create them in Settings.' 
+                                  : 'All custom tools already added.'}
+                              </p>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </>
+                  )}
+                </div>
+              </div>
+            </div>
 
             {/* -- Tasks Execution Order Ranking -- */}
             <div className="flex flex-col gap-2 pt-4 border-t border-brand-border/50">
@@ -820,6 +906,89 @@ export function NodeConfigDrawer() {
                           {nodes.filter(n => n.type === 'task' && n.id !== activeNode.id && !((data as any).context || []).includes(n.id)).length === 0 && (
                             <div className="px-3 py-4 text-center">
                               <p className="text-[10px] text-brand-muted italic">No more tasks available.</p>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            <div className="flex flex-col gap-2 pt-4 border-t border-brand-border/50">
+              <label className="text-xs font-bold text-brand-muted uppercase tracking-wider">Custom Python Tools</label>
+              <p className="text-[11px] text-brand-muted opacity-80 mb-2">
+                Enable your custom Python tools for this task.
+              </p>
+              
+              <div className="flex flex-wrap gap-2" data-testid="input-task-custom-tools">
+                {((data as any).customToolIds || []).map((toolId: string) => {
+                  const tool = customTools.find(t => t.id === toolId);
+                  if (!tool) return null;
+                  return (
+                    <div key={toolId} className="flex items-center gap-1.5 px-2 py-1 bg-emerald-500/10 border border-emerald-500/20 text-emerald-600 dark:text-emerald-400 rounded-lg text-xs font-medium group">
+                      <span className="truncate max-w-[120px]">{tool.name}</span>
+                      <button 
+                        type="button"
+                        onClick={() => {
+                          const currentIds = (data as any).customToolIds || [];
+                          const newIds = currentIds.filter((id: string) => id !== toolId);
+                          updateNodeData(activeNode.id, { customToolIds: newIds });
+                        }}
+                        className="hover:bg-emerald-500/20 p-0.5 rounded transition-colors"
+                      >
+                        <X className="w-2.5 h-2.5" />
+                      </button>
+                    </div>
+                  );
+                })}
+                
+                <div className="relative">
+                  <button 
+                    type="button"
+                    onClick={() => setIsCustomToolSelectorOpen(!isCustomToolSelectorOpen)}
+                    className="flex items-center gap-1.5 px-2.5 py-1 border border-dashed border-brand-border hover:border-emerald-400 rounded-lg text-xs font-medium text-brand-muted hover:text-emerald-500 transition-all bg-brand-bg/50"
+                  >
+                    <Plus className="w-3 h-3" />
+                    Add Custom Tool
+                  </button>
+
+                  {isCustomToolSelectorOpen && (
+                    <>
+                      <div 
+                        className="fixed inset-0 z-[55]" 
+                        onClick={() => setIsCustomToolSelectorOpen(false)}
+                      />
+                      <div className="absolute left-0 top-full mt-2 w-56 bg-brand-card border border-brand-border rounded-xl shadow-xl z-[60] py-2 animate-in fade-in zoom-in duration-200">
+                        <div className="px-3 py-1.5 border-b border-brand-border mb-1">
+                          <span className="text-[10px] font-bold text-brand-muted uppercase tracking-wider">Select Custom Tool</span>
+                        </div>
+                        <div className="max-h-48 overflow-y-auto px-1">
+                          {customTools
+                            .filter(t => !((data as any).customToolIds || []).includes(t.id))
+                            .map(tool => (
+                              <button
+                                key={tool.id}
+                                onClick={() => {
+                                  const currentIds = (data as any).customToolIds || [];
+                                  const newIds = [...currentIds, tool.id];
+                                  updateNodeData(activeNode.id, { customToolIds: newIds });
+                                  setIsCustomToolSelectorOpen(false);
+                                }}
+                                className="w-full flex items-center justify-between px-3 py-2 text-xs text-brand-text hover:bg-brand-bg rounded-lg transition-colors text-left group"
+                              >
+                                <span className="truncate">{tool.name}</span>
+                                <Plus className="w-3 h-3 text-brand-muted group-hover:text-emerald-500" />
+                              </button>
+                            ))}
+                          {customTools.filter(t => !((data as any).customToolIds || []).includes(t.id)).length === 0 && (
+                            <div className="px-3 py-4 text-center">
+                              <p className="px-2 text-[10px] text-brand-muted italic">
+                                {customTools.length === 0 
+                                  ? 'No custom tools defined. Create them in Settings.' 
+                                  : 'All custom tools already added.'}
+                              </p>
                             </div>
                           )}
                         </div>

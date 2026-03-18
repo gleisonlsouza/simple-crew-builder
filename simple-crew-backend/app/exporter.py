@@ -155,6 +155,7 @@ Para uma experiência otimizada, recomendamos o uso do gerenciador de pacotes **
 - `src/{folder_name}/config/`: Arquivos YAML de configuração para Agentes e Tarefas.
 - `src/{folder_name}/crew.py`: Lógica principal de orquestração da Crew.
 - `src/{folder_name}/main.py`: Ponto de entrada para execução e setup de MCP Tools.
+- `src/{folder_name}/tools.py`: Ferramentas Python customizadas.
 - `pyproject.toml`: Configurações de dependências e metadados.
 
 ---
@@ -164,7 +165,6 @@ Gerado com ❤️ por **Simple Crew Builder**
 
         # 4. Prepare data for YAMLs and Python
         nodes = {node.id: node for node in graph_data.nodes}
-        edges = graph_data.edges
         
         agent_nodes = [n for n in graph_data.nodes if n.type == 'agent']
         task_nodes = [n for n in graph_data.nodes if n.type == 'task']
@@ -172,10 +172,57 @@ Gerado com ❤️ por **Simple Crew Builder**
 
         package_path = f"{folder_name}/src/{folder_name}"
 
+        # 5. tools/ (Custom Tools folder)
+        used_custom_tool_ids = set()
+        for agent in agent_nodes:
+            tool_ids = getattr(agent.data, 'customToolIds', []) or []
+            for tid in tool_ids:
+                used_custom_tool_ids.add(tid)
+        
+        for task in task_nodes:
+            tool_ids = getattr(task.data, 'customToolIds', []) or []
+            for tid in tool_ids:
+                used_custom_tool_ids.add(tid)
+        
+        custom_tools_dict = {t.id: t for t in (graph_data.customTools or [])}
+        has_custom_tools = False
+        
+        # Tools directory __init__.py
+        tools_package_path = f"{package_path}/tools"
+        
+        for tid in used_custom_tool_ids:
+            if tid in custom_tools_dict:
+                tool_data = custom_tools_dict[tid]
+                has_custom_tools = True
+                
+                # Slugify name for filename
+                tool_slug = to_snake_case(tool_data.name)
+                if not tool_slug:
+                    tool_slug = f"tool_{tid[:8]}"
+                
+                # Standard imports for each tool file
+                tool_file_content = "from crewai.tools import tool\nfrom pydantic import BaseModel, Field\nimport os\nimport json\n\n"
+                
+                # Verify if code already has @tool decorator
+                has_decorator = "@tool" in tool_data.code
+                
+                if not has_decorator:
+                    # Apply decorator with name from DB
+                    name_for_decorator = tool_data.name.lower().replace(" ", "_")
+                    tool_file_content += f'@tool("{name_for_decorator}")\n'
+                
+                tool_file_content += tool_data.code + "\n"
+                
+                zip_file.writestr(f"{tools_package_path}/{tool_slug}.py", tool_file_content)
+
+        if has_custom_tools:
+            # Add __init__.py to make it a package
+            zip_file.writestr(f"{tools_package_path}/__init__.py", "# Custom tools package\n")
+
         # Coleta de Parâmetros (Placeholders)
         all_placeholders = set()
 
-        # 5. src/config/agents.yaml
+        # 6. src/config/agents.yaml
         agents_yaml_data = {}
         for node in agent_nodes:
             agent_key = to_snake_case(node.data.name) if node.data.name else f"agent_{node.id[:8]}"
@@ -211,7 +258,7 @@ Gerado com ❤️ por **Simple Crew Builder**
         )
         zip_file.writestr(f"{package_path}/config/agents.yaml", agents_yaml)
 
-        # 6. src/{folder_name}/config/tasks.yaml
+        # 7. src/{folder_name}/config/tasks.yaml
         tasks_yaml_data = {}
         for node in task_nodes:
             task_key = to_snake_case(node.data.name) if node.data.name else f"task_{node.id[:8]}"
@@ -223,7 +270,7 @@ Gerado com ❤️ por **Simple Crew Builder**
             all_placeholders.update(extract_placeholders(expected_output))
 
             # Find assigned agent
-            agent_id = next((e.source for e in edges if e.target == node.id and nodes[e.source].type == 'agent'), None)
+            agent_id = next((e.source for e in graph_data.edges if e.target == node.id and nodes[e.source].type == 'agent'), None)
             agent_key = "default_agent"
             if agent_id:
                 agent_node = nodes[agent_id]
@@ -245,12 +292,12 @@ Gerado com ❤️ por **Simple Crew Builder**
         )
         zip_file.writestr(f"{package_path}/config/tasks.yaml", tasks_yaml)
 
-        # 7. src/{folder_name}/crew.py
+        # 8. src/{folder_name}/crew.py
         class_name = f"{folder_name.title().replace('_', '')}Crew"
-        crew_py_content = generate_crew_py(agent_nodes, task_nodes, crew_node, edges, nodes, class_name)
+        crew_py_content = generate_crew_py(agent_nodes, task_nodes, crew_node, graph_data.edges, nodes, class_name, custom_tools_dict)
         zip_file.writestr(f"{package_path}/crew.py", crew_py_content)
 
-        # 8. src/{folder_name}/main.py
+        # 9. src/{folder_name}/main.py
         # Detecta placeholders nos YAMLs
         placeholders_from_yaml = {p: f"valor_para_{p}" for p in sorted(list(all_placeholders))}
         
@@ -282,7 +329,7 @@ Gerado com ❤️ por **Simple Crew Builder**
         else:
             mcp_setup_code = f"    {class_name}().crew().kickoff(inputs=inputs)\n"
 
-        main_py_content = f"""from .crew import {class_name}{mcp_import}
+        main_py_content = f"""from {folder_name}.crew import {class_name}{mcp_import}
 
 def run():
     # Parâmetros detectados nos arquivos YAML
@@ -294,38 +341,58 @@ if __name__ == "__main__":
 """
         zip_file.writestr(f"{package_path}/main.py", main_py_content)
         
-        # 9. src/{folder_name}/__init__.py
+        # 10. src/{folder_name}/__init__.py
         zip_file.writestr(f"{package_path}/__init__.py", "")
         # Adiciona __init__.py no src/
         zip_file.writestr(f"{folder_name}/src/__init__.py", "")
 
     return buffer.getvalue()
 
-def generate_crew_py(agent_nodes, task_nodes, crew_node, edges, nodes, class_name) -> str:
+def generate_crew_py(agent_nodes, task_nodes, crew_node, edges, nodes, class_name, custom_tools_dict=None) -> str:
     agents_methods = ""
+    needed_tools_imports = []
+    
     for node in agent_nodes:
         agent_key = to_snake_case(node.data.name) if node.data.name else f"agent_{node.id[:8]}"
         method_name = agent_key
         
-        # Ferramentas MCP vinculadas a este agente
+        # Tools
         mcp_ids = getattr(node.data, 'mcpServerIds', []) or []
-        tools_code = "[]"
+        custom_tool_ids = getattr(node.data, 'customToolIds', []) or []
+        
+        tools_list = []
+        tools_code = ""
+
+        # Setup MCP tools
         if mcp_ids:
-            # Coleta as ferramentas dos dicionários de ferramentas passados no __init__
-            tools_list_code = ", ".join([f"self.mcp_tools.get('{mid}', [])" for mid in mcp_ids])
-            tools_code = f"[]\n        for t_list in [{tools_list_code}]:\n            this_tools.extend(t_list)"
-            # Better format
-            tools_code = "this_tools = []"
+            tools_code += "        this_tools = []\n"
             for mid in mcp_ids:
-                tools_code += f"\n        this_tools.extend(self.mcp_tools.get('{mid}', []))"
+                tools_code += f"        this_tools.extend(self.mcp_tools.get('{mid}', []))\n"
+            tools_list.append("this_tools")
+
+        # Setup Custom Tools
+        if custom_tool_ids and custom_tools_dict:
+            for cid in custom_tool_ids:
+                if cid in custom_tools_dict:
+                    tool_data = custom_tools_dict[cid]
+                    tool_slug = to_snake_case(tool_data.name) or f"tool_{cid[:8]}"
+                    
+                    # Extract function name from code
+                    match = re.search(r'def\s+([a-zA-Z0-9_]+)', tool_data.code)
+                    if match:
+                        func_name = match.group(1)
+                        tools_list.append(func_name)
+                        # Store info for imports: (slug, func_name)
+                        if (tool_slug, func_name) not in needed_tools_imports:
+                            needed_tools_imports.append((tool_slug, func_name))
 
         agents_methods += f"""
     @agent
     def {method_name}(self) -> Agent:
-        {tools_code if mcp_ids else ""}
+{tools_code if mcp_ids else ""}
         return Agent(
             config=self.agents_config['{agent_key}'],
-            verbose=True{",\n            tools=this_tools" if mcp_ids else ""}
+            verbose=True{",\n            tools=[" + ", ".join(tools_list) + "]" if tools_list else ""}
         )
 """
 
@@ -334,14 +401,35 @@ def generate_crew_py(agent_nodes, task_nodes, crew_node, edges, nodes, class_nam
         task_key = to_snake_case(node.data.name) if node.data.name else f"task_{node.id[:8]}"
         method_name = task_key
         
-        # Build context if any
+        # Tools (Custom Tools only for Tasks)
+        custom_tool_ids = getattr(node.data, 'customToolIds', []) or []
+        task_tools_list = []
+        
+        if custom_tool_ids and custom_tools_dict:
+            for cid in custom_tool_ids:
+                if cid in custom_tools_dict:
+                    tool_data = custom_tools_dict[cid]
+                    tool_slug = to_snake_case(tool_data.name) or f"tool_{cid[:8]}"
+                    
+                    # Extract function name from code
+                    match = re.search(r'def\s+([a-zA-Z0-9_]+)', tool_data.code)
+                    if match:
+                        func_name = match.group(1)
+                        task_tools_list.append(func_name)
+                        # Store info for imports: (slug, func_name)
+                        if (tool_slug, func_name) not in needed_tools_imports:
+                            needed_tools_imports.append((tool_slug, func_name))
+
+        # Build context
         context_ids = getattr(node.data, 'context', []) or []
         context_line = ""
         if context_ids:
             context_methods = []
             for cid in context_ids:
-                if cid in nodes:
-                    cnode = nodes[cid]
+                # Find node in the nodes dict
+                cnode = nodes.get(cid)
+                
+                if cnode:
                     ckey = to_snake_case(cnode.data.name) if cnode.data.name else f"task_{cid[:8]}"
                     context_methods.append(f"self.{ckey}()")
             if context_methods:
@@ -351,7 +439,7 @@ def generate_crew_py(agent_nodes, task_nodes, crew_node, edges, nodes, class_nam
     @task
     def {method_name}(self) -> Task:
         return Task(
-            config=self.tasks_config['{task_key}']{context_line}
+            config=self.tasks_config['{task_key}']{context_line}{",\n            tools=[" + ", ".join(task_tools_list) + "]" if task_tools_list else ""}
         )
 """
 
@@ -359,8 +447,13 @@ def generate_crew_py(agent_nodes, task_nodes, crew_node, edges, nodes, class_nam
     if crew_node and getattr(crew_node.data, 'process', None) == "hierarchical":
         process_type = "Process.hierarchical"
 
+    tools_import = ""
+    if needed_tools_imports:
+        for slug, func in needed_tools_imports:
+            tools_import += f"\nfrom .tools.{slug} import {func}"
+
     content = f"""from crewai import Agent, Crew, Process, Task
-from crewai.project import CrewBase, agent, crew, task
+from crewai.project import CrewBase, agent, crew, task{tools_import}
 
 @CrewBase
 class {class_name}():
