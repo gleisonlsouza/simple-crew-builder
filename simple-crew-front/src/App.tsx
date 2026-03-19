@@ -4,6 +4,7 @@ import Dashboard from './pages/Dashboard';
 import Builder from './pages/Builder';
 import SettingsPage from './pages/Settings';
 import { useStore } from './store';
+import { WorkspaceExplorer } from './components/WorkspaceExplorer';
 
 function App() {
   const theme = useStore((state) => state.theme);
@@ -36,6 +37,7 @@ function App() {
         <Route path="/workflow/:id" element={<Builder />} />
         <Route path="/settings" element={<SettingsPage />} />
       </Routes>
+      <WorkspaceExplorer />
     </BrowserRouter>
   );
 }

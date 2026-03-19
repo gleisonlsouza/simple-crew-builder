@@ -58,6 +58,7 @@ class GraphData(BaseModel):
 class ProjectBase(BaseModel):
     name: str
     description: Optional[str] = None
+    workspace_id: Optional[Any] = None # UUID
     canvas_data: Dict[str, Any]
 
 class ProjectCreate(ProjectBase):
@@ -74,6 +75,7 @@ class ProjectRead(ProjectBase):
 class ProjectUpdate(BaseModel):
     name: Optional[str] = None
     description: Optional[str] = None
+    workspace_id: Optional[Any] = None
     canvas_data: Optional[Dict[str, Any]] = None
 
 # Schemas para CRUD de Credenciais

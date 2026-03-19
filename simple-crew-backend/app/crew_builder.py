@@ -3,7 +3,7 @@ import threading
 import queue
 import json
 import typing
-from typing import Dict, List, Iterator, Any
+from typing import Dict, List, Iterator, Any, Optional
 from pathlib import Path
 from crewai import Agent, Task, Crew, Process
 from crewai.tools import tool, BaseTool
@@ -12,6 +12,7 @@ import os
 from pydantic import BaseModel, Field
 from .models import LLMModel, Credential, MCPServer, AppSettings, Workspace
 from .schemas import GraphData
+from mcp import StdioServerParameters
 from crewai_tools import (
     SerperDevTool, 
     ScrapeWebsiteTool, 
@@ -26,12 +27,13 @@ from crewai_tools import (
     CSVSearchTool,
     MDXSearchTool,
     TXTSearchTool,
-    OCRTool
+    MCPServerAdapter
 )
 from .database import engine
 from sqlmodel import Session, select
 from dotenv import load_dotenv
-from contextlib import ExitStack
+from contextlib import ExitStack, redirect_stdout
+import contextlib
 
 load_dotenv()
 
@@ -44,61 +46,47 @@ class StreamToQueue:
     def write(self, buf):
         for line in buf.splitlines(True):
             if line.strip():
-                # Encapsula o print nativo do CrewAI numa casca estruturada
+                # Envia para a Queue (Frontend)
                 self.q.put(json.dumps({"type": "log", "data": line}) + "\n")
+                
+                # Mirror para o Terminal Real (Importante para debug do usuário)
+                try:
+                    if sys.__stdout__:
+                        sys.__stdout__.write(line)
+                        sys.__stdout__.flush()
+                except:
+                    pass
                 
     def flush(self):
         pass
-
-# --- DEFINIÇÃO DE SCHEMAS PARA PLAYWRIGHT MCP ---
-class BrowserNavigateSchema(BaseModel):
-    url: str = Field(...)
-class BrowserClickSchema(BaseModel):
-    ref: str = Field(...)
-class BrowserTypeSchema(BaseModel):
-    ref: str = Field(...)
-    text: str = Field(...)
-class BrowserSnapshotSchema(BaseModel):
-    pass
-
-playwright_schemas = {
-    "browser_navigate": BrowserNavigateSchema,
-    "browser_click": BrowserClickSchema,
-    "browser_type": BrowserTypeSchema,
-    "browser_snapshot": BrowserSnapshotSchema
-}
 
 # --- WORKSPACE AWARE FILE TOOLS ---
 class WorkspaceFileReadTool(FileReadTool):
     workspace_path: str = Field(..., description="The root path of the workspace")
     
-    def _run(self, **kwargs: Any) -> str:
-        file_path = kwargs.get('file_path') or self.file_path
+    def _run(self, file_path: Optional[str] = None, **kwargs: Any) -> str:
         if file_path:
             abs_workspace = os.path.abspath(self.workspace_path)
             if not os.path.isabs(file_path):
                 file_path = os.path.join(abs_workspace, file_path)
-            kwargs['file_path'] = file_path
         
-        print(f"WorkspaceFileReadTool: reading {kwargs.get('file_path')}")
-        return super()._run(**kwargs)
+        print(f"WorkspaceFileReadTool: reading {file_path}")
+        return super()._run(file_path=file_path, **kwargs)
 
 class WorkspaceFileWriterTool(FileWriterTool):
     workspace_path: str = Field(..., description="The root path of the workspace")
     
-    def _run(self, **kwargs: Any) -> str:
-        requested_dir = kwargs.get('directory')
+    def _run(self, filename: str, content: str, directory: Optional[str] = None, **kwargs: Any) -> str:
         abs_workspace = os.path.abspath(self.workspace_path)
         
-        # Se o agente não passar diretório, ou passar algo relativo, forçamos o workspace
-        if not requested_dir or not os.path.isabs(requested_dir):
-            if not requested_dir or requested_dir == "./":
-                kwargs['directory'] = abs_workspace
+        if not directory or not os.path.isabs(directory):
+            if not directory or directory == "./":
+                directory = abs_workspace
             else:
-                kwargs['directory'] = os.path.join(abs_workspace, requested_dir.lstrip('./\\'))
+                directory = os.path.join(abs_workspace, directory.lstrip('./\\'))
         
-        print(f"WorkspaceFileWriterTool: writing {kwargs.get('filename')} to {kwargs.get('directory')}")
-        return super()._run(**kwargs)
+        print(f"WorkspaceFileWriterTool: writing {filename} to {directory}")
+        return super()._run(filename=filename, content=content, directory=directory, **kwargs)
 
 def neutralize_path(path: str, abs_workspace: str) -> str:
     """
@@ -197,6 +185,9 @@ def wrap_tool_with_workspace_guard(tool_instance: BaseTool, workspace_path: str)
     relacionados a caminhos sejam forçados para dentro do workspace.
     Também limpa atributos da instância que possam estar apontando para fora.
     """
+    if not workspace_path:
+        return tool_instance
+        
     original_run = tool_instance._run
     abs_workspace = os.path.abspath(workspace_path)
     
@@ -221,7 +212,7 @@ def wrap_tool_with_workspace_guard(tool_instance: BaseTool, workspace_path: str)
     tool_instance._run = protected_run
     return tool_instance
 
-def run_crew_stream(graph_data: GraphData) -> Iterator[str]:
+def run_crew_stream(graph_data: GraphData, workspace_id: Optional[Any] = None) -> Iterator[str]:
     nodes = {node.id: node for node in graph_data.nodes}
     edges = graph_data.edges
     
@@ -303,15 +294,26 @@ def run_crew_stream(graph_data: GraphData) -> Iterator[str]:
                 # --- PRE-STEP: Resolve Workspace Path (Physical for this run) ---
                 workspace_path = None
                 with Session(engine) as session:
-                    settings = session.exec(select(AppSettings).where(AppSettings.user_id == ROOT_USER_ID)).first()
-                    if settings and settings.active_workspace_id:
-                        ws_record = session.get(Workspace, settings.active_workspace_id)
+                    # 1. Prioridade: Workspace vindo do Projeto (passado por argumento)
+                    ws_to_use_id = workspace_id
+                    
+                    # 2. Fallback: Workspace Global das configurações
+                    if not ws_to_use_id:
+                        settings = session.exec(select(AppSettings).where(AppSettings.user_id == ROOT_USER_ID)).first()
+                        if settings:
+                            ws_to_use_id = settings.active_workspace_id
+
+                    # Resolve o path físico se temos um ID
+                    if ws_to_use_id:
+                        ws_record = session.get(Workspace, ws_to_use_id)
                         if ws_record:
                             workspace_path = os.path.abspath(os.path.join(os.getcwd(), ws_record.path))
-                            log_debug(f"Resolved workspace_path: {workspace_path}")
+                            log_debug(f"Resolved workspace_path (ID: {ws_to_use_id}): {workspace_path}")
                     
+                    # 3. Fallback final: default
                     if not workspace_path:
                         workspace_path = os.path.abspath(os.path.join(os.getcwd(), "workspaces", "default"))
+                        log_debug(f"Using default workspace: {workspace_path}")
                     
                     if not os.path.exists(workspace_path):
                         os.makedirs(workspace_path, exist_ok=True)
@@ -324,10 +326,14 @@ def run_crew_stream(graph_data: GraphData) -> Iterator[str]:
                 all_mcp_ids = set()
                 for node in agent_nodes:
                     mcp_server_ids = getattr(node.data, 'mcpServerIds', []) or []
+                    if mcp_server_ids:
+                        log_debug(f"Agent {node.data.name} has MCP Server IDs: {mcp_server_ids}")
                     for mid in mcp_server_ids:
                         all_mcp_ids.add(mid)
                 
                 log_debug(f"Unique MCP IDs found in graph: {all_mcp_ids}")
+                if not all_mcp_ids:
+                    log_debug("No MCP Server IDs found in any agent node.")
                 
                 # Carregamos do banco e ativamos os Adapters
                 mcp_adapters_cache = {}
@@ -344,46 +350,65 @@ def run_crew_stream(graph_data: GraphData) -> Iterator[str]:
                                     command = "npx.cmd"
                                 
                                 env = dict(os.environ)
+                                env["UV_PYTHON"] = "3.12"
                                 if mcp_record.env_vars:
                                     env.update(mcp_record.env_vars)
 
-                                log_debug(f"Starting stdio MCP: {command} {' '.join(mcp_record.args or [])}")
-                                params = StdioServerParameters(
-                                    command=command,
-                                    args=mcp_record.args or [],
-                                    env=env
-                                )
-                                adapter = MCPServerAdapter(params)
+                                # Força args para Lista se vier como Dict do banco por algum motivo
+                                mcp_args = mcp_record.args or []
+                                if isinstance(mcp_args, dict):
+                                    mcp_args = [str(v) for v in mcp_args.values()]
+                                
+                                log_debug(f"Starting stdio MCP: {command} {' '.join(mcp_args)}")
+                                try:
+                                    params = StdioServerParameters(
+                                        command=command,
+                                        args=mcp_args,
+                                        env=env
+                                    )
+                                    adapter = MCPServerAdapter(params, connect_timeout=120)
+                                except Exception as pe:
+                                    log_debug(f"Failed to create StdioServerParameters or Adapter for {mcp_record.name}: {str(pe)}")
+                                    continue
                             else:
                                 # SSE (Em desenvolvimento - Requer SseClientParameters do SDK MCP)
                                 log_debug(f"SSE transport not yet supported for {mcp_record.name}")
                                 continue
                             
-                            # Entramos no contexto do adapter para ativar a conexão (Retorna a lista de ferramentas)
-                            raw_tools = stack.enter_context(adapter)
-                            log_debug(f"MCP {mcp_record.name} connected. Found {len(raw_tools)} tools.")
+                            log_debug(f"Connecting to MCP {mcp_record.name} via stack.enter_context...")
+                            try:
+                                # Entramos no contexto do adapter para ativar a conexão (Retorna a lista de ferramentas)
+                                raw_tools = stack.enter_context(adapter)
+                                log_debug(f"MCP {mcp_record.name} connected. Found {len(raw_tools if raw_tools else [])} raw tools.")
+                            except Exception as ce:
+                                log_debug(f"Failed to enter MCP context for {mcp_record.name}: {str(ce)}")
+                                continue
+                            
+                            if not raw_tools:
+                                log_debug(f"Warning: MCP server {mcp_record.name} returned 0 tools.")
                             
                             # Playwright Schema Injection & Filtering
                             is_playwright = "playwright" in mcp_record.name.lower() or any("playwright" in str(arg).lower() for arg in (mcp_record.args or []))
                             
                             processed_tools = []
                             if is_playwright:
-                                allowed_suffixes = list(playwright_schemas.keys())
+                                allowed_suffixes = ["browser_navigate", "browser_click", "browser_type", "browser_snapshot"]
                                 for mcp_tool in raw_tools:
-                                    match = next((s for s in allowed_suffixes if mcp_tool.name.endswith(s)), None)
-                                    if match:
-                                        log_debug(f"Injecting schema for Playwright tool: {mcp_tool.name}")
-                                        mcp_tool.args_schema = playwright_schemas[match]
+                                    if any(mcp_tool.name.endswith(s) for s in allowed_suffixes):
                                         processed_tools.append(mcp_tool)
                                     else:
                                         log_debug(f"Skipping non-essential Playwright tool: {mcp_tool.name}")
                             else:
-                                processed_tools = raw_tools
+                                processed_tools.extend(raw_tools)
+                            
+                            mcp_adapters_cache[str(mcp_id)] = processed_tools
                             
                             for mcp_tool in processed_tools:
-                                wrap_tool_with_workspace_guard(mcp_tool, workspace_path)
+                                # Workspace Guard (only for non-MCP for now to be safe, or if you want it enabled)
+                                # wrap_tool_with_workspace_guard(mcp_tool, workspace_path)
+                                pass
                                 
-                            mcp_adapters_cache[mcp_id] = processed_tools
+                            mcp_adapters_cache[str(mcp_id)] = processed_tools
                         except Exception as e:
                             log_debug(f"Connection failed for {mcp_record.name}: {str(e)}")
                 def resolve_node_tools(node_data, node_name, include_mcp=True):
@@ -433,8 +458,6 @@ def run_crew_stream(graph_data: GraphData) -> Iterator[str]:
                                 node_tools.append(MDXSearchTool(config={'directory': workspace_path} if workspace_path else {}))
                             elif gid == 'txt_search':
                                 node_tools.append(TXTSearchTool(config={'directory': workspace_path} if workspace_path else {}))
-                            elif gid == 'ocr':
-                                node_tools.append(OCRTool())
                             
                             log_debug(f"Default tool '{gid}' added to {node_name}")
                         except Exception as ge:
@@ -442,12 +465,18 @@ def run_crew_stream(graph_data: GraphData) -> Iterator[str]:
 
                     if include_mcp:
                         mcp_ids = getattr(node_data, 'mcpServerIds', []) or []
+                        log_debug(f"Node {node_name} requesting tools for MCP IDs: {mcp_ids}")
                         for mid in mcp_ids:
-                            if mid in mcp_adapters_cache:
-                                tools_to_add = mcp_adapters_cache[mid]
+                            mid_str = str(mid)
+                            if mid_str in mcp_adapters_cache:
+                                tools_to_add = mcp_adapters_cache[mid_str]
                                 if isinstance(tools_to_add, list):
                                     node_tools.extend(tools_to_add)
-                                log_debug(f"Node {node_name} received {len(tools_to_add)} tools from MCP {mid}")
+                                    log_debug(f"Node {node_name} received {len(tools_to_add)} tools from MCP {mid_str}")
+                                else:
+                                    log_debug(f"Warning: Cached MCP item for {mid_str} is not a list: {type(tools_to_add)}")
+                            else:
+                                log_debug(f"Warning: MCP ID {mid_str} not found in mcp_adapters_cache. Cache Keys: {list(mcp_adapters_cache.keys())}")
                     
                     custom_ids = getattr(node_data, 'customToolIds', []) or []
                     for cid in custom_ids:
@@ -515,7 +544,7 @@ def run_crew_stream(graph_data: GraphData) -> Iterator[str]:
                                         break
                             
                             if found_tool:
-                                wrap_tool_with_workspace_guard(found_tool, workspace_path)
+                                # REMOVA ESTA LINHA: wrap_tool_with_workspace_guard(found_tool, workspace_path)
                                 try:
                                     # Ensure metadata
                                     if not hasattr(found_tool, 'name') or not found_tool.name:
@@ -532,10 +561,6 @@ def run_crew_stream(graph_data: GraphData) -> Iterator[str]:
                         except Exception as te:
                             log_debug(f"Failed to execute custom tool '{tool_def.name}' for {node_name}: {str(te)}")
                     
-                    # Final guard for all resolved tools
-                    for t in node_tools:
-                        wrap_tool_with_workspace_guard(t, workspace_path)
-                            
                     return node_tools
 
                 agents_map: Dict[str, Agent] = {}
@@ -572,8 +597,12 @@ def run_crew_stream(graph_data: GraphData) -> Iterator[str]:
                                 if credential.provider: llm_params["provider"] = credential.provider
                                 agent_llm = LLM(**llm_params)
 
-                    # Injeção de Prompt: Força o Agente a respeitar o Workspace
-                    workspace_instruction = f"\n\nIMPORTANT: Your current working directory is '{workspace_path}'. All file operations MUST be relative to this path. Never write or read files outside of this directory."
+                    # Injeção de Prompt: Força o Agente a respeitar o Workspace (como restrição, não como ordem)
+                    workspace_instruction = (
+                        f"\n\nIMPORTANT: Your current working directory is '{workspace_path}'. "
+                        "All file operations (read/write) MUST be done inside this directory or its subfolders. "
+                        "Never attempt to access paths outside this workspace."
+                    )
                     
                     agent = Agent(
                         role=role,
@@ -584,6 +613,7 @@ def run_crew_stream(graph_data: GraphData) -> Iterator[str]:
                         step_callback=make_agent_step_callback(node.id),
                         llm=agent_llm,
                         tools=this_agent_tools,
+                        reasoning=False,
                         max_iter=getattr(node.data, 'max_iter', 60),
                         max_execution_time=getattr(node.data, 'max_execution_time', 300)
                     )
@@ -617,17 +647,29 @@ def run_crew_stream(graph_data: GraphData) -> Iterator[str]:
                     target_agent = agents_map[source_agent_id]
                     log_debug(f"Task {task_name} assigned to Agent {target_agent.role if hasattr(target_agent, 'role') else source_agent_id}")
                     
-                    # Resolve ferramentas da Task (Apenas Custom Tools, sem MCP para Tasks)
+                    # Resolve ferramentas da Task (Apenas Custom/Global Tools, sem MCP para Tasks como solicitado)
                     this_task_tools = resolve_node_tools(node.data, f"Task {task_name}", include_mcp=False)
                         
-                    # Injeção de Prompt na Task para reforçar o workspace
-                    workspace_task_instruction = f"\n\nNOTE: All files must be handled within the workspace: '{workspace_path}'."
+                    # Injeção de Prompt na Task para reforçar o workspace (como restrição, não como ordem)
+                    workspace_task_instruction = (
+                        f"\n\nIMPORTANT: Your current working directory is '{workspace_path}'. "
+                        "All file operations (read/write) MUST be done inside this directory or its subfolders. "
+                        "Never attempt to access paths outside this workspace."
+                    )
                     
+                    # Para garantir que o agente não perca seus poderes (como Browser/MCP) 
+                    # definidos no nível de Agente, somamos as ferramentas do agente às da Task.
+                    # No CrewAI, se passarmos tools para a Task, elas substituem as do agente se nâo houver soma.
+                    # Usamos um dict para garantir que ferramentas com o mesmo nome não se dupliquem.
+                    combined_tools_dict = {getattr(t, 'name', str(t)): t for t in (target_agent.tools or [])}
+                    combined_tools_dict.update({getattr(t, 'name', str(t)): t for t in this_task_tools})
+                    combined_tools = list(combined_tools_dict.values())
+
                     task = Task(
                         description=description + workspace_task_instruction,
                         expected_output=expected_output,
-                        agent=agents_map[source_agent_id],
-                        tools=this_task_tools,
+                        agent=target_agent,
+                        tools=combined_tools,
                         callback=make_task_callback(node.id)
                     )
                     tasks_list.append(task)
@@ -644,14 +686,22 @@ def run_crew_stream(graph_data: GraphData) -> Iterator[str]:
                 final_tasks_ordered: List[Task] = []
                 final_task_ids_ordered: List[str] = []
                 visited = set()
+                visiting = set() # Rastreia a pilha atual para detectar ciclos
                 
                 def add_task_with_context(tid):
                     if tid in visited or tid not in tasks_dict:
                         return
                     
+                    if tid in visiting:
+                        log_debug(f"ERRO CRÍTICO: Ciclo detectado envolvendo a Task {tid}. Quebrando o loop para evitar crash.")
+                        return # Interrompe a recursão deste galho
+                        
+                    visiting.add(tid)
+                    
                     # 1. Pega os contexts desta task
                     node = nodes.get(tid)
                     if not node:
+                        visiting.remove(tid)
                         return
                     context_ids = getattr(node.data, 'context', []) or []
                     
@@ -670,9 +720,51 @@ def run_crew_stream(graph_data: GraphData) -> Iterator[str]:
                         final_tasks_ordered.append(task_instance)
                         final_task_ids_ordered.append(tid)
                         visited.add(tid)
+                    
+                    visiting.remove(tid)
 
-                for node in task_nodes:
-                    add_task_with_context(node.id)
+                # --- NOVA LÓGICA DE ORDENAÇÃO À PROVA DE BALAS (Baseada em Edges) ---
+                
+                base_task_queue = []
+                
+                # 1. Ordem oficial dos agentes
+                agent_order = getattr(crew_node.data, 'agentOrder', []) if crew_node else []
+                if not agent_order:
+                    agent_order = [n.id for n in agent_nodes]
+
+                # 2. Agrupa as tasks por agente lendo as linhas (edges) do canvas
+                agent_to_tasks = {ag_id: [] for ag_id in agent_order}
+                agent_ids_set = set(agent_order)
+
+                for edge in edges:
+                    if edge.source in agent_ids_set and edge.target in tasks_dict:
+                        agent_to_tasks[edge.source].append(edge.target)
+
+                # 3. Monta a fila respeitando rigorosamente a vez de cada agente
+                for ag_id in agent_order:
+                    tasks_of_agent = agent_to_tasks[ag_id]
+                    
+                    # Tenta organizar pela ordem salva no node (se o front enviou)
+                    ag_node = nodes.get(ag_id)
+                    ag_task_order = getattr(ag_node.data, 'taskOrder', []) if ag_node else []
+                    
+                    for tid in ag_task_order:
+                        if tid in tasks_of_agent and tid not in base_task_queue:
+                            base_task_queue.append(tid)
+                            
+                    # Força a adição de tasks que estão conectadas pela Edge, mas faltaram no array
+                    for tid in tasks_of_agent:
+                        if tid not in base_task_queue:
+                            base_task_queue.append(tid)
+
+                # 4. Fallback para tasks órfãs (segurança extra)
+                for t_node in task_nodes:
+                    if t_node.id not in base_task_queue and t_node.id in tasks_dict:
+                        base_task_queue.append(t_node.id)
+
+                # 5. Executa a montagem final de dependências de contexto
+                for tid in base_task_queue:
+                    add_task_with_context(tid)
 
                 if not final_tasks_ordered:
                     q.put(json.dumps({"type": "error", "error": "A Crew não possui nenhuma Task válida para executar."}) + "\n")
@@ -701,7 +793,10 @@ def run_crew_stream(graph_data: GraphData) -> Iterator[str]:
                 q.put(json.dumps({"type": "final_result", "result": str(result)}) + "\n")
 
             except Exception as e:
-                q.put(json.dumps({"type": "error", "error": str(e)}) + "\n")
+                import traceback
+                error_trace = traceback.format_exc()
+                log_debug(f"CRITICAL ERROR during worker execution:\n{error_trace}")
+                q.put(json.dumps({"type": "error", "error": f"{str(e)}\n{error_trace}"}) + "\n")
             finally:
                 sys.stdout = original_stdout
                 q.put(json.dumps({"type": "done"}) + "\n")

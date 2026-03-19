@@ -43,6 +43,7 @@ export interface Project {
   id: string;
   name: string;
   description?: string;
+  workspace_id?: string;
   canvas_data: {
     nodes: AppNode[];
     edges: AppEdge[];
@@ -116,6 +117,13 @@ export interface Workspace {
   path: string;
 }
 
+export interface WorkspaceFile {
+  name: string;
+  path: string;
+  is_dir: boolean;
+  children?: WorkspaceFile[];
+}
+
 export interface AppState {
   nodes: AppNode[];
   edges: AppEdge[];
@@ -126,6 +134,8 @@ export interface AppState {
   currentProjectId: string | null;
   currentProjectName: string | null;
   currentProjectDescription: string | null;
+  currentProjectWorkspaceId: string | null;
+  updateProjectWorkspaceId: (workspaceId: string | null) => void;
   nodeStatuses: Record<string, NodeStatus>;
   onNodesChange: (changes: any) => void;
   onEdgesChange: (changes: any) => void;
@@ -155,18 +165,32 @@ export interface AppState {
   loadProjectJson: (data: any) => boolean;
   executionResult: string | null;
   setExecutionResult: (result: string | null) => void;
-  isConsoleOpen: boolean;
-  isConsoleExpanded: boolean;
-  setIsConsoleOpen: (isOpen: boolean) => void;
-  setIsConsoleExpanded: (isExpanded: boolean) => void;
+  resetProject: () => void;
+
+  
+  // Workspace management & Settings
+  workspaces: Workspace[];
+  activeWorkspaceId: string | null;
+  systemAiModelId: string | null;
+  setActiveWorkspaceId: (id: string | null) => void;
+  fetchWorkspaces: () => Promise<void>;
+  addWorkspace: (workspace: Omit<Workspace, 'id' | 'created_at' | 'updated_at'>) => Promise<void>;
+  updateWorkspace: (id: string, workspace: Partial<Workspace>) => Promise<void>;
+  deleteWorkspace: (id: string) => Promise<void>;
+  openWorkspace: (id: string) => Promise<void>;
+  fetchSettings: () => Promise<void>;
+
+  updateSettings: (settings: { active_workspace_id?: string | null; system_ai_model_id?: string | null }) => Promise<void>;
+
   theme: 'light' | 'dark';
   toggleTheme: () => void;
   isSettingsOpen: boolean;
   setIsSettingsOpen: (open: boolean) => void;
-  resetProject: () => void;
-  duplicateProject: (id: string) => Promise<void>;
-  updateProjectMetadata: (id: string, name: string, description: string) => Promise<void>;
-  createNewProject: (name: string, description: string) => Promise<{id: string} | null>;
+  isConsoleOpen: boolean;
+  isConsoleExpanded: boolean;
+  setIsConsoleOpen: (isOpen: boolean) => void;
+  setIsConsoleExpanded: (isExpanded: boolean) => void;
+
   credentials: Credential[];
   fetchCredentials: () => Promise<void>;
   addCredential: (credential: Omit<Credential, 'id' | 'created_at'>) => void;
@@ -179,7 +203,6 @@ export interface AppState {
   updateModel: (id: string, model: Partial<ModelConfig>) => void;
   deleteModel: (id: string) => void;
   setDefaultModelConfig: (id: string) => void;
-  
   defaultModel: string;
   setDefaultModel: (model: string) => void;
 
@@ -198,18 +221,17 @@ export interface AppState {
   updateMCPServer: (id: string, server: Partial<MCPServer>) => void;
   deleteMCPServer: (id: string) => void;
 
-  systemAiModelId: string | null;
-  activeWorkspaceId: string | null;
-  workspaces: Workspace[];
-  fetchWorkspaces: () => Promise<void>;
-  addWorkspace: (workspace: Omit<Workspace, 'id'>) => Promise<void>;
-  updateWorkspace: (id: string, workspace: Partial<Workspace>) => Promise<void>;
-  deleteWorkspace: (id: string) => Promise<void>;
-  
-  fetchSettings: () => Promise<void>;
-  setSystemAiModelId: (id: string | null) => void;
-  setActiveWorkspaceId: (id: string | null) => void;
+  // AI Assistant / Consulting
   suggestAiContent: (nodeId: string, field: 'role' | 'goal' | 'backstory' | 'description' | 'expected_output') => Promise<void>;
   suggestBulkAiContent: (nodeId: string) => Promise<void>;
   suggestTaskBulkAiContent: (nodeId: string) => Promise<void>;
+
+  // Explorer
+  isExplorerOpen: boolean;
+  setIsExplorerOpen: (open: boolean) => void;
+  currentExplorerWsId: string | null;
+  setCurrentExplorerWsId: (id: string | null) => void;
+  fetchWorkspaceFiles: (wsId: string) => Promise<WorkspaceFile[]>;
+  fetchFileContent: (wsId: string, path: string) => Promise<string>;
+  downloadWorkspaceZip: (wsId: string, path?: string) => Promise<void>;
 }

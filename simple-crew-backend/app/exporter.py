@@ -176,12 +176,77 @@ Gerado com ❤️ por **Simple Crew Builder**
 """
         zip_file.writestr(f"{folder_name}/README.md", readme_content)
 
-        # 4. Prepare data for YAMLs and Python
+        # 4. Prepare data for YAMLs and Python (Sorted by Visual Hierarchy)
         nodes = {node.id: node for node in graph_data.nodes}
         
-        agent_nodes = [n for n in graph_data.nodes if n.type == 'agent']
-        task_nodes = [n for n in graph_data.nodes if n.type == 'task']
+        all_agent_nodes = [n for n in graph_data.nodes if n.type == 'agent']
+        all_task_nodes = [n for n in graph_data.nodes if n.type == 'task']
         crew_node = next((n for n in graph_data.nodes if n.type == 'crew'), None)
+
+        # --- ORDENAÇÃO À PROVA DE BALAS (Sincronizada com crew_builder.py) ---
+        
+        # 1. Ordem dos Agentes (Hereditário da Crew)
+        agent_order_hint = getattr(crew_node.data, 'agentOrder', []) if crew_node else []
+        agent_ids_set = {n.id for n in all_agent_nodes}
+        
+        ordered_agent_ids = [aid for aid in agent_order_hint if aid in agent_ids_set]
+        # Agentes que escaparam do agentOrder
+        ordered_agent_ids.extend([n.id for n in all_agent_nodes if n.id not in set(ordered_agent_ids)])
+        
+        agent_nodes = [nodes[aid] for aid in ordered_agent_ids if aid in nodes]
+
+        # 2. Agrupa as tasks por agente lendo as edges
+        agent_to_tasks = {aid: [] for aid in ordered_agent_ids}
+        for edge in graph_data.edges:
+            if edge.source in agent_ids_set and nodes.get(edge.target) and nodes[edge.target].type == 'task':
+                if edge.source in agent_to_tasks:
+                    agent_to_tasks[edge.source].append(edge.target)
+        
+        base_task_queue = []
+        for aid in ordered_agent_ids:
+            tasks_of_agent = agent_to_tasks.get(aid, [])
+            ag_node = nodes.get(aid)
+            ag_task_order = getattr(ag_node.data, 'taskOrder', []) if ag_node else []
+            
+            # Prioridade para o taskOrder (ordem visual no card)
+            for tid in ag_task_order:
+                if tid in tasks_of_agent and tid not in base_task_queue:
+                    base_task_queue.append(tid)
+            # Tasks conectadas mas sem ordem explícita
+            for tid in tasks_of_agent:
+                if tid not in base_task_queue:
+                    base_task_queue.append(tid)
+        
+        # Tasks órfãs (segurança)
+        for n in all_task_nodes:
+            if n.id not in base_task_queue:
+                base_task_queue.append(n.id)
+        
+        # 3. Resolução de Grafo (Context Dependencies)
+        final_task_ids_ordered = []
+        visited = set()
+        visiting = set()
+
+        def resolve_task_dependencies(tid):
+            if tid in visiting: return # Cycle protection
+            if tid in visited: return
+            visiting.add(tid)
+            
+            t_node = nodes.get(tid)
+            if t_node:
+                # Pre-requisitos (context) devem vir antes
+                context_ids = getattr(t_node.data, 'context', []) or []
+                for cid in context_ids:
+                    resolve_task_dependencies(cid)
+                
+                final_task_ids_ordered.append(tid)
+                visited.add(tid)
+            visiting.remove(tid)
+
+        for tid in base_task_queue:
+            resolve_task_dependencies(tid)
+        
+        task_nodes = [nodes[tid] for tid in final_task_ids_ordered if tid in nodes]
 
         package_path = f"{folder_name}/src/{folder_name}"
 
@@ -222,9 +287,19 @@ Gerado com ❤️ por **Simple Crew Builder**
                 if not has_decorator:
                     # Apply decorator with name from DB
                     name_for_decorator = tool_data.name.lower().replace(" ", "_")
-                    tool_file_content += f'@tool("{name_for_decorator}")\n'
-                
-                tool_file_content += tool_data.code + "\n"
+                    # Localiza o primeiro 'def' ou 'class' para inserir o decorator logo antes dele
+                    # Capturamos a indentação horizontal existente ([ \t]*)
+                    match = re.search(r'^([ \t]*)(?:def|class)\s+', tool_data.code, re.MULTILINE)
+                    if match:
+                        indent = match.group(1)
+                        decorator_code = f'{indent}@tool("{name_for_decorator}")\n'
+                        start_pos = match.start()
+                        tool_code_modified = tool_data.code[:start_pos] + decorator_code + tool_data.code[start_pos:]
+                        tool_file_content += tool_code_modified + "\n"
+                    else:
+                        tool_file_content += f'@tool("{name_for_decorator}")\n' + tool_data.code + "\n"
+                else:
+                    tool_file_content += tool_data.code + "\n"
                 
                 zip_file.writestr(f"{tools_package_path}/{tool_slug}.py", tool_file_content)
 
@@ -379,7 +454,7 @@ if __name__ == "__main__":
 def generate_crew_py(agent_nodes, task_nodes, crew_node, edges, nodes, class_name, custom_tools_dict=None, global_tools_config=None) -> str:
     agents_methods = ""
     needed_tools_imports = []
-    needed_crewai_tools = set()
+    needed_crewai_tools = {"FileReadTool", "FileWriterTool"}
     
     global_configs = {t.id: t for t in (global_tools_config or [])}
     for node in agent_nodes:
@@ -589,15 +664,6 @@ from pydantic import Field
 import os
 from typing import Any
 
-@CrewBase
-class {class_name}():
-    \"\"\"Orquestração de agentes gerada pelo SimpleCrew\"\"\"
-    agents_config = 'config/agents.yaml'
-    tasks_config = 'config/tasks.yaml'
-
-    def __init__(self, mcp_tools=None):
-        self.mcp_tools = mcp_tools or {{}}
-
 # --- WORKSPACE AWARE FILE TOOLS ---
 class WorkspaceFileReadTool(FileReadTool):
     workspace_path: str = Field(..., description="The root path of the workspace")
@@ -624,6 +690,14 @@ class WorkspaceFileWriterTool(FileWriterTool):
                 kwargs['directory'] = os.path.join(abs_workspace, requested_dir.lstrip('./\\\\'))
         return super()._run(**kwargs)
 
+@CrewBase
+class {class_name}():
+    \"\"\"Orquestração de agentes gerada pelo SimpleCrew\"\"\"
+    agents_config = 'config/agents.yaml'
+    tasks_config = 'config/tasks.yaml'
+
+    def __init__(self, mcp_tools=None):
+        self.mcp_tools = mcp_tools or {{}}
 
     {agents_methods}
     {tasks_methods}

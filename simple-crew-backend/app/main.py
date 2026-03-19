@@ -1,9 +1,14 @@
 import io
+import os
+import shutil
+import tempfile
+import asyncio
+from datetime import datetime
 from contextlib import asynccontextmanager
-from typing import List
-from fastapi import FastAPI, HTTPException, Depends, Query
+from typing import List, Optional, Dict, Any
+from fastapi import FastAPI, HTTPException, Depends, Header, Request, BackgroundTasks, Query
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import StreamingResponse
+from fastapi.responses import FileResponse, StreamingResponse
 from sqlmodel import Session, select
 from .crew_builder import run_crew_stream
 from .database import init_db, get_session
@@ -53,9 +58,25 @@ def home():
 async def execute_crew(
     graph_data: GraphData, 
     save_to_db: bool = Query(False),
+    project_id: Optional[str] = Header(None, alias="X-Project-Id"),
     session: Session = Depends(get_session)
 ):
     try:
+        # Resolve Workspace ID: Priorities: 1. Project level, 2. Global settings
+        active_workspace_id = None
+        
+        # 1. Se informou o ID do projeto, tenta pegar o workspace dele
+        if project_id:
+            db_project = session.get(CrewProject, project_id)
+            if db_project and db_project.workspace_id:
+                active_workspace_id = db_project.workspace_id
+        
+        # 2. Se não tem ID ou o projeto não tem workspace setado, pega o Global (como fallback)
+        if not active_workspace_id:
+            settings = session.exec(select(AppSettings).where(AppSettings.user_id == ROOT_USER_ID)).first()
+            if settings:
+                active_workspace_id = settings.active_workspace_id
+
         # Se solicitado, persiste o estado do canvas no banco vinculado ao usuário root
         if save_to_db:
             # Busca o usuário root (seed)
@@ -73,7 +94,8 @@ async def execute_crew(
                 new_crew = CrewProject(
                     name=crew_name,
                     canvas_data=graph_data.model_dump(),
-                    user_id=user.id
+                    user_id=user.id,
+                    workspace_id=active_workspace_id # Associate with resolved workspace
                 )
                 session.add(new_crew)
                 session.commit()
@@ -84,7 +106,7 @@ async def execute_crew(
 
         # Despacha as dependências e payload JSON para a magia do nosso Parser local CrewAI Stream
         return StreamingResponse(
-            run_crew_stream(graph_data), 
+            run_crew_stream(graph_data, workspace_id=active_workspace_id), 
             media_type="text/event-stream"
         )
     except ValueError as ve:
@@ -599,6 +621,126 @@ async def delete_workspace(ws_id: str, session: Session = Depends(get_session)):
     session.delete(ws)
     session.commit()
     return {"message": "Workspace removido com sucesso"}
+
+@app.post("/api/v1/workspaces/{ws_id}/open")
+async def open_workspace(ws_id: str, session: Session = Depends(get_session)):
+    ws = session.get(Workspace, ws_id)
+    if not ws:
+        raise HTTPException(status_code=404, detail="Workspace não encontrado")
+    
+    abs_path = os.path.abspath(os.path.join(os.getcwd(), ws.path))
+    if not os.path.exists(abs_path):
+        os.makedirs(abs_path, exist_ok=True)
+    
+    try:
+        os.startfile(abs_path)
+        return {"message": f"Workspace {ws.name} aberto no explorador de arquivos"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Erro ao abrir workspace: {str(e)}")
+
+@app.get("/api/v1/workspaces/{ws_id}/files")
+async def list_workspace_files(ws_id: str, session: Session = Depends(get_session)):
+    ws = session.get(Workspace, ws_id)
+    if not ws:
+        raise HTTPException(status_code=404, detail="Workspace não encontrado")
+    
+    abs_root = os.path.abspath(os.path.join(os.getcwd(), ws.path))
+    if not os.path.exists(abs_root):
+        return []
+
+    def build_tree(current_path):
+        tree = []
+        try:
+            for entry in os.scandir(current_path):
+                rel_path = os.path.relpath(entry.path, abs_root)
+                node = {
+                    "name": entry.name,
+                    "path": rel_path.replace("\\", "/"),
+                    "is_dir": entry.is_dir()
+                }
+                if entry.is_dir():
+                    node["children"] = build_tree(entry.path)
+                tree.append(node)
+        except Exception:
+            pass
+        # Sort: Folders first, then alphabetically
+        tree.sort(key=lambda x: (not x["is_dir"], x["name"].lower()))
+        return tree
+
+    return build_tree(abs_root)
+
+@app.get("/api/v1/workspaces/{ws_id}/files/content")
+async def get_file_content(ws_id: str, path: str, session: Session = Depends(get_session)):
+    ws = session.get(Workspace, ws_id)
+    if not ws:
+        raise HTTPException(status_code=404, detail="Workspace não encontrado")
+    
+    abs_root = os.path.abspath(os.path.join(os.getcwd(), ws.path))
+    # Security: join and check realpath to prevent traversal
+    target_path = os.path.abspath(os.path.join(abs_root, path))
+    
+    if not target_path.startswith(abs_root):
+        raise HTTPException(status_code=403, detail="Acesso negado (tentativa de path traversal)")
+    
+    if not os.path.exists(target_path) or os.path.isdir(target_path):
+        raise HTTPException(status_code=404, detail="Arquivo não encontrado")
+    
+    try:
+        with open(target_path, "r", encoding="utf-8") as f:
+            content = f.read()
+            return {"content": content}
+    except UnicodeDecodeError:
+        return {"content": "[Arquivo binário ou codificação não suportada]"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/v1/workspaces/{ws_id}/download-zip")
+async def download_workspace_zip(
+    ws_id: str, 
+    path: str = "", 
+    background_tasks: BackgroundTasks = None,
+    session: Session = Depends(get_session)
+):
+    ws = session.get(Workspace, ws_id)
+    if not ws:
+        raise HTTPException(status_code=404, detail="Workspace não encontrado")
+    
+    abs_root = os.path.abspath(os.path.join(os.getcwd(), ws.path))
+    target_path = os.path.abspath(os.path.join(abs_root, path))
+    
+    if not target_path.startswith(abs_root):
+        raise HTTPException(status_code=403, detail="Acesso negado")
+    
+    if not os.path.exists(target_path) or not os.path.isdir(target_path):
+        raise HTTPException(status_code=404, detail="Diretório não encontrado")
+
+    temp_dir = tempfile.mkdtemp()
+    base_name = f"{ws.name}_{path.replace('/', '_') or 'full'}"
+    zip_output_base = os.path.join(temp_dir, base_name)
+    
+    try:
+        zip_file_path = shutil.make_archive(zip_output_base, 'zip', target_path)
+        
+        def cleanup():
+            try:
+                shutil.rmtree(temp_dir)
+            except Exception:
+                pass
+            
+        if background_tasks:
+            background_tasks.add_task(cleanup)
+        
+        return FileResponse(
+            path=zip_file_path,
+            filename=f"{base_name}.zip",
+            media_type="application/zip"
+        )
+    except Exception as e:
+        if os.path.exists(temp_dir):
+            shutil.rmtree(temp_dir)
+        raise HTTPException(status_code=500, detail=str(e))
+
 
 # --- Settings Endpoints ---
 @app.get("/api/v1/settings", response_model=AppSettingsRead)

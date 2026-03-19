@@ -59,6 +59,8 @@ class CrewProject(SQLModel, table=True):
     user_id: uuid.UUID = Field(foreign_key="user.id")
     user: User = Relationship(back_populates="crews")
 
+    workspace_id: Optional[uuid.UUID] = Field(default=None, foreign_key="workspace.id", sa_column_kwargs={"nullable": True})
+
     # Timestamps
     created_at: datetime = Field(
         sa_column=Column(DateTime(timezone=True), server_default=func.now())
@@ -129,12 +131,12 @@ class MCPServer(SQLModel, table=True):
     
     # Stdio fields
     command: Optional[str] = None
-    args: Optional[Dict[str, Any]] = Field(default_factory=dict, sa_column=Column(JSON))
-    env_vars: Optional[Dict[str, Any]] = Field(default_factory=dict, sa_column=Column(JSON))
+    args: Optional[list[str]] = Field(default_factory=list, sa_column=Column(JSON))
+    env_vars: Optional[Dict[str, str]] = Field(default_factory=dict, sa_column=Column(JSON))
     
     # SSE fields
     url: Optional[str] = None
-    headers: Optional[Dict[str, Any]] = Field(default_factory=dict, sa_column=Column(JSON))
+    headers: Optional[Dict[str, str]] = Field(default_factory=dict, sa_column=Column(JSON))
     
     # Relationship
     user_id: uuid.UUID = Field(foreign_key="user.id")
