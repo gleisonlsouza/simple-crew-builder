@@ -1259,7 +1259,7 @@ export const useStore = create<AppState>((set, get) => ({
         systemAiModelId: settings.system_ai_model_id
       });
     } catch (error) {
-      console.error("Error fetching file content:", error);
+      console.error("Error fetching settings:", error);
       throw error;
     }
   },
@@ -1592,10 +1592,14 @@ export const useStore = create<AppState>((set, get) => ({
   },
 
   setActiveWorkspaceId: (id: string | null) => set({ activeWorkspaceId: id }),
+  setSystemAiModelId: (id: string | null) => {
+    set({ systemAiModelId: id });
+    get().updateSettings({ system_ai_model_id: id });
+  },
   
   updateSettings: async (settings) => {
     try {
-      const response = await fetch('http://localhost:8000/api/v1/settings/00000000-0000-0000-0000-000000000000', {
+      const response = await fetch('http://localhost:8000/api/v1/settings', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(settings),

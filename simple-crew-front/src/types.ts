@@ -173,6 +173,7 @@ export interface AppState {
   workspaces: Workspace[];
   activeWorkspaceId: string | null;
   systemAiModelId: string | null;
+  setSystemAiModelId: (id: string | null) => void;
   setActiveWorkspaceId: (id: string | null) => void;
   fetchWorkspaces: () => Promise<void>;
   addWorkspace: (workspace: Omit<Workspace, 'id' | 'created_at' | 'updated_at'>) => Promise<void>;
