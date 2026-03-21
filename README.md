@@ -1,75 +1,129 @@
-# 🚀 SimpleCrew
+# 🚀 Simple Crew Builder
 
-SimpleCrew is a professional-grade visual builder for **CrewAI**, allowing you to design, orchestrate, and monitor AI Multi-Agent systems through an intuitive drag-and-drop interface.
+![Simple Crew Builder](images/simple-crew-builder.png)
 
-![SimpleCrew Banner](https://images.unsplash.com/photo-1677442136019-21780ecad995?auto=format&fit=crop&q=80&w=1600)
+**Simple Crew Builder** is a premium, open-source visual orchestrator for **CrewAI**. It empowers developers and AI enthusiasts to design, configure, and execute complex Multi-Agent systems through a stunning, intuitive drag-and-drop interface.
+
+> "The best way to predict the future is to invent it." — Alan Kay
+
+Built with a focus on ease of use and visual excellence, Simple Crew Builder removes the friction of configuring agents, tasks, and tools, letting your imagination run wild.
+
+---
 
 ## ✨ Features
 
-- **Visual Orchestration:** Drag and drop Agents, Tasks, and Crews using a React Flow canvas.
-- **Real-time SSE Streaming:** Watch the AI's "thought process" letter-by-letter with Server-Sent Events.
-- **Dynamic Status Tracking:** Nodes and connections change colors (Gray -> Blue -> Green) in real-time as the execution flows.
-- **Collapsible Console:** A sleek, VS-Code-style drawer to monitor raw logs and final results.
-- **Robust Connection:** Built-in heartbeats and sentinel signals to prevent timeouts during long AI processing.
+- **Visual Workflow Designer**: Orchestrate Agents, Tasks, and Crews using a powerful React Flow canvas.
+- **Real-time Execution Streaming**: Watch your agents "think" and act in real-time via Server-Sent Events (SSE).
+- **Dynamic Status Monitoring**: Visual cues (colors and animations) show exactly where your execution is at any moment.
+- **Advanced Configuration**: Full support for LLM parameters, Custom Python Tools, and MCP (Model Context Protocol) servers.
+- **Docker Ready**: Deploy everything seamlessly with a single command.
+- **Premium Aesthetics**: A modern, dark-themed UI designed for a high-end experience.
+
+---
 
 ## 🛠 Tech Stack
 
 ### Frontend
-- **React 18** + **Vite**
-- **Tailwind CSS** (Modern, premium aesthetics)
-- **Zustand** (Global state management)
-- **React Flow** (Visual graph engine)
-- **Lucide React** (Icons)
+- **React 18** + **Vite** (Ultra-fast development)
+- **Tailwind CSS** (Custom design system)
+- **Zustand** (State management)
+- **React Flow** (Visual orchestration engine)
+- **Lucide React** (Premium icons)
 
 ### Backend
-- **Python 3.10+**
-- **FastAPI** (High-performance streaming API)
-- **CrewAI** (Multi-agent framework)
-- **Uvicorn** (ASGI server)
+- **Python 3.12**
+- **FastAPI** (High-performance API with streaming)
+- **CrewAI** (The heavy-lifting Multi-Agent framework)
+- **PostgreSQL** (Persistent storage for configurations)
+- **Docker & Docker Compose** (Containerization)
+
+---
 
 ## 🚀 Getting Started
 
-### Prerequisites
-- Node.js & npm
-- Python 3.10+
-- OpenAI API Key (configured in backend `.env`)
+There are two ways to run the Simple Crew Builder: using **Docker (Recommended)** or **Individually**.
 
-### 1. Backend Setup
+### 📦 Option 1: Running with Docker (easiest)
+
+Ensure you have [Docker](https://www.docker.com/) and [Docker Compose](https://docs.docker.com/compose/) installed.
+
+1. **Clone the repository**:
+   ```bash
+   git clone https://github.com/gleisonlsouza/simple-crew-builder.git
+   cd simple-crew-builder
+   ```
+
+2. **Configure Environment Variables**:
+   Copy the example environment file and add your keys.
+   ```bash
+   cp simple-crew-backend/.env.example simple-crew-backend/.env
+   # Edit simple-crew-backend/.env and add your OPENAI_API_KEY (and others)
+   ```
+
+3. **Start the containers**:
+   ```bash
+   docker compose up --build
+   ```
+
+The application will be available at:
+- **Frontend**: `http://localhost:5173`
+- **Backend API**: `http://localhost:8000`
+- **Postgres**: `localhost:5432`
+
+---
+
+### 🛠 Option 2: Running Individually (Development)
+
+#### 1. Backend Setup
+Requires **Python 3.12+** and **Node.js 20+** (if using MCP).
+
 ```bash
 cd simple-crew-backend
-# Install dependencies (using uv or pip)
+# Install dependencies using 'uv' (recommended)
 uv sync
-# Or: pip install -r requirements.txt
+# Or use pip
+pip install -r requirements.txt
 
-# Configure environment
-cp .env.example .env
-# Edit .env and add your OPENAI_API_KEY
-
-# Run the server
-uv run -m uvicorn app.main:app --reload
+# Start the FastAPI server
+uv run -m uvicorn app.main:app --reload --port 8000
 ```
-The API will be available at `http://localhost:8000`.
 
-### 2. Frontend Setup
+#### 2. Frontend Setup
+Requires **Node.js 20+**.
+
 ```bash
 cd simple-crew-front
 npm install
 npm run dev
 ```
+
 The application will be available at `http://localhost:5173`.
 
-## 📂 Project Structure
+---
 
-```text
-SimpleCrew/
-├── simple-crew-backend/    # FastAPI + CrewAI logic
-│   ├── app/                # Main application code
-│   └── .env                # Backend configuration
-├── simple-crew-front/      # React + Vite frontend
-│   ├── src/                # Frontend source code
-│   └── public/             # Static assets
-└── README.md               # You are here!
-```
+## 🤝 Contributing
+
+This is an **Open Source** project and we ❤️ contributions! 
+Whether it's a bug report, a new feature, or a documentation improvement, feel free to open a Pull Request or Issue.
+
+1. Fork the Project
+2. Create your Feature Branch (`git checkout -b feature/AmazingFeature`)
+3. Commit your Changes (`git commit -m 'Add some AmazingFeature'`)
+4. Push to the Branch (`git push origin feature/AmazingFeature`)
+5. Open a Pull Request
+
+---
+
+## 👨‍💻 Author
+
+Created with ❤️ by **[Gleison Souza](https://www.linkedin.com/in/gleisonlsouza/)**
+
+---
 
 ## 📜 License
-MIT
+
+Distributed under the MIT License. See `LICENSE` for more information.
+
+---
+
+*Let your imagination run wild and build the future of AI agents today!*
