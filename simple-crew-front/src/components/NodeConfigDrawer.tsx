@@ -340,7 +340,7 @@ export function NodeConfigDrawer() {
     setSuggestionState(prev => ({ ...prev, isOpen: false }));
   };
 
-  const handleFieldKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement | HTMLInputElement | any>, field: string) => {
+  const handleFieldKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement | HTMLInputElement | any>) => {
     if (suggestionState.isOpen) {
       const crewNode = nodes.find(n => n.type === 'crew');
       const inputs = Object.keys((crewNode?.data as any)?.inputs || {}).filter(k => !k.startsWith('input_'));
@@ -373,7 +373,11 @@ export function NodeConfigDrawer() {
     updateFn: (val: string) => void
   ) => {
     const value = e.target.value;
-    const cursorPos = e.target.selectionStart || 0;
+    const targetElement = (e.target.getBoundingClientRect ? e.target : document.activeElement) as HTMLTextAreaElement | HTMLInputElement;
+    const cursorPos = (targetElement && typeof targetElement.selectionStart === 'number') 
+      ? targetElement.selectionStart 
+      : value.length;
+
     updateFn(value);
 
     // Lógica para detectar se terminamos com "{" ou se estamos dentro de um "{... "
@@ -384,7 +388,7 @@ export function NodeConfigDrawer() {
     if (lastBraceIndex > lastCloseBraceIndex) {
       // Estamos dentro de um bloco de sugestão
       const filter = textBeforeCursor.slice(lastBraceIndex + 1);
-      const rect = e.target.getBoundingClientRect();
+      const rect = targetElement?.getBoundingClientRect ? targetElement.getBoundingClientRect() : null;
       
       setSuggestionState({
         isOpen: true,
@@ -520,7 +524,7 @@ export function NodeConfigDrawer() {
               <HighlightedTextField
                 type="input"
                 value={(data as any).role || ''}
-                onKeyDown={(e) => handleFieldKeyDown(e, 'role')}
+                onKeyDown={(e) => handleFieldKeyDown(e)}
                 onChange={(e) => handleFieldChange(e, 'role', (val) => updateNodeData(activeNode.id, { role: val }))}
                 placeholder="e.g. Senior Researcher"
               />
@@ -541,7 +545,7 @@ export function NodeConfigDrawer() {
               <HighlightedTextField
                 type="textarea"
                 value={(data as any).goal || ''}
-                onKeyDown={(e) => handleFieldKeyDown(e, 'goal')}
+                onKeyDown={(e) => handleFieldKeyDown(e)}
                 onChange={(e) => handleFieldChange(e, 'goal', (val) => updateNodeData(activeNode.id, { goal: val }))}
                 placeholder="What does this agent need to achieve?"
                 rows={3}
@@ -563,7 +567,7 @@ export function NodeConfigDrawer() {
               <HighlightedTextField
                 type="textarea"
                 value={(data as any).backstory || ''}
-                onKeyDown={(e) => handleFieldKeyDown(e, 'backstory')}
+                onKeyDown={(e) => handleFieldKeyDown(e)}
                 onChange={(e) => handleFieldChange(e, 'backstory', (val) => updateNodeData(activeNode.id, { backstory: val }))}
                 placeholder="The agent's background and expertise..."
                 rows={5}
@@ -838,6 +842,293 @@ export function NodeConfigDrawer() {
               </div>
             </div>
 
+            {/* -- Agent Execution Settings -- */}
+            <div className="flex flex-col gap-4 pt-4 border-t border-brand-border/50">
+              <h3 className="text-xs font-bold text-brand-muted uppercase tracking-wider mb-1">Execution Settings</h3>
+              
+              <div className="grid grid-cols-2 gap-4">
+                <label className="flex items-center gap-2 cursor-pointer group">
+                  <div className="relative flex items-center">
+                    <input 
+                      type="checkbox" 
+                      className="sr-only"
+                      checked={(data as any).verbose !== false}
+                      onChange={(e) => updateNodeData(activeNode.id, { verbose: e.target.checked })}
+                    />
+                    <div className={`w-8 h-4 bg-brand-bg border border-brand-border rounded-full transition-colors ${((data as any).verbose !== false) ? 'bg-indigo-500/20 border-indigo-500' : ''}`}>
+                      <div className={`absolute top-0.5 left-0.5 w-3 h-3 rounded-full transition-transform ${((data as any).verbose !== false) ? 'translate-x-4 bg-indigo-500' : 'bg-brand-muted'}`} />
+                    </div>
+                  </div>
+                  <span className="text-xs text-brand-text group-hover:text-indigo-400 transition-colors">Verbose</span>
+                </label>
+
+                <label className="flex items-center gap-2 cursor-pointer group">
+                  <div className="relative flex items-center">
+                    <input 
+                      type="checkbox" 
+                      className="sr-only"
+                      checked={(data as any).allow_delegation === true}
+                      onChange={(e) => updateNodeData(activeNode.id, { allow_delegation: e.target.checked })}
+                    />
+                    <div className={`w-8 h-4 bg-brand-bg border border-brand-border rounded-full transition-colors ${((data as any).allow_delegation === true) ? 'bg-indigo-500/20 border-indigo-500' : ''}`}>
+                      <div className={`absolute top-0.5 left-0.5 w-3 h-3 rounded-full transition-transform ${((data as any).allow_delegation === true) ? 'translate-x-4 bg-indigo-500' : 'bg-brand-muted'}`} />
+                    </div>
+                  </div>
+                  <span className="text-xs text-brand-text group-hover:text-indigo-400 transition-colors">Allow Delegation</span>
+                </label>
+
+                <label className="flex items-center gap-2 cursor-pointer group">
+                  <div className="relative flex items-center">
+                    <input 
+                      type="checkbox" 
+                      className="sr-only"
+                      checked={(data as any).cache === true}
+                      onChange={(e) => updateNodeData(activeNode.id, { cache: e.target.checked })}
+                    />
+                    <div className={`w-8 h-4 bg-brand-bg border border-brand-border rounded-full transition-colors ${((data as any).cache === true) ? 'bg-indigo-500/20 border-indigo-500' : ''}`}>
+                      <div className={`absolute top-0.5 left-0.5 w-3 h-3 rounded-full transition-transform ${((data as any).cache === true) ? 'translate-x-4 bg-indigo-500' : 'bg-brand-muted'}`} />
+                    </div>
+                  </div>
+                  <span className="text-xs text-brand-text group-hover:text-indigo-400 transition-colors">Cache</span>
+                </label>
+
+                <label className="flex items-center gap-2 cursor-pointer group">
+                  <div className="relative flex items-center">
+                    <input 
+                      type="checkbox" 
+                      className="sr-only"
+                      checked={(data as any).allow_code_execution === true}
+                      onChange={(e) => updateNodeData(activeNode.id, { allow_code_execution: e.target.checked })}
+                    />
+                    <div className={`w-8 h-4 bg-brand-bg border border-brand-border rounded-full transition-colors ${((data as any).allow_code_execution === true) ? 'bg-indigo-500/20 border-indigo-500' : ''}`}>
+                      <div className={`absolute top-0.5 left-0.5 w-3 h-3 rounded-full transition-transform ${((data as any).allow_code_execution === true) ? 'translate-x-4 bg-indigo-500' : 'bg-brand-muted'}`} />
+                    </div>
+                  </div>
+                  <span className="text-xs text-brand-text group-hover:text-indigo-400 transition-colors">Code Execution</span>
+                </label>
+                
+                <label className="flex items-center gap-2 cursor-pointer group">
+                  <div className="relative flex items-center">
+                    <input 
+                      type="checkbox" 
+                      className="sr-only"
+                      checked={(data as any).respect_context_window !== false}
+                      onChange={(e) => updateNodeData(activeNode.id, { respect_context_window: e.target.checked })}
+                    />
+                    <div className={`w-8 h-4 bg-brand-bg border border-brand-border rounded-full transition-colors ${((data as any).respect_context_window !== false) ? 'bg-indigo-500/20 border-indigo-500' : ''}`}>
+                      <div className={`absolute top-0.5 left-0.5 w-3 h-3 rounded-full transition-transform ${((data as any).respect_context_window !== false) ? 'translate-x-4 bg-indigo-500' : 'bg-brand-muted'}`} />
+                    </div>
+                  </div>
+                  <span className="text-xs text-brand-text group-hover:text-indigo-400 transition-colors">Respect Context</span>
+                </label>
+                
+                <label className="flex items-center gap-2 cursor-pointer group">
+                  <div className="relative flex items-center">
+                    <input 
+                      type="checkbox" 
+                      className="sr-only"
+                      checked={(data as any).use_system_prompt === true}
+                      onChange={(e) => updateNodeData(activeNode.id, { use_system_prompt: e.target.checked })}
+                    />
+                    <div className={`w-8 h-4 bg-brand-bg border border-brand-border rounded-full transition-colors ${((data as any).use_system_prompt === true) ? 'bg-indigo-500/20 border-indigo-500' : ''}`}>
+                      <div className={`absolute top-0.5 left-0.5 w-3 h-3 rounded-full transition-transform ${((data as any).use_system_prompt === true) ? 'translate-x-4 bg-indigo-500' : 'bg-brand-muted'}`} />
+                    </div>
+                  </div>
+                  <span className="text-xs text-brand-text group-hover:text-indigo-400 transition-colors">System Prompt</span>
+                </label>
+
+                <label className="flex items-center gap-2 cursor-pointer group">
+                  <div className="relative flex items-center">
+                    <input 
+                      type="checkbox" 
+                      className="sr-only"
+                      checked={(data as any).reasoning === true}
+                      onChange={(e) => updateNodeData(activeNode.id, { reasoning: e.target.checked })}
+                    />
+                    <div className={`w-8 h-4 bg-brand-bg border border-brand-border rounded-full transition-colors ${((data as any).reasoning === true) ? 'bg-indigo-500/20 border-indigo-500' : ''}`}>
+                      <div className={`absolute top-0.5 left-0.5 w-3 h-3 rounded-full transition-transform ${((data as any).reasoning === true) ? 'translate-x-4 bg-indigo-500' : 'bg-brand-muted'}`} />
+                    </div>
+                  </div>
+                  <span className="text-xs text-brand-text group-hover:text-indigo-400 transition-colors">Reasoning</span>
+                </label>
+
+                <label className="flex items-center gap-2 cursor-pointer group">
+                  <div className="relative flex items-center">
+                    <input 
+                      type="checkbox" 
+                      className="sr-only"
+                      checked={(data as any).multimodal === true}
+                      onChange={(e) => updateNodeData(activeNode.id, { multimodal: e.target.checked })}
+                    />
+                    <div className={`w-8 h-4 bg-brand-bg border border-brand-border rounded-full transition-colors ${((data as any).multimodal === true) ? 'bg-indigo-500/20 border-indigo-500' : ''}`}>
+                      <div className={`absolute top-0.5 left-0.5 w-3 h-3 rounded-full transition-transform ${((data as any).multimodal === true) ? 'translate-x-4 bg-indigo-500' : 'bg-brand-muted'}`} />
+                    </div>
+                  </div>
+                  <span className="text-xs text-brand-text group-hover:text-indigo-400 transition-colors">Multimodal</span>
+                </label>
+
+                <label className="flex items-center gap-2 cursor-pointer group">
+                  <div className="relative flex items-center">
+                    <input 
+                      type="checkbox" 
+                      className="sr-only"
+                      checked={(data as any).inject_date === true}
+                      onChange={(e) => updateNodeData(activeNode.id, { inject_date: e.target.checked })}
+                    />
+                    <div className={`w-8 h-4 bg-brand-bg border border-brand-border rounded-full transition-colors ${((data as any).inject_date === true) ? 'bg-indigo-500/20 border-indigo-500' : ''}`}>
+                      <div className={`absolute top-0.5 left-0.5 w-3 h-3 rounded-full transition-transform ${((data as any).inject_date === true) ? 'translate-x-4 bg-indigo-500' : 'bg-brand-muted'}`} />
+                    </div>
+                  </div>
+                  <span className="text-xs text-brand-text group-hover:text-indigo-400 transition-colors">Inject Date</span>
+                </label>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4 mt-2">
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-xs font-bold text-brand-muted uppercase tracking-wider">Max Iterations</label>
+                  <input 
+                    type="number" 
+                    value={(data as any).max_iter ?? 25}
+                    onChange={(e) => updateNodeData(activeNode.id, { max_iter: parseInt(e.target.value) || 25 })}
+                    className="w-full bg-brand-bg border border-brand-border rounded-lg px-3 py-1.5 text-sm text-brand-text outline-none focus:ring-2 focus:ring-indigo-500 transition-all"
+                    placeholder="25"
+                    min="1"
+                  />
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-xs font-bold text-brand-muted uppercase tracking-wider">Max Retries</label>
+                  <input 
+                    type="number" 
+                    value={(data as any).max_retry_limit ?? 2}
+                    onChange={(e) => updateNodeData(activeNode.id, { max_retry_limit: parseInt(e.target.value) || 2 })}
+                    className="w-full bg-brand-bg border border-brand-border rounded-lg px-3 py-1.5 text-sm text-brand-text outline-none focus:ring-2 focus:ring-indigo-500 transition-all"
+                    placeholder="2"
+                    min="0"
+                  />
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-xs font-bold text-brand-muted uppercase tracking-wider">Max RPM</label>
+                  <input 
+                    type="number" 
+                    value={(data as any).max_rpm || ''}
+                    onChange={(e) => updateNodeData(activeNode.id, { max_rpm: e.target.value ? parseInt(e.target.value) : undefined })}
+                    className="w-full bg-brand-bg border border-brand-border rounded-lg px-3 py-1.5 text-sm text-brand-text outline-none focus:ring-2 focus:ring-indigo-500 transition-all"
+                    placeholder="No limit"
+                    min="1"
+                  />
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-xs font-bold text-brand-muted uppercase tracking-wider">Max Exec Time (s)</label>
+                  <input 
+                    type="number" 
+                    value={(data as any).max_execution_time || ''}
+                    onChange={(e) => updateNodeData(activeNode.id, { max_execution_time: e.target.value ? parseInt(e.target.value) : undefined })}
+                    className="w-full bg-brand-bg border border-brand-border rounded-lg px-3 py-1.5 text-sm text-brand-text outline-none focus:ring-2 focus:ring-indigo-500 transition-all"
+                    placeholder="No limit"
+                    min="1"
+                  />
+                </div>
+                
+                {((data as any).reasoning === true) && (
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-xs font-bold text-brand-muted uppercase tracking-wider">Max Reasoning</label>
+                    <input 
+                      type="number" 
+                      value={(data as any).max_reasoning_attempts || ''}
+                      onChange={(e) => updateNodeData(activeNode.id, { max_reasoning_attempts: e.target.value ? parseInt(e.target.value) : undefined })}
+                      className="w-full bg-brand-bg border border-brand-border rounded-lg px-3 py-1.5 text-sm text-brand-text outline-none focus:ring-2 focus:ring-indigo-500 transition-all"
+                      placeholder="No limit"
+                      min="1"
+                    />
+                  </div>
+                )}
+                
+                {((data as any).inject_date === true) && (
+                  <div className="flex flex-col gap-1.5 col-span-2">
+                    <label className="text-xs font-bold text-brand-muted uppercase tracking-wider">Date Format</label>
+                    <input 
+                      type="text" 
+                      value={(data as any).date_format || ''}
+                      onChange={(e) => updateNodeData(activeNode.id, { date_format: e.target.value })}
+                      className="w-full bg-brand-bg border border-brand-border rounded-lg px-3 py-1.5 text-sm text-brand-text outline-none focus:ring-2 focus:ring-indigo-500 transition-all"
+                      placeholder="%Y-%m-%d"
+                    />
+                  </div>
+                )}
+              </div>
+
+              {((data as any).allow_code_execution === true) && (
+                <div className="flex flex-col gap-1.5 mt-2">
+                  <label className="text-xs font-bold text-brand-muted uppercase tracking-wider">Code Execution Mode</label>
+                  <select 
+                    value={(data as any).code_execution_mode || 'safe'}
+                    onChange={(e) => updateNodeData(activeNode.id, { code_execution_mode: e.target.value })}
+                    className="w-full bg-brand-bg border border-brand-border rounded-lg px-3 py-2 text-sm text-brand-text outline-none focus:ring-2 focus:ring-indigo-500 transition-all cursor-pointer appearance-none"
+                  >
+                    <option value="safe">Safe (Docker)</option>
+                    <option value="unsafe">Unsafe (Local)</option>
+                  </select>
+                </div>
+              )}
+
+              <div className="flex flex-col gap-1.5 mt-2">
+                <label className="text-xs font-bold text-brand-muted uppercase tracking-wider">Function Calling LLM</label>
+                <select 
+                  value={(data as any).function_calling_llm_id || ''}
+                  onChange={(e) => updateNodeData(activeNode.id, { function_calling_llm_id: e.target.value || undefined })}
+                  className="w-full bg-brand-bg border border-brand-border rounded-lg px-3 py-2 text-sm text-brand-text outline-none focus:ring-2 focus:ring-indigo-500 transition-all cursor-pointer appearance-none"
+                >
+                  <option value="">Default (Same as Agent LLM)</option>
+                  {models.map(model => (
+                    <option key={model.id} value={model.id}>
+                      {model.name} {model.isDefault ? '(Global)' : ''}
+                    </option>
+                  ))}
+                </select>
+                <p className="text-[11px] text-brand-muted opacity-80 mt-1">
+                  Optional LLM to specifically handle function/tool calling.
+                </p>
+              </div>
+
+              {/* -- Advanced Templates -- */}
+              <div className="flex flex-col gap-3 mt-4 pt-4 border-t border-brand-border/50">
+                <h4 className="text-[11px] font-bold text-brand-muted uppercase tracking-wider">Advanced Templates</h4>
+                
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-[10px] font-bold text-brand-muted uppercase tracking-wider">System Template</label>
+                  <textarea 
+                    value={(data as any).system_template || ''}
+                    onChange={(e) => updateNodeData(activeNode.id, { system_template: e.target.value })}
+                    className="w-full bg-brand-bg border border-brand-border rounded-lg px-3 py-2 text-xs text-brand-text outline-none focus:ring-2 focus:ring-indigo-500 transition-all font-mono resize-y"
+                    placeholder="Custom system prompt template..."
+                    rows={2}
+                  />
+                </div>
+                
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-[10px] font-bold text-brand-muted uppercase tracking-wider">Prompt Template</label>
+                  <textarea 
+                    value={(data as any).prompt_template || ''}
+                    onChange={(e) => updateNodeData(activeNode.id, { prompt_template: e.target.value })}
+                    className="w-full bg-brand-bg border border-brand-border rounded-lg px-3 py-2 text-xs text-brand-text outline-none focus:ring-2 focus:ring-indigo-500 transition-all font-mono resize-y"
+                    placeholder="Custom prompt template..."
+                    rows={2}
+                  />
+                </div>
+                
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-[10px] font-bold text-brand-muted uppercase tracking-wider">Response Template</label>
+                  <textarea 
+                    value={(data as any).response_template || ''}
+                    onChange={(e) => updateNodeData(activeNode.id, { response_template: e.target.value })}
+                    className="w-full bg-brand-bg border border-brand-border rounded-lg px-3 py-2 text-xs text-brand-text outline-none focus:ring-2 focus:ring-indigo-500 transition-all font-mono resize-y"
+                    placeholder="Custom response template..."
+                    rows={2}
+                  />
+                </div>
+              </div>
+            </div>
+
             {/* -- Tasks Execution Order Ranking -- */}
             <div className="flex flex-col gap-2 pt-4 border-t border-brand-border/50">
               <h3 className="text-xs font-bold text-brand-muted uppercase tracking-wider mb-1">Execution (Tasks)</h3>
@@ -892,7 +1183,7 @@ export function NodeConfigDrawer() {
               <HighlightedTextField
                 type="textarea"
                 value={(data as any).description || ''}
-                onKeyDown={(e) => handleFieldKeyDown(e, 'description')}
+                onKeyDown={(e) => handleFieldKeyDown(e)}
                 onChange={(e) => handleFieldChange(e, 'description', (val) => updateNodeData(activeNode.id, { description: val }))}
                 placeholder="What exactly needs to be done?"
                 rows={4}
@@ -913,7 +1204,7 @@ export function NodeConfigDrawer() {
               <HighlightedTextField
                 type="textarea"
                 value={(data as any).expected_output || ''}
-                onKeyDown={(e) => handleFieldKeyDown(e, 'expected_output')}
+                onKeyDown={(e) => handleFieldKeyDown(e)}
                 onChange={(e) => handleFieldChange(e, 'expected_output', (val) => updateNodeData(activeNode.id, { expected_output: val }))}
                 placeholder="What should this task produce?"
                 rows={3}
@@ -1082,6 +1373,69 @@ export function NodeConfigDrawer() {
                 </div>
               </div>
             </div>
+
+            {/* -- Advanced Execution Settings -- */}
+            <div className="flex flex-col gap-4 pt-4 border-t border-brand-border/50">
+              <label className="text-xs font-bold text-brand-muted uppercase tracking-wider">Execution Settings</label>
+              
+              <div className="grid grid-cols-2 gap-4">
+                <label className="flex items-center gap-2 cursor-pointer group">
+                  <div className="relative flex items-center">
+                    <input 
+                      type="checkbox" 
+                      className="sr-only"
+                      checked={(data as any).async_execution === true}
+                      onChange={(e) => updateNodeData(activeNode.id, { async_execution: e.target.checked })}
+                    />
+                    <div className={`w-8 h-4 bg-brand-bg border border-brand-border rounded-full transition-colors ${((data as any).async_execution === true) ? 'bg-indigo-500/20 border-indigo-500' : ''}`}>
+                      <div className={`absolute top-0.5 left-0.5 w-3 h-3 rounded-full transition-transform ${((data as any).async_execution === true) ? 'translate-x-4 bg-indigo-500' : 'bg-brand-muted'}`} />
+                    </div>
+                  </div>
+                  <span className="text-xs text-brand-text group-hover:text-indigo-400 transition-colors">Async</span>
+                </label>
+
+                <label className="flex items-center gap-2 cursor-pointer group">
+                  <div className="relative flex items-center">
+                    <input 
+                      type="checkbox" 
+                      className="sr-only"
+                      checked={(data as any).human_input === true}
+                      onChange={(e) => updateNodeData(activeNode.id, { human_input: e.target.checked })}
+                    />
+                    <div className={`w-8 h-4 bg-brand-bg border border-brand-border rounded-full transition-colors ${((data as any).human_input === true) ? 'bg-indigo-500/20 border-indigo-500' : ''}`}>
+                      <div className={`absolute top-0.5 left-0.5 w-3 h-3 rounded-full transition-transform ${((data as any).human_input === true) ? 'translate-x-4 bg-indigo-500' : 'bg-brand-muted'}`} />
+                    </div>
+                  </div>
+                  <span className="text-xs text-brand-text group-hover:text-indigo-400 transition-colors">Human Input</span>
+                </label>
+                
+                <label className="flex items-center gap-2 cursor-pointer group col-span-2">
+                  <div className="relative flex items-center">
+                    <input 
+                      type="checkbox" 
+                      className="sr-only"
+                      checked={(data as any).create_directory === true}
+                      onChange={(e) => updateNodeData(activeNode.id, { create_directory: e.target.checked })}
+                    />
+                    <div className={`w-8 h-4 bg-brand-bg border border-brand-border rounded-full transition-colors ${((data as any).create_directory === true) ? 'bg-indigo-500/20 border-indigo-500' : ''}`}>
+                      <div className={`absolute top-0.5 left-0.5 w-3 h-3 rounded-full transition-transform ${((data as any).create_directory === true) ? 'translate-x-4 bg-indigo-500' : 'bg-brand-muted'}`} />
+                    </div>
+                  </div>
+                  <span className="text-xs text-brand-text group-hover:text-indigo-400 transition-colors">Create Dir for Output File</span>
+                </label>
+              </div>
+
+              <div className="flex flex-col gap-1.5 mt-2">
+                <label className="text-[11px] font-bold text-brand-muted uppercase tracking-wider">Output File</label>
+                <input 
+                  type="text" 
+                  value={(data as any).output_file || ''}
+                  onChange={(e) => updateNodeData(activeNode.id, { output_file: e.target.value })}
+                  className="w-full bg-brand-bg border border-brand-border rounded-lg px-3 py-1.5 text-sm text-brand-text outline-none focus:ring-2 focus:ring-blue-500/40 transition-all"
+                  placeholder="e.g. report.md"
+                />
+              </div>
+            </div>
           </div>
         )}
 
@@ -1193,6 +1547,196 @@ export function NodeConfigDrawer() {
                   </div>
                 )}
               </div>
+            </div>
+            {/* -- Additional Settings -- */}
+            <div className="flex flex-col gap-4 pt-5 border-t border-brand-border/50">
+              <label className="text-xs font-bold text-brand-muted uppercase tracking-wider">Additional Settings</label>
+              
+              <div className="grid grid-cols-2 gap-4">
+                <label className="flex items-center gap-2 cursor-pointer group">
+                  <div className="relative flex items-center">
+                    <input 
+                      type="checkbox" 
+                      className="sr-only"
+                      checked={(data as any).verbose !== false}
+                      onChange={(e) => updateNodeData(activeNode.id, { verbose: e.target.checked })}
+                    />
+                    <div className={`w-8 h-4 bg-brand-bg border border-brand-border rounded-full transition-colors ${((data as any).verbose !== false) ? 'bg-indigo-500/20 border-indigo-500' : ''}`}>
+                      <div className={`absolute top-0.5 left-0.5 w-3 h-3 rounded-full transition-transform ${((data as any).verbose !== false) ? 'translate-x-4 bg-indigo-500' : 'bg-brand-muted'}`} />
+                    </div>
+                  </div>
+                  <span className="text-xs text-brand-text group-hover:text-indigo-400 transition-colors">Verbose</span>
+                </label>
+
+                <label className="flex items-center gap-2 cursor-pointer group">
+                  <div className="relative flex items-center">
+                    <input 
+                      type="checkbox" 
+                      className="sr-only"
+                      checked={(data as any).memory === true}
+                      onChange={(e) => updateNodeData(activeNode.id, { memory: e.target.checked })}
+                    />
+                    <div className={`w-8 h-4 bg-brand-bg border border-brand-border rounded-full transition-colors ${((data as any).memory === true) ? 'bg-indigo-500/20 border-indigo-500' : ''}`}>
+                      <div className={`absolute top-0.5 left-0.5 w-3 h-3 rounded-full transition-transform ${((data as any).memory === true) ? 'translate-x-4 bg-indigo-500' : 'bg-brand-muted'}`} />
+                    </div>
+                  </div>
+                  <span className="text-xs text-brand-text group-hover:text-indigo-400 transition-colors">Memory</span>
+                </label>
+
+                <label className="flex items-center gap-2 cursor-pointer group">
+                  <div className="relative flex items-center">
+                    <input 
+                      type="checkbox" 
+                      className="sr-only"
+                      checked={(data as any).cache === true}
+                      onChange={(e) => updateNodeData(activeNode.id, { cache: e.target.checked })}
+                    />
+                    <div className={`w-8 h-4 bg-brand-bg border border-brand-border rounded-full transition-colors ${((data as any).cache === true) ? 'bg-indigo-500/20 border-indigo-500' : ''}`}>
+                      <div className={`absolute top-0.5 left-0.5 w-3 h-3 rounded-full transition-transform ${((data as any).cache === true) ? 'translate-x-4 bg-indigo-500' : 'bg-brand-muted'}`} />
+                    </div>
+                  </div>
+                  <span className="text-xs text-brand-text group-hover:text-indigo-400 transition-colors">Cache</span>
+                </label>
+
+                <label className="flex items-center gap-2 cursor-pointer group">
+                  <div className="relative flex items-center">
+                    <input 
+                      type="checkbox" 
+                      className="sr-only"
+                      checked={(data as any).share_crew === true}
+                      onChange={(e) => updateNodeData(activeNode.id, { share_crew: e.target.checked })}
+                    />
+                    <div className={`w-8 h-4 bg-brand-bg border border-brand-border rounded-full transition-colors ${((data as any).share_crew === true) ? 'bg-indigo-500/20 border-indigo-500' : ''}`}>
+                      <div className={`absolute top-0.5 left-0.5 w-3 h-3 rounded-full transition-transform ${((data as any).share_crew === true) ? 'translate-x-4 bg-indigo-500' : 'bg-brand-muted'}`} />
+                    </div>
+                  </div>
+                  <span className="text-xs text-brand-text group-hover:text-indigo-400 transition-colors">Share Crew</span>
+                </label>
+
+                <label className="flex items-center gap-2 cursor-pointer group col-span-2">
+                  <div className="relative flex items-center">
+                    <input 
+                      type="checkbox" 
+                      className="sr-only"
+                      checked={(data as any).planning === true}
+                      onChange={(e) => updateNodeData(activeNode.id, { planning: e.target.checked })}
+                    />
+                    <div className={`w-8 h-4 bg-brand-bg border border-brand-border rounded-full transition-colors ${((data as any).planning === true) ? 'bg-indigo-500/20 border-indigo-500' : ''}`}>
+                      <div className={`absolute top-0.5 left-0.5 w-3 h-3 rounded-full transition-transform ${((data as any).planning === true) ? 'translate-x-4 bg-indigo-500' : 'bg-brand-muted'}`} />
+                    </div>
+                  </div>
+                  <span className="text-xs text-brand-text group-hover:text-indigo-400 transition-colors">Enable Planning Phase</span>
+                </label>
+              </div>
+
+              <div className="flex flex-col gap-2 mt-2">
+                <label className="text-[11px] font-bold text-brand-muted uppercase tracking-wider">Max RPM</label>
+                <input
+                  type="number"
+                  className="bg-brand-bg border border-brand-border rounded-lg px-3 py-2 text-sm text-brand-text outline-none focus:ring-2 focus:ring-blue-500/40 transition-all placeholder:opacity-50"
+                  placeholder="Requests per minute (optional)"
+                  value={(data as any).max_rpm || ''}
+                  onChange={(e) => {
+                    const val = e.target.value ? parseInt(e.target.value, 10) : undefined;
+                    updateNodeData(activeNode.id, { max_rpm: val });
+                  }}
+                />
+              </div>
+
+              <div className="flex flex-col gap-2 mt-2">
+                <div className="flex items-center gap-2">
+                  <Cpu className="w-3.5 h-3.5 text-indigo-500" />
+                  <label className="text-[11px] font-bold text-brand-muted uppercase tracking-wider">Manager LLM</label>
+                </div>
+                <select 
+                  value={(data as any).manager_llm_id || ''}
+                  onChange={(e) => updateNodeData(activeNode.id, { manager_llm_id: e.target.value || undefined })}
+                  className="w-full bg-brand-bg border border-brand-border rounded-lg px-3 py-2 text-sm text-brand-text outline-none focus:ring-2 focus:ring-indigo-500 transition-all cursor-pointer appearance-none"
+                >
+                  <option value="">Default (Auto)</option>
+                  {models.map(model => (
+                    <option key={model.id} value={model.id}>
+                      {model.name} {model.isDefault ? '(Default)' : ''}
+                    </option>
+                  ))}
+                </select>
+                <p className="text-[10px] text-brand-muted opacity-80">
+                  Required if process is Hierarchical.
+                </p>
+              </div>
+
+              <div className="flex flex-col gap-1.5 mt-2">
+                <label className="text-[11px] font-bold text-brand-muted uppercase tracking-wider">Function Calling LLM</label>
+                <select 
+                  value={(data as any).function_calling_llm_id || ''}
+                  onChange={(e) => updateNodeData(activeNode.id, { function_calling_llm_id: e.target.value || undefined })}
+                  className="w-full bg-brand-bg border border-brand-border rounded-lg px-3 py-2 text-sm text-brand-text outline-none focus:ring-2 focus:ring-indigo-500 transition-all cursor-pointer appearance-none"
+                >
+                  <option value="">Default</option>
+                  {models.map(model => (
+                    <option key={model.id} value={model.id}>
+                      {model.name} {model.isDefault ? '(Global)' : ''}
+                    </option>
+                  ))}
+                </select>
+                <p className="text-[10px] text-brand-muted opacity-80 mt-1">
+                  Global fallback LLM to specifically handle function/tool calling for all agents.
+                </p>
+              </div>
+
+              <div className="flex flex-col gap-1.5 mt-2">
+                <label className="text-[11px] font-bold text-brand-muted uppercase tracking-wider">Output Log File</label>
+                <input 
+                  type="text" 
+                  value={(data as any).output_log_file || ''}
+                  onChange={(e) => updateNodeData(activeNode.id, { output_log_file: e.target.value })}
+                  className="w-full bg-brand-bg border border-brand-border rounded-lg px-3 py-1.5 text-sm text-brand-text outline-none focus:ring-2 focus:ring-blue-500/40 transition-all"
+                  placeholder="e.g. logs.txt"
+                />
+              </div>
+
+              <div className="flex flex-col gap-1.5 mt-2">
+                <label className="text-[11px] font-bold text-brand-muted uppercase tracking-wider">Prompt File (JSON)</label>
+                <input 
+                  type="text" 
+                  value={(data as any).prompt_file || ''}
+                  onChange={(e) => updateNodeData(activeNode.id, { prompt_file: e.target.value })}
+                  className="w-full bg-brand-bg border border-brand-border rounded-lg px-3 py-1.5 text-sm text-brand-text outline-none focus:ring-2 focus:ring-blue-500/40 transition-all"
+                  placeholder="e.g. prompt.json"
+                />
+              </div>
+              
+              <div className="flex flex-col gap-1.5 mt-2">
+                <label className="text-[11px] font-bold text-brand-muted uppercase tracking-wider">Embedder Config (JSON)</label>
+                <textarea 
+                  value={(data as any).embedder || ''}
+                  onChange={(e) => updateNodeData(activeNode.id, { embedder: e.target.value })}
+                  className="w-full bg-brand-bg border border-brand-border rounded-lg px-3 py-2 text-xs text-brand-text outline-none focus:ring-2 focus:ring-blue-500/40 transition-all font-mono resize-y"
+                  placeholder='{"provider": "openai"}'
+                  rows={2}
+                />
+              </div>
+
+              {(data as any).planning === true && (
+                <div className="flex flex-col gap-2 mt-2">
+                  <div className="flex items-center gap-2">
+                    <Cpu className="w-3.5 h-3.5 text-indigo-500" />
+                    <label className="text-[11px] font-bold text-brand-muted uppercase tracking-wider">Planning LLM</label>
+                  </div>
+                  <select 
+                    value={(data as any).planning_llm_id || ''}
+                    onChange={(e) => updateNodeData(activeNode.id, { planning_llm_id: e.target.value || undefined })}
+                    className="w-full bg-brand-bg border border-brand-border rounded-lg px-3 py-2 text-sm text-brand-text outline-none focus:ring-2 focus:ring-indigo-500 transition-all cursor-pointer appearance-none"
+                  >
+                    <option value="">Default (Auto)</option>
+                    {models.map(model => (
+                      <option key={model.id} value={model.id}>
+                        {model.name} {model.isDefault ? '(Default)' : ''}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
             </div>
             
             {/* -- Agents Execution Order Ranking -- */}

@@ -396,7 +396,8 @@ Gerado com ❤️ por **Simple Crew Builder**
             nodes, 
             class_name, 
             custom_tools_dict,
-            graph_data.globalTools
+            graph_data.globalTools,
+            agent_llms
         )
         zip_file.writestr(f"{package_path}/crew.py", crew_py_content)
 
@@ -451,7 +452,7 @@ if __name__ == "__main__":
 
     return buffer.getvalue()
 
-def generate_crew_py(agent_nodes, task_nodes, crew_node, edges, nodes, class_name, custom_tools_dict=None, global_tools_config=None) -> str:
+def generate_crew_py(agent_nodes, task_nodes, crew_node, edges, nodes, class_name, custom_tools_dict=None, global_tools_config=None, agent_llms=None) -> str:
     agents_methods = ""
     needed_tools_imports = []
     needed_crewai_tools = {"FileReadTool", "FileWriterTool"}
@@ -541,13 +542,94 @@ def generate_crew_py(agent_nodes, task_nodes, crew_node, edges, nodes, class_nam
                         if (tool_slug, func_name) not in needed_tools_imports:
                             needed_tools_imports.append((tool_slug, func_name))
 
+        # Options Settings
+        agent_kwargs = [
+            f"config=self.agents_config['{agent_key}']"
+        ]
+        
+        if hasattr(node, 'data'):
+            data = node.data
+            if getattr(data, 'verbose', True) is False:
+                agent_kwargs.append("verbose=False")
+            else:
+                agent_kwargs.append("verbose=True")
+                
+            if getattr(data, 'allow_delegation', False) is True:
+                agent_kwargs.append("allow_delegation=True")
+                
+            if getattr(data, 'cache', True) is False:
+                agent_kwargs.append("cache=False")
+                
+            if getattr(data, 'allow_code_execution', False) is True:
+                agent_kwargs.append("allow_code_execution=True")
+                
+            if getattr(data, 'respect_context_window', True) is False:
+                agent_kwargs.append("respect_context_window=False")
+                
+            if getattr(data, 'use_system_prompt', True) is False:
+                agent_kwargs.append("use_system_prompt=False")
+                
+            max_iter = getattr(data, 'max_iter', None)
+            if max_iter is not None and max_iter != 25:
+                agent_kwargs.append(f"max_iter={max_iter}")
+                
+            max_retry_limit = getattr(data, 'max_retry_limit', None)
+            if max_retry_limit is not None and max_retry_limit != 2:
+                agent_kwargs.append(f"max_retry_limit={max_retry_limit}")
+                
+            max_rpm = getattr(data, 'max_rpm', None)
+            if max_rpm is not None:
+                agent_kwargs.append(f"max_rpm={max_rpm}")
+                
+            max_exec_time = getattr(data, 'max_execution_time', None)
+            if max_exec_time is not None:
+                agent_kwargs.append(f"max_execution_time={max_exec_time}")
+                
+            code_exec_mode = getattr(data, 'code_execution_mode', None)
+            if code_exec_mode in ("safe", "unsafe") and getattr(data, 'allow_code_execution', False):
+                agent_kwargs.append(f"code_execution_mode='{code_exec_mode}'")
+                
+            if getattr(data, 'reasoning', False) is True:
+                agent_kwargs.append("reasoning=True")
+                
+            if getattr(data, 'multimodal', False) is True:
+                agent_kwargs.append("multimodal=True")
+                
+            if getattr(data, 'inject_date', False) is True:
+                agent_kwargs.append("inject_date=True")
+                
+            max_reasoning = getattr(data, 'max_reasoning_attempts', None)
+            if max_reasoning is not None:
+                agent_kwargs.append(f"max_reasoning_attempts={max_reasoning}")
+                
+            date_format = getattr(data, 'date_format', None)
+            if date_format:
+                agent_kwargs.append(f"date_format='{date_format}'")
+                
+            for tpl in ['system_template', 'prompt_template', 'response_template']:
+                tpl_val = getattr(data, tpl, None)
+                if tpl_val:
+                    # Escape trillas to avoid syntax errors
+                    escaped_tpl = tpl_val.replace('"""', '\\"\\"\\"')
+                    agent_kwargs.append(f"{tpl}=\"\"\"{escaped_tpl}\"\"\"")
+                    
+                
+        if agent_llms and getattr(node, 'id', None):
+            fc_llm = agent_llms.get(f"function_calling_{node.id}")
+            if fc_llm:
+                agent_kwargs.append(f"function_calling_llm='{fc_llm['model']}'")
+
+        if tools_list:
+            agent_kwargs.append(f"tools=[{', '.join(tools_list)}]")
+            
+        agent_kwargs_str = ",\n            ".join(agent_kwargs)
+
         agents_methods += f"""
     @agent
     def {method_name}(self) -> Agent:
 {tools_code if mcp_ids else ""}
         return Agent(
-            config=self.agents_config['{agent_key}'],
-            verbose=True{",\n            tools=[" + ", ".join(tools_list) + "]" if tools_list else ""}
+            {agent_kwargs_str}
         )
 """
 
@@ -637,17 +719,94 @@ def generate_crew_py(agent_nodes, task_nodes, crew_node, edges, nodes, class_nam
             if context_methods:
                 context_line = f",\n            context=[{', '.join(context_methods)}]"
 
+        task_kwargs = [f"config=self.tasks_config['{task_key}']"]
+        if context_line:
+            task_kwargs.append(f"context=[{', '.join(context_methods)}]")
+        if task_tools_list:
+            task_kwargs.append(f"tools=[{', '.join(task_tools_list)}]")
+            
+        if getattr(node.data, 'async_execution', False) is True:
+            task_kwargs.append("async_execution=True")
+            
+        if getattr(node.data, 'human_input', False) is True:
+            task_kwargs.append("human_input=True")
+            
+        if getattr(node.data, 'create_directory', True) is False:
+            task_kwargs.append("create_directory=False")
+            
+        output_file = getattr(node.data, 'output_file', None)
+        if output_file:
+            task_kwargs.append(f"output_file='{output_file}'")
+            
+        task_kwargs_str = ",\n            ".join(task_kwargs)
+
         tasks_methods += f"""
     @task
     def {method_name}(self) -> Task:
         return Task(
-            config=self.tasks_config['{task_key}']{context_line}{",\n            tools=[" + ", ".join(task_tools_list) + "]" if task_tools_list else ""}
+            {task_kwargs_str}
         )
 """
 
     process_type = "Process.sequential"
     if crew_node and getattr(crew_node.data, 'process', None) == "hierarchical":
         process_type = "Process.hierarchical"
+
+    crew_kwargs = [
+        "agents=self.agents",
+        "tasks=self.tasks",
+        f"process={process_type}"
+    ]
+
+    if crew_node:
+        data = crew_node.data
+        if getattr(data, 'verbose', True) is False:
+            crew_kwargs.append("verbose=False")
+        else:
+            crew_kwargs.append("verbose=True")
+            
+        if getattr(data, 'memory', False) is True:
+            crew_kwargs.append("memory=True")
+            
+        if getattr(data, 'cache', True) is False:
+            crew_kwargs.append("cache=False")
+            
+        if getattr(data, 'planning', False) is True:
+            crew_kwargs.append("planning=True")
+            
+        if getattr(data, 'share_crew', False) is True:
+            crew_kwargs.append("share_crew=True")
+            
+        max_rpm = getattr(data, 'max_rpm', None)
+        if max_rpm is not None:
+            crew_kwargs.append(f"max_rpm={max_rpm}")
+            
+    if agent_llms and crew_node:
+        manager_llm = agent_llms.get(f"manager_{crew_node.id}")
+        if manager_llm:
+            crew_kwargs.append(f"manager_llm='{manager_llm['model']}'")
+            
+        planning_llm = agent_llms.get(f"planning_{crew_node.id}")
+        if planning_llm:
+            crew_kwargs.append(f"planning_llm='{planning_llm['model']}'")
+            
+        fc_llm = agent_llms.get(f"function_calling_{crew_node.id}")
+        if fc_llm:
+            crew_kwargs.append(f"function_calling_llm='{fc_llm['model']}'")
+            
+        embedder_conf = getattr(data, 'embedder', None)
+        if embedder_conf:
+            crew_kwargs.append(f"embedder={embedder_conf}")
+            
+        output_log = getattr(data, 'output_log_file', None)
+        if output_log:
+            crew_kwargs.append(f"output_log_file='{output_log}'")
+            
+        prompt_file = getattr(data, 'prompt_file', None)
+        if prompt_file:
+            crew_kwargs.append(f"prompt_file='{prompt_file}'")
+
+    crew_kwargs_str = ",\n            ".join(crew_kwargs)
 
     tools_import = ""
     if needed_tools_imports:
@@ -706,10 +865,7 @@ class {class_name}():
     def crew(self) -> Crew:
         \"\"\"Cria a Crew com os agentes e tarefas definidos\"\"\"
         return Crew(
-            agents=self.agents,
-            tasks=self.tasks,
-            process={process_type},
-            verbose=True
+            {crew_kwargs_str}
         )
 """
     return content

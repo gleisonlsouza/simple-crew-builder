@@ -576,6 +576,7 @@ def run_crew_stream(graph_data: GraphData, workspace_id: Optional[Any] = None) -
 
                     # LLM Setup
                     agent_llm = None
+                    fc_llm = None
                     with Session(engine) as session:
                         llm_config = None
                         if model_id:
@@ -592,10 +593,27 @@ def run_crew_stream(graph_data: GraphData, workspace_id: Optional[Any] = None) -
                                 }
                                 if llm_config.temperature is not None: llm_params["temperature"] = llm_config.temperature
                                 if llm_config.max_tokens is not None: llm_params["max_tokens"] = llm_config.max_tokens
-                                if llm_config.max_completion_tokens is not None: llm_params["max_completion_tokens"] = llm_config.max_completion_tokens
+                                if getattr(llm_config, 'max_completion_tokens', None) is not None: llm_params["max_completion_tokens"] = llm_config.max_completion_tokens
                                 if llm_config.base_url and llm_config.base_url != "default": llm_params["base_url"] = llm_config.base_url
                                 if credential.provider: llm_params["provider"] = credential.provider
                                 agent_llm = LLM(**llm_params)
+
+                        fc_id = getattr(node.data, 'function_calling_llm_id', None)
+                        if fc_id:
+                            fc_config = session.get(LLMModel, fc_id)
+                            if fc_config:
+                                credential = session.get(Credential, fc_config.credential_id)
+                                if credential:
+                                    llm_params = {
+                                        "model": fc_config.model_name,
+                                        "api_key": credential.key,
+                                    }
+                                    if fc_config.temperature is not None: llm_params["temperature"] = fc_config.temperature
+                                    if fc_config.max_tokens is not None: llm_params["max_tokens"] = fc_config.max_tokens
+                                    if getattr(fc_config, 'max_completion_tokens', None) is not None: llm_params["max_completion_tokens"] = fc_config.max_completion_tokens
+                                    if fc_config.base_url and fc_config.base_url != "default": llm_params["base_url"] = fc_config.base_url
+                                    if credential.provider: llm_params["provider"] = credential.provider
+                                    fc_llm = LLM(**llm_params)
 
                     # Injeção de Prompt: Força o Agente a respeitar o Workspace (como restrição, não como ordem)
                     workspace_instruction = (
@@ -604,19 +622,62 @@ def run_crew_stream(graph_data: GraphData, workspace_id: Optional[Any] = None) -
                         "Never attempt to access paths outside this workspace."
                     )
                     
-                    agent = Agent(
-                        role=role,
-                        goal=goal,
-                        backstory=backstory + workspace_instruction,
-                        verbose=True,
-                        allow_delegation=False, 
-                        step_callback=make_agent_step_callback(node.id),
-                        llm=agent_llm,
-                        tools=this_agent_tools,
-                        reasoning=False,
-                        max_iter=getattr(node.data, 'max_iter', 60),
-                        max_execution_time=getattr(node.data, 'max_execution_time', 300)
-                    )
+                    agent_kwargs = {
+                        "role": role,
+                        "goal": goal,
+                        "backstory": backstory + workspace_instruction,
+                        "step_callback": make_agent_step_callback(node.id),
+                        "llm": agent_llm,
+                        "tools": this_agent_tools,
+                        "verbose": getattr(node.data, 'verbose', True) is not False,
+                        "allow_delegation": getattr(node.data, 'allow_delegation', False) is True,
+                        "cache": getattr(node.data, 'cache', True) is not False,
+                        "allow_code_execution": getattr(node.data, 'allow_code_execution', False) is True,
+                        "respect_context_window": getattr(node.data, 'respect_context_window', True) is not False,
+                        "use_system_prompt": getattr(node.data, 'use_system_prompt', True) is not False,
+                        "reasoning": getattr(node.data, 'reasoning', False) is True,
+                        "multimodal": getattr(node.data, 'multimodal', False) is True,
+                        "inject_date": getattr(node.data, 'inject_date', False) is True,
+                    }
+                    if fc_llm:
+                        agent_kwargs["function_calling_llm"] = fc_llm
+                        
+                    max_iter = getattr(node.data, 'max_iter', 25)
+                    if max_iter is not None: agent_kwargs["max_iter"] = max_iter
+                    
+                    max_retry_limit = getattr(node.data, 'max_retry_limit', 2)
+                    if max_retry_limit is not None: agent_kwargs["max_retry_limit"] = max_retry_limit
+                    
+                    max_rpm = getattr(node.data, 'max_rpm', None)
+                    if max_rpm is not None: agent_kwargs["max_rpm"] = max_rpm
+                    
+                    max_exec_time = getattr(node.data, 'max_execution_time', None)
+                    if max_exec_time is not None: agent_kwargs["max_execution_time"] = max_exec_time
+                    
+                    max_reasoning_attempts = getattr(node.data, 'max_reasoning_attempts', None)
+                    if max_reasoning_attempts is not None: agent_kwargs["max_reasoning_attempts"] = max_reasoning_attempts
+                    
+                    date_format = getattr(node.data, 'date_format', None)
+                    if date_format: agent_kwargs["date_format"] = date_format
+                    
+                    system_template = getattr(node.data, 'system_template', None)
+                    if system_template: agent_kwargs["system_template"] = system_template
+                    
+                    prompt_template = getattr(node.data, 'prompt_template', None)
+                    if prompt_template: agent_kwargs["prompt_template"] = prompt_template
+                    
+                    response_template = getattr(node.data, 'response_template', None)
+                    if response_template: agent_kwargs["response_template"] = response_template
+                    
+                    code_exec_mode = getattr(node.data, 'code_execution_mode', None)
+                    max_exec = getattr(node.data, 'max_execution_time', None)
+                    if max_exec is not None: agent_kwargs["max_execution_time"] = max_exec
+                    
+                    code_exec_mode = getattr(node.data, 'code_execution_mode', None)
+                    if code_exec_mode in ("safe", "unsafe") and getattr(node.data, 'allow_code_execution', False):
+                        agent_kwargs["code_execution_mode"] = code_exec_mode
+
+                    agent = Agent(**agent_kwargs)
                     agents_map[node.id] = agent
                     
                     tool_names = [getattr(t, 'name', str(t)) for t in this_agent_tools]
@@ -665,13 +726,28 @@ def run_crew_stream(graph_data: GraphData, workspace_id: Optional[Any] = None) -
                     combined_tools_dict.update({getattr(t, 'name', str(t)): t for t in this_task_tools})
                     combined_tools = list(combined_tools_dict.values())
 
-                    task = Task(
-                        description=description + workspace_task_instruction,
-                        expected_output=expected_output,
-                        agent=target_agent,
-                        tools=combined_tools,
-                        callback=make_task_callback(node.id)
-                    )
+                    task_kwargs = {
+                        "description": description + workspace_task_instruction,
+                        "expected_output": expected_output,
+                        "agent": target_agent,
+                        "tools": combined_tools,
+                        "callback": make_task_callback(node.id)
+                    }
+                    
+                    if getattr(node.data, 'async_execution', False) is True:
+                        task_kwargs['async_execution'] = True
+                        
+                    if getattr(node.data, 'human_input', False) is True:
+                        task_kwargs['human_input'] = True
+                        
+                    if getattr(node.data, 'create_directory', True) is False:
+                        task_kwargs['create_directory'] = False
+                        
+                    output_file = getattr(node.data, 'output_file', None)
+                    if output_file:
+                        task_kwargs['output_file'] = output_file
+                        
+                    task = Task(**task_kwargs)
                     tasks_list.append(task)
                     tasks_dict[node.id] = task
 
@@ -777,12 +853,103 @@ def run_crew_stream(graph_data: GraphData, workspace_id: Optional[Any] = None) -
                 ordered_task_ids = final_task_ids_ordered
 
                 # --- 5. Execução ---
-                crew = Crew(
-                    agents=list(agents_map.values()),
-                    tasks=final_tasks_ordered,
-                    process=process_type,
-                    verbose=True
-                )
+                crew_kwargs = {
+                    "agents": list(agents_map.values()),
+                    "tasks": final_tasks_ordered,
+                    "process": process_type
+                }
+                
+                if crew_node:
+                    data = crew_node.data
+                    if getattr(data, 'verbose', True) is False:
+                        crew_kwargs["verbose"] = False
+                    else:
+                        crew_kwargs["verbose"] = True
+                        
+                    if getattr(data, 'memory', False) is True:
+                        crew_kwargs["memory"] = True
+                        
+                    if getattr(data, 'cache', True) is False:
+                        crew_kwargs["cache"] = False
+                        
+                    if getattr(data, 'planning', False) is True:
+                        crew_kwargs["planning"] = True
+                        
+                    if getattr(data, 'share_crew', False) is True:
+                        crew_kwargs["share_crew"] = True
+                        
+                    max_rpm = getattr(data, 'max_rpm', None)
+                    if max_rpm is not None:
+                        crew_kwargs["max_rpm"] = max_rpm
+
+                    with Session(engine) as session:
+                        manager_id = getattr(data, 'manager_llm_id', None)
+                        if manager_id:
+                            manager_config = session.get(LLMModel, manager_id)
+                            if manager_config:
+                                credential = session.get(Credential, manager_config.credential_id)
+                                if credential:
+                                    llm_params = {
+                                        "model": manager_config.model_name,
+                                        "api_key": credential.key,
+                                    }
+                                    if credential.provider: llm_params["provider"] = credential.provider
+                                    if manager_config.base_url and manager_config.base_url != "default": llm_params["base_url"] = manager_config.base_url
+                                    if manager_config.temperature is not None: llm_params["temperature"] = manager_config.temperature
+                                    if manager_config.max_tokens is not None: llm_params["max_tokens"] = manager_config.max_tokens
+                                    if getattr(manager_config, 'max_completion_tokens', None) is not None: llm_params["max_completion_tokens"] = manager_config.max_completion_tokens
+                                    crew_kwargs["manager_llm"] = LLM(**llm_params)
+                                    
+                        planning_id = getattr(data, 'planning_llm_id', None)
+                        if planning_id:
+                            planning_config = session.get(LLMModel, planning_id)
+                            if planning_config:
+                                credential = session.get(Credential, planning_config.credential_id)
+                                if credential:
+                                    llm_params = {
+                                        "model": planning_config.model_name,
+                                        "api_key": credential.key,
+                                    }
+                                    if credential.provider: llm_params["provider"] = credential.provider
+                                    if planning_config.base_url and planning_config.base_url != "default": llm_params["base_url"] = planning_config.base_url
+                                    if planning_config.temperature is not None: llm_params["temperature"] = planning_config.temperature
+                                    if planning_config.max_tokens is not None: llm_params["max_tokens"] = planning_config.max_tokens
+                                    if getattr(planning_config, 'max_completion_tokens', None) is not None: llm_params["max_completion_tokens"] = planning_config.max_completion_tokens
+                                    crew_kwargs["planning_llm"] = LLM(**llm_params)
+
+                        fc_id = getattr(data, 'function_calling_llm_id', None)
+                        if fc_id:
+                            fc_config = session.get(LLMModel, fc_id)
+                            if fc_config:
+                                credential = session.get(Credential, fc_config.credential_id)
+                                if credential:
+                                    llm_params = {
+                                        "model": fc_config.model_name,
+                                        "api_key": credential.key,
+                                    }
+                                    if credential.provider: llm_params["provider"] = credential.provider
+                                    if fc_config.base_url and fc_config.base_url != "default": llm_params["base_url"] = fc_config.base_url
+                                    if fc_config.temperature is not None: llm_params["temperature"] = fc_config.temperature
+                                    if fc_config.max_tokens is not None: llm_params["max_tokens"] = fc_config.max_tokens
+                                    if getattr(fc_config, 'max_completion_tokens', None) is not None: llm_params["max_completion_tokens"] = fc_config.max_completion_tokens
+                                    crew_kwargs["function_calling_llm"] = LLM(**llm_params)
+
+                    embedder_conf = getattr(data, 'embedder', None)
+                    if embedder_conf:
+                        try:
+                            crew_kwargs["embedder"] = json.loads(embedder_conf)
+                        except Exception as e:
+                            log_debug(f"Failed to parse embedder JSON config: {e}")
+
+                    output_log = getattr(data, 'output_log_file', None)
+                    if output_log:
+                        crew_kwargs["output_log_file"] = output_log
+
+                    prompt_file = getattr(data, 'prompt_file', None)
+                    if prompt_file:
+                        crew_kwargs["prompt_file"] = prompt_file
+
+                crew = Crew(**crew_kwargs)
                 
                 if ordered_task_ids:
                     emit_task_running(ordered_task_ids[0])

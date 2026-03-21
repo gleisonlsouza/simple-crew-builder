@@ -256,6 +256,58 @@ async def export_project_python(project_id: str, session: Session = Depends(get_
                         "model": llm_config.model_name,
                         "provider": provider
                     }
+                
+                # Function Calling LLM
+                fc_id = getattr(node.data, 'function_calling_llm_id', None)
+                if fc_id:
+                    fc_config = session.get(LLMModel, fc_id)
+                    if fc_config:
+                        credential = session.get(Credential, fc_config.credential_id)
+                        provider = credential.provider.lower() if credential and credential.provider else "openai"
+                        unique_providers.add(provider)
+                        agent_llms_data[f"function_calling_{node.id}"] = {
+                            "model": fc_config.model_name,
+                            "provider": provider
+                        }
+            elif node.type == 'crew':
+                # MANAGER LLM
+                manager_id = getattr(node.data, 'manager_llm_id', None)
+                if manager_id:
+                    manager_config = session.get(LLMModel, manager_id)
+                    if manager_config:
+                        credential = session.get(Credential, manager_config.credential_id)
+                        provider = credential.provider.lower() if credential and credential.provider else "openai"
+                        unique_providers.add(provider)
+                        agent_llms_data[f"manager_{node.id}"] = {
+                            "model": manager_config.model_name,
+                            "provider": provider
+                        }
+                
+                # PLANNING LLM
+                planning_id = getattr(node.data, 'planning_llm_id', None)
+                if planning_id:
+                    planning_config = session.get(LLMModel, planning_id)
+                    if planning_config:
+                        credential = session.get(Credential, planning_config.credential_id)
+                        provider = credential.provider.lower() if credential and credential.provider else "openai"
+                        unique_providers.add(provider)
+                        agent_llms_data[f"planning_{node.id}"] = {
+                            "model": planning_config.model_name,
+                            "provider": provider
+                        }
+                
+                # FUNCTION CALLING LLM (CREW LEVEL)
+                fc_id = getattr(node.data, 'function_calling_llm_id', None)
+                if fc_id:
+                    fc_config = session.get(LLMModel, fc_id)
+                    if fc_config:
+                        credential = session.get(Credential, fc_config.credential_id)
+                        provider = credential.provider.lower() if credential and credential.provider else "openai"
+                        unique_providers.add(provider)
+                        agent_llms_data[f"function_calling_{node.id}"] = {
+                            "model": fc_config.model_name,
+                            "provider": provider
+                        }
         
         # Fetch Workspace
         workspace_path = None

@@ -12,6 +12,26 @@ export interface AgentNodeData extends Record<string, unknown> {
   mcpServerIds?: string[];
   customToolIds?: string[];
   globalToolIds?: string[];
+  function_calling_llm_id?: string;
+  max_iter?: number;
+  max_rpm?: number;
+  max_execution_time?: number;
+  verbose?: boolean;
+  allow_delegation?: boolean;
+  cache?: boolean;
+  allow_code_execution?: boolean;
+  max_retry_limit?: number;
+  respect_context_window?: boolean;
+  use_system_prompt?: boolean;
+  code_execution_mode?: string;
+  reasoning?: boolean;
+  max_reasoning_attempts?: number;
+  multimodal?: boolean;
+  inject_date?: boolean;
+  date_format?: string;
+  system_template?: string;
+  prompt_template?: string;
+  response_template?: string;
 }
 
 export interface TaskNodeData extends Record<string, unknown> {
@@ -21,6 +41,10 @@ export interface TaskNodeData extends Record<string, unknown> {
   context?: string[];
   customToolIds?: string[];
   globalToolIds?: string[];
+  async_execution?: boolean;
+  human_input?: boolean;
+  output_file?: string;
+  create_directory?: boolean;
 }
 
 export interface CrewNodeData extends Record<string, unknown> {
@@ -28,6 +52,18 @@ export interface CrewNodeData extends Record<string, unknown> {
   isCollapsed?: boolean;
   agentOrder?: string[];
   inputs?: Record<string, string>;
+  verbose?: boolean;
+  memory?: boolean;
+  cache?: boolean;
+  planning?: boolean;
+  share_crew?: boolean;
+  max_rpm?: number;
+  manager_llm_id?: string;
+  planning_llm_id?: string;
+  function_calling_llm_id?: string;
+  output_log_file?: string;
+  embedder?: string; // Stored as a JSON string for easy editing
+  prompt_file?: string;
 }
 
 export type AppNode =
