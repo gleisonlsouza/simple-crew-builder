@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import { useStore } from '../store';
 import { SettingsDrawer } from '../components/SettingsDrawer';
+import { ConfirmationModal } from '../components/ConfirmationModal';
 
 const Dashboard = () => {
   const navigate = useNavigate();
@@ -31,6 +32,8 @@ const Dashboard = () => {
   const [isSettingsMenuOpen, setIsSettingsMenuOpen] = React.useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = React.useState(false);
   const [isCreateModalOpen, setIsCreateModalOpen] = React.useState(false);
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = React.useState(false);
+  const [projectToDelete, setProjectToDelete] = React.useState<{id: string, name: string} | null>(null);
   const [editingProject, setEditingProject] = React.useState<{id: string, name: string, description: string} | null>(null);
   const [newProject, setNewProject] = React.useState({ name: '', description: '' });
 
@@ -57,7 +60,7 @@ const Dashboard = () => {
 
   const handleConfirmCreate = async () => {
     if (!newProject.name.trim()) {
-      alert("Please enter a name for the workflow.");
+      useStore.getState().showNotification("Please enter a name for the workflow.", "warning");
       return;
     }
     const created = await createNewProject(newProject.name, newProject.description);
@@ -84,7 +87,7 @@ const Dashboard = () => {
           navigate(`/workflow/${imported.id}`);
         }
       } catch (err) {
-        alert("Failed to parse JSON file.");
+        useStore.getState().showNotification("Failed to parse JSON file.", "error");
       }
     };
     reader.readAsText(file);
@@ -294,9 +297,8 @@ const Dashboard = () => {
                         <div className="border-t border-brand-border my-1" />
                         <button 
                           onClick={() => {
-                            if (confirm('Deseja excluir este workflow?')) {
-                              deleteProject(project.id);
-                            }
+                            setProjectToDelete({ id: project.id, name: project.name });
+                            setIsDeleteModalOpen(true);
                             setOpenMenuId(null);
                           }}
                           className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-red-500 hover:bg-red-50 dark:hover:bg-red-900/10 transition-colors text-left"
@@ -314,6 +316,26 @@ const Dashboard = () => {
         </div>
       </main>
       <SettingsDrawer />
+
+      {/* Delete Confirmation Modal */}
+      <ConfirmationModal 
+        isOpen={isDeleteModalOpen}
+        onClose={() => {
+          setIsDeleteModalOpen(false);
+          setProjectToDelete(null);
+        }}
+        onConfirm={() => {
+          if (projectToDelete) {
+            deleteProject(projectToDelete.id);
+            useStore.getState().showNotification(`Workflow "${projectToDelete.name}" deleted.`, "info");
+          }
+        }}
+        title="Delete Workflow"
+        message={`Are you sure you want to delete "${projectToDelete?.name}"? This action cannot be undone.`}
+        confirmText="Delete Workflow"
+        variant="danger"
+        icon={<Trash2 className="w-6 h-6" />}
+      />
 
       {/* Rename Modal */}
       {isEditModalOpen && editingProject && (

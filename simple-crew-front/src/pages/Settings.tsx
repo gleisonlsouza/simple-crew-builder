@@ -33,6 +33,7 @@ import { useStore } from '../store';
 import { HighlightedTextField } from '../components/HighlightedTextField';
 import { CustomSelect } from '../components/CustomSelect';
 import { type ModelConfig, type MCPServer, type CustomTool } from '../types';
+import { ConfirmationModal } from '../components/ConfirmationModal';
 
 
 const SettingsPage = () => {
@@ -97,6 +98,29 @@ const SettingsPage = () => {
   const [editingCustomToolId, setEditingCustomToolId] = useState<string | null>(null);
   const [editingWorkspaceId, setEditingWorkspaceId] = useState<string | null>(null);
   const [showKeys, setShowKeys] = useState<Record<string, boolean>>({});
+
+  // Delete Confirmation State
+  const [deleteConfirm, setDeleteConfirm] = useState<{
+    isOpen: boolean;
+    type: 'credential' | 'model' | 'tool' | 'mcp' | 'workspace' | null;
+    id: string;
+    name: string;
+  }>({ isOpen: false, type: null, id: '', name: '' });
+
+  const requestDelete = (type: 'credential' | 'model' | 'tool' | 'mcp' | 'workspace', id: string, name: string) => {
+    setDeleteConfirm({ isOpen: true, type, id, name });
+  };
+
+  const executeDelete = () => {
+    const { type, id } = deleteConfirm;
+    if (type === 'credential') deleteCredential(id);
+    else if (type === 'model') deleteModel(id);
+    else if (type === 'tool') deleteCustomTool(id);
+    else if (type === 'mcp') deleteMCPServer(id);
+    else if (type === 'workspace') deleteWorkspace(id);
+    
+    setDeleteConfirm({ isOpen: false, type: null, id: '', name: '' });
+  };
 
   const toggleShowKey = (id: string) => {
     setShowKeys(prev => ({ ...prev, [id]: !prev[id] }));
@@ -413,8 +437,9 @@ const SettingsPage = () => {
                       </div>
                       
                       <button 
-                        onClick={() => deleteCredential(cred.id)}
+                        onClick={() => requestDelete('credential', cred.id, cred.name)}
                         className="p-2 text-brand-muted hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-all opacity-0 group-hover:opacity-100"
+                        title="Delete"
                       >
                         <Trash2 className="w-5 h-5" />
                       </button>
@@ -512,7 +537,7 @@ const SettingsPage = () => {
                             <Copy className="w-4 h-4" />
                           </button>
                           <button 
-                            onClick={() => deleteModel(model.id)}
+                            onClick={() => requestDelete('model', model.id, model.name)}
                             className="p-2 text-brand-muted hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-all"
                             title="Delete"
                           >
@@ -699,8 +724,9 @@ const SettingsPage = () => {
                               <Edit className="w-5 h-5" />
                             </button>
                             <button 
-                              onClick={() => deleteCustomTool(tool.id)}
+                              onClick={() => requestDelete('tool', tool.id, tool.name)}
                               className="p-2 text-brand-muted hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-all"
+                              title="Delete"
                             >
                               <Trash2 className="w-5 h-5" />
                             </button>
@@ -807,8 +833,9 @@ const SettingsPage = () => {
                           <Settings2 className="w-5 h-5" />
                         </button>
                         <button 
-                          onClick={() => deleteMCPServer(server.id)}
+                          onClick={() => requestDelete('mcp', server.id, server.name)}
                           className="p-2 text-brand-muted hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-all"
+                          title="Delete"
                         >
                           <Trash2 className="w-5 h-5" />
                         </button>
@@ -881,7 +908,7 @@ const SettingsPage = () => {
                           <Edit className="w-4 h-4" />
                         </button>
                         <button 
-                          onClick={() => deleteWorkspace(ws.id)}
+                          onClick={() => requestDelete('workspace', ws.id, ws.name)}
                           className="p-2 text-brand-muted hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-all"
                           title="Delete"
                         >
@@ -1529,6 +1556,18 @@ const SettingsPage = () => {
           </div>
         </div>
       )}
+
+      {/* Delete Confirmation Modal */}
+      <ConfirmationModal 
+        isOpen={deleteConfirm.isOpen}
+        onClose={() => setDeleteConfirm({ ...deleteConfirm, isOpen: false })}
+        onConfirm={executeDelete}
+        title={`Delete ${deleteConfirm.type?.charAt(0).toUpperCase()}${deleteConfirm.type?.slice(1)}`}
+        message={`Are you sure you want to delete "${deleteConfirm.name}"? This action cannot be undone.`}
+        confirmText="Delete Permanently"
+        variant="danger"
+        icon={<Trash2 className="w-6 h-6" />}
+      />
     </div>
   );
 };
