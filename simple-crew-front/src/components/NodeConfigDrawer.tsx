@@ -340,7 +340,7 @@ export function NodeConfigDrawer() {
     setSuggestionState(prev => ({ ...prev, isOpen: false }));
   };
 
-  const handleFieldKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement | HTMLInputElement | any>, field: string) => {
+  const handleFieldKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement | HTMLInputElement | any>) => {
     if (suggestionState.isOpen) {
       const crewNode = nodes.find(n => n.type === 'crew');
       const inputs = Object.keys((crewNode?.data as any)?.inputs || {}).filter(k => !k.startsWith('input_'));
@@ -373,7 +373,11 @@ export function NodeConfigDrawer() {
     updateFn: (val: string) => void
   ) => {
     const value = e.target.value;
-    const cursorPos = e.target.selectionStart || 0;
+    const targetElement = (e.target.getBoundingClientRect ? e.target : document.activeElement) as HTMLTextAreaElement | HTMLInputElement;
+    const cursorPos = (targetElement && typeof targetElement.selectionStart === 'number') 
+      ? targetElement.selectionStart 
+      : value.length;
+
     updateFn(value);
 
     // Lógica para detectar se terminamos com "{" ou se estamos dentro de um "{... "
@@ -384,7 +388,7 @@ export function NodeConfigDrawer() {
     if (lastBraceIndex > lastCloseBraceIndex) {
       // Estamos dentro de um bloco de sugestão
       const filter = textBeforeCursor.slice(lastBraceIndex + 1);
-      const rect = e.target.getBoundingClientRect();
+      const rect = targetElement?.getBoundingClientRect ? targetElement.getBoundingClientRect() : null;
       
       setSuggestionState({
         isOpen: true,
@@ -520,7 +524,7 @@ export function NodeConfigDrawer() {
               <HighlightedTextField
                 type="input"
                 value={(data as any).role || ''}
-                onKeyDown={(e) => handleFieldKeyDown(e, 'role')}
+                onKeyDown={(e) => handleFieldKeyDown(e)}
                 onChange={(e) => handleFieldChange(e, 'role', (val) => updateNodeData(activeNode.id, { role: val }))}
                 placeholder="e.g. Senior Researcher"
               />
@@ -541,7 +545,7 @@ export function NodeConfigDrawer() {
               <HighlightedTextField
                 type="textarea"
                 value={(data as any).goal || ''}
-                onKeyDown={(e) => handleFieldKeyDown(e, 'goal')}
+                onKeyDown={(e) => handleFieldKeyDown(e)}
                 onChange={(e) => handleFieldChange(e, 'goal', (val) => updateNodeData(activeNode.id, { goal: val }))}
                 placeholder="What does this agent need to achieve?"
                 rows={3}
@@ -563,7 +567,7 @@ export function NodeConfigDrawer() {
               <HighlightedTextField
                 type="textarea"
                 value={(data as any).backstory || ''}
-                onKeyDown={(e) => handleFieldKeyDown(e, 'backstory')}
+                onKeyDown={(e) => handleFieldKeyDown(e)}
                 onChange={(e) => handleFieldChange(e, 'backstory', (val) => updateNodeData(activeNode.id, { backstory: val }))}
                 placeholder="The agent's background and expertise..."
                 rows={5}
@@ -892,7 +896,7 @@ export function NodeConfigDrawer() {
               <HighlightedTextField
                 type="textarea"
                 value={(data as any).description || ''}
-                onKeyDown={(e) => handleFieldKeyDown(e, 'description')}
+                onKeyDown={(e) => handleFieldKeyDown(e)}
                 onChange={(e) => handleFieldChange(e, 'description', (val) => updateNodeData(activeNode.id, { description: val }))}
                 placeholder="What exactly needs to be done?"
                 rows={4}
@@ -913,7 +917,7 @@ export function NodeConfigDrawer() {
               <HighlightedTextField
                 type="textarea"
                 value={(data as any).expected_output || ''}
-                onKeyDown={(e) => handleFieldKeyDown(e, 'expected_output')}
+                onKeyDown={(e) => handleFieldKeyDown(e)}
                 onChange={(e) => handleFieldChange(e, 'expected_output', (val) => updateNodeData(activeNode.id, { expected_output: val }))}
                 placeholder="What should this task produce?"
                 rows={3}
