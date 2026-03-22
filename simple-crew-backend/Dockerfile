@@ -36,6 +36,9 @@ RUN uv sync --frozen --no-install-project
 # Copy the rest of the application
 COPY . .
 
+# Create an empty .env file so Python doesn't crash
+RUN touch .env
+
 # Expose port
 EXPOSE 8000
 

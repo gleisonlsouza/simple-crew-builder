@@ -1,0 +1,70 @@
+name: Docker Publish
+
+on:
+  release:
+    types: [published]
+
+jobs:
+  push_backend:
+    name: Push Backend to Docker Hub
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Extract metadata (Backend)
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: gleisonsouza/simple-crew-builder-backend
+          tags: |
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=sha
+
+      - name: Build and push (Backend)
+        uses: docker/build-push-action@v5
+        with:
+          context: ./simple-crew-backend
+          file: ./simple-crew-backend/Dockerfile
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+
+  push_frontend:
+    name: Push Frontend to Docker Hub
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Extract metadata (Frontend)
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: gleisonsouza/simple-crew-builder-frontend
+          tags: |
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=sha
+
+      - name: Build and push (Frontend)
+        uses: docker/build-push-action@v5
+        with:
+          context: ./simple-crew-front
+          file: ./simple-crew-front/Dockerfile
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
