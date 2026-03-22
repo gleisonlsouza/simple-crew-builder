@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import ReactMarkdown from 'react-markdown';
 import { useStore } from '../store';
 import { X, ChevronDown, ChevronUp, Send } from 'lucide-react';
 type Message = {
@@ -237,7 +238,31 @@ export function ResizableChatPanel() {
                       : 'bg-slate-800/80 rounded-tl-none border-slate-700/50 text-slate-200'
                   }`}
                 >
-                  <p className="text-sm break-words whitespace-pre-wrap">{msg.content}</p>
+                  <div className="text-sm break-words chat-markdown">
+                    <ReactMarkdown
+                      components={{
+                        p: ({ children }) => <p className="mb-1 last:mb-0">{children}</p>,
+                        strong: ({ children }) => <strong className="font-semibold">{children}</strong>,
+                        em: ({ children }) => <em className="italic">{children}</em>,
+                        code: ({ children, className }) =>
+                          className ? (
+                            <code className="block bg-black/30 rounded p-2 mt-1 mb-1 text-xs font-mono whitespace-pre-wrap">{children}</code>
+                          ) : (
+                            <code className="bg-black/30 rounded px-1 text-xs font-mono">{children}</code>
+                          ),
+                        pre: ({ children }) => <pre className="bg-black/30 rounded p-2 mt-1 mb-1 text-xs font-mono overflow-x-auto whitespace-pre-wrap">{children}</pre>,
+                        ul: ({ children }) => <ul className="list-disc list-inside mb-1 space-y-0.5">{children}</ul>,
+                        ol: ({ children }) => <ol className="list-decimal list-inside mb-1 space-y-0.5">{children}</ol>,
+                        li: ({ children }) => <li className="ml-2">{children}</li>,
+                        h1: ({ children }) => <h1 className="text-base font-bold mb-1">{children}</h1>,
+                        h2: ({ children }) => <h2 className="text-sm font-bold mb-1">{children}</h2>,
+                        h3: ({ children }) => <h3 className="text-sm font-semibold mb-1">{children}</h3>,
+                        blockquote: ({ children }) => <blockquote className="border-l-2 border-slate-500 pl-2 italic opacity-80">{children}</blockquote>,
+                        a: ({ href, children }) => <a href={href} target="_blank" rel="noopener noreferrer" className="underline opacity-80 hover:opacity-100">{children}</a>,
+                        hr: () => <hr className="border-slate-600 my-2" />,
+                      }}
+                    >{msg.content}</ReactMarkdown>
+                  </div>
                 </div>
               </div>
             ))}
