@@ -168,7 +168,7 @@ cd simple-crew-front
 cp examplo.env.development .env.development
 
 # Install dependencies
-npm install
+npm install --legacy-peer-deps
 
 # Start the dev server
 npm run dev
