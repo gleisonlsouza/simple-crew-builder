@@ -12,12 +12,12 @@ services:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
-    networks:
-      - simple-crew-network
 
-  # Backend Service (Puxando do Docker Hub)
+  # Backend Service (Python 3.12 + Node.js 20)
   backend:
-    image: gleisonsouza/simple-crew-builder-backend:latest
+    build:
+      context: ./simple-crew-backend
+      dockerfile: Dockerfile
     container_name: simple-crew-backend
     restart: always
     depends_on:
@@ -25,30 +25,30 @@ services:
     environment:
       - DATABASE_URL=postgresql://postgres:postgres@db:5432/simple-crew-builder
       - POSTGRES_DATABASE_URL=postgresql://postgres:postgres@db:5432/simple-crew-builder
-      - OPENAI_API_KEY=${OPENAI_API_KEY}
-    networks:
-      - simple-crew-network
+    env_file:
+      - ./simple-crew-backend/.env
     ports:
       - "8000:8000"
     volumes:
-      - backend_workspaces:/app/workspaces
+      - ./simple-crew-backend:/app
+      - /app/.venv # Protect container's venv
 
-  # Frontend Service (Puxando do Docker Hub - Nginx com Reverse Proxy)
+  # Frontend Service (React + Vite Dev Server)
   frontend:
-    image: gleisonsouza/simple-crew-builder-frontend:latest
+    build:
+      context: ./simple-crew-front
+      dockerfile: Dockerfile.dev
     container_name: simple-crew-frontend
     restart: always
     depends_on:
       - backend
     ports:
-      - "8080:80"
-    networks:
-      - simple-crew-network
+      - "5173:5173"
+    volumes:
+      - ./simple-crew-front:/app
+      - /app/node_modules # Protect container's node_modules
+    environment:
+      - VITE_API_URL=http://localhost:8000
 
 volumes:
   postgres_data:
-  backend_workspaces:
-
-networks:
-  simple-crew-network:
-    driver: bridge

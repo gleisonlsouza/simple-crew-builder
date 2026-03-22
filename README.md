@@ -24,8 +24,8 @@ Built with a focus on ease of use and visual excellence, Simple Crew Builder rem
 ## 🛠 Tech Stack
 
 ### Frontend
-- **React 18** + **Vite** (Ultra-fast development)
-- **Tailwind CSS** (Custom design system)
+- **React 19** + **Vite** (Ultra-fast development)
+- **Tailwind CSS v4** (Custom design system)
 - **Zustand** (State management)
 - **React Flow** (Visual orchestration engine)
 - **Lucide React** (Premium icons)
@@ -39,65 +39,198 @@ Built with a focus on ease of use and visual excellence, Simple Crew Builder rem
 
 ---
 
-## 🚀 Getting Started
+## 📁 Project Structure
 
-There are two ways to run the Simple Crew Builder: using **Docker (Recommended)** or **Individually**.
-
-### 📦 Option 1: Running with Docker (easiest)
-
-Ensure you have [Docker](https://www.docker.com/) and [Docker Compose](https://docs.docker.com/compose/) installed.
-
-1. **Clone the repository**:
-   ```bash
-   git clone https://github.com/gleisonlsouza/simple-crew-builder.git
-   cd simple-crew-builder
-   ```
-
-2. **Configure Environment Variables**:
-   Copy the example environment file and add your keys.
-   ```bash
-   cp simple-crew-backend/.env.example simple-crew-backend/.env
-   # Edit simple-crew-backend/.env and add your OPENAI_API_KEY (and others)
-   ```
-
-3. **Start the containers**:
-   ```bash
-   docker compose up --build
-   ```
-
-The application will be available at:
-- **Frontend**: `http://localhost:5173`
-- **Backend API**: `http://localhost:8000`
-- **Postgres**: `localhost:5432`
+```
+simple-crew-builder/
+├── simple-crew-backend/        # Python FastAPI backend
+│   ├── app/                    # Application code
+│   ├── Dockerfile              # Production Docker image
+│   ├── examplo.env             # 👈 Rename to .env
+│   └── pyproject.toml          # Python dependencies
+├── simple-crew-front/          # React frontend
+│   ├── src/                    # Application code
+│   ├── Dockerfile              # Production image (Nginx + Reverse Proxy)
+│   ├── Dockerfile.dev          # Development image (Vite Hot Reload)
+│   ├── nginx.conf              # Nginx config with API reverse proxy
+│   └── examplo.env.development # 👈 Rename to .env.development
+├── docker-compose.yml          # 🐳 Production (Docker Hub images)
+├── docker-compose.dev.yml      # 🔧 Development (local build)
+└── .github/workflows/          # CI/CD pipeline
+```
 
 ---
 
-### 🛠 Option 2: Running Individually (Development)
+## 🚀 Getting Started
 
-#### 1. Backend Setup
-Requires **Python 3.12+** and **Node.js 20+** (if using MCP).
+### Prerequisites
+
+- [Docker](https://www.docker.com/) and [Docker Compose](https://docs.docker.com/compose/) (for Docker options)
+- [Python 3.12+](https://www.python.org/) and [uv](https://docs.astral.sh/uv/) (for local backend)
+- [Node.js 20+](https://nodejs.org/) (for local frontend and MCP tools)
+- [PostgreSQL 15+](https://www.postgresql.org/) (for local database)
+
+---
+
+## 📦 Option 1: Docker Production (Recommended)
+
+Uses official images from **Docker Hub**. No build needed.
+
+**1. Clone and configure:**
+
+```bash
+git clone https://github.com/gleisonlsouza/simple-crew-builder.git
+cd simple-crew-builder
+```
+
+**2. Create a `.env` at the project root with your OpenAI key:**
+
+```bash
+echo "OPENAI_API_KEY=sk-proj-your-key-here" > .env
+```
+
+**3. Start everything:**
+
+```bash
+docker compose pull
+docker compose up
+```
+
+**4. Access the application:**
+
+| Service | URL |
+|---------|-----|
+| **Frontend** | `http://localhost:8080` |
+| **Backend API** | `http://localhost:8000` |
+| **Database** | `localhost:5432` |
+
+> 💡 In production mode, the frontend uses **Nginx** as a reverse proxy. All `/api/` requests are automatically routed to the backend internally — no CORS issues.
+
+---
+
+## 🔧 Option 2: Docker Development (with Hot Reload)
+
+Builds images locally from source code and enables live file watching.
+
+**1. Configure the backend environment:**
+
+```bash
+cp simple-crew-backend/examplo.env simple-crew-backend/.env
+# Edit simple-crew-backend/.env and add your OPENAI_API_KEY
+```
+
+**2. Configure the frontend environment:**
+
+```bash
+cp simple-crew-front/examplo.env.development simple-crew-front/.env.development
+```
+
+**3. Start the development stack:**
+
+```bash
+docker compose -f docker-compose.dev.yml up --build
+```
+
+| Service | URL |
+|---------|-----|
+| **Frontend (Vite)** | `http://localhost:5173` |
+| **Backend API** | `http://localhost:8000` |
+| **Database** | `localhost:5432` |
+
+---
+
+## 🛠 Option 3: Running Locally (No Docker)
+
+For full control and debugging. Requires PostgreSQL running locally.
+
+### 1. Backend Setup
 
 ```bash
 cd simple-crew-backend
-# Install dependencies using 'uv' (recommended)
-uv sync
-# Or use pip
-pip install -r requirements.txt
 
-# Start the FastAPI server
+# Copy and configure environment
+cp examplo.env .env
+# Edit .env → add your OPENAI_API_KEY
+
+# Install dependencies with uv
+uv sync
+
+# Start the server
 uv run -m uvicorn app.main:app --reload --port 8000
 ```
 
-#### 2. Frontend Setup
-Requires **Node.js 20+**.
+### 2. Frontend Setup
 
 ```bash
 cd simple-crew-front
+
+# Copy and configure environment
+cp examplo.env.development .env.development
+
+# Install dependencies
 npm install
+
+# Start the dev server
 npm run dev
 ```
 
-The application will be available at `http://localhost:5173`.
+| Service | URL |
+|---------|-----|
+| **Frontend (Vite)** | `http://localhost:5173` |
+| **Backend API** | `http://localhost:8000` |
+
+---
+
+## 🐳 Docker Architecture
+
+```
+┌─────────────────────────────────────────────────┐
+│                   Docker Network                │
+│                                                 │
+│  ┌──────────┐   ┌───────────┐   ┌───────────┐  │
+│  │ Postgres │   │  Backend  │   │  Frontend  │  │
+│  │ :5432    │◄──│  :8000    │◄──│  Nginx :80 │  │
+│  └──────────┘   └───────────┘   └─────┬─────┘  │
+│                                       │         │
+└───────────────────────────────────────┼─────────┘
+                                        │
+                              Browser :8080
+                           ┌────────────┴────────────┐
+                           │ /        → React SPA    │
+                           │ /api/*   → Backend      │
+                           └─────────────────────────┘
+```
+
+### Compose Files Comparison
+
+| | `docker-compose.yml` | `docker-compose.dev.yml` |
+|--|---|---|
+| **Purpose** | Production | Development |
+| **Images** | Docker Hub (`latest`) | Local build |
+| **Frontend** | Nginx (port `8080→80`) | Vite (port `5173`) |
+| **API Routing** | Nginx reverse proxy | Direct `localhost:8000` |
+| **Hot Reload** | ❌ | ✅ |
+| **Volumes** | Data persistence only | Source code mounted |
+
+---
+
+## ⚙️ Environment Variables
+
+### Backend (`simple-crew-backend/.env`)
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `OPENAI_API_KEY` | Your OpenAI API key | *(required)* |
+| `MODEL` | Default LLM model | `gpt-4o-mini` |
+| `POSTGRES_DATABASE_URL` | Database connection string | `postgresql://postgres:postgres@localhost:5432/simple-crew-builder` |
+
+### Frontend (`simple-crew-front/.env.development`)
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `VITE_API_URL` | Backend URL for dev mode | `http://localhost:8000` |
+
+> ⚠️ In production, `VITE_API_URL` is **not needed**. Nginx handles API routing automatically.
 
 ---
 
