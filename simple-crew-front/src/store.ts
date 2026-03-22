@@ -10,6 +10,8 @@ import {
 } from '@xyflow/react';
 import type { AppState, AppNode, AppEdge, NodeStatus, ModelConfig } from './types';
 
+const API_URL = import.meta.env.VITE_API_URL || '';
+
 // Initial example nodes to show on the canvas
 const initialNodes: AppNode[] = [
   {
@@ -178,7 +180,7 @@ export const useStore = create<AppState>((set, get) => ({
 
   fetchWorkspaceFiles: async (wsId: string) => {
     try {
-      const response = await fetch(`http://localhost:8000/api/v1/workspaces/${wsId}/files`);
+      const response = await fetch(`${API_URL}/api/v1/workspaces/${wsId}/files`);
       if (!response.ok) throw new Error('Failed to fetch workspace files');
       return await response.json();
     } catch (error: any) {
@@ -189,7 +191,7 @@ export const useStore = create<AppState>((set, get) => ({
 
   fetchFileContent: async (ws_id: string, path: string) => {
     try {
-      const response = await fetch(`http://localhost:8000/api/v1/workspaces/${ws_id}/files/content?path=${encodeURIComponent(path)}`);
+      const response = await fetch(`${API_URL}/api/v1/workspaces/${ws_id}/files/content?path=${encodeURIComponent(path)}`);
       if (!response.ok) throw new Error('Failed to fetch file content');
       const data = await response.json();
       return data.content;
@@ -201,7 +203,7 @@ export const useStore = create<AppState>((set, get) => ({
 
   fetchMCPServers: async () => {
     try {
-      const response = await fetch('http://localhost:8000/api/v1/mcp-servers');
+      const response = await fetch(`${API_URL}/api/v1/mcp-servers`);
       if (!response.ok) throw new Error('Failed to fetch MCP servers');
       const servers = await response.json();
       const mappedServers = servers.map((s: any) => ({
@@ -222,7 +224,7 @@ export const useStore = create<AppState>((set, get) => ({
 
   fetchCustomTools: async () => {
     try {
-      const response = await fetch('http://localhost:8000/api/v1/custom-tools');
+      const response = await fetch(`${API_URL}/api/v1/custom-tools`);
       if (!response.ok) throw new Error('Failed to fetch custom tools');
       const tools = await response.json();
       set({ customTools: tools });
@@ -248,7 +250,7 @@ export const useStore = create<AppState>((set, get) => ({
 
   addCustomTool: async (tool) => {
     try {
-      const response = await fetch('http://localhost:8000/api/v1/custom-tools', {
+      const response = await fetch(`${API_URL}/api/v1/custom-tools`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(tool)
@@ -263,7 +265,7 @@ export const useStore = create<AppState>((set, get) => ({
 
   updateCustomTool: async (id, config) => {
     try {
-      const response = await fetch(`http://localhost:8000/api/v1/custom-tools/${id}`, {
+      const response = await fetch(`${API_URL}/api/v1/custom-tools/${id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(config)
@@ -278,7 +280,7 @@ export const useStore = create<AppState>((set, get) => ({
 
   deleteCustomTool: async (id) => {
     try {
-      const response = await fetch(`http://localhost:8000/api/v1/custom-tools/${id}`, {
+      const response = await fetch(`${API_URL}/api/v1/custom-tools/${id}`, {
         method: 'DELETE'
       });
       if (!response.ok) throw new Error('Failed to delete custom tool');
@@ -300,7 +302,7 @@ export const useStore = create<AppState>((set, get) => ({
         url: server.url,
         headers: server.headers
       };
-      const response = await fetch('http://localhost:8000/api/v1/mcp-servers', {
+      const response = await fetch(`${API_URL}/api/v1/mcp-servers`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
@@ -325,7 +327,7 @@ export const useStore = create<AppState>((set, get) => ({
       if (config.url !== undefined) payload.url = config.url;
       if (config.headers !== undefined) payload.headers = config.headers;
 
-      const response = await fetch(`http://localhost:8000/api/v1/mcp-servers/${id}`, {
+      const response = await fetch(`${API_URL}/api/v1/mcp-servers/${id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
@@ -340,7 +342,7 @@ export const useStore = create<AppState>((set, get) => ({
 
   deleteMCPServer: async (id) => {
     try {
-      const response = await fetch(`http://localhost:8000/api/v1/mcp-servers/${id}`, {
+      const response = await fetch(`${API_URL}/api/v1/mcp-servers/${id}`, {
         method: 'DELETE'
       });
       if (!response.ok) throw new Error('Failed to delete MCP server');
@@ -413,7 +415,7 @@ export const useStore = create<AppState>((set, get) => ({
     try {
       state.showNotification("Preparing Python project... ⏳", "info");
       
-      const response = await fetch(`http://localhost:8000/api/v1/projects/${state.currentProjectId}/export-python`);
+      const response = await fetch(`${API_URL}/api/v1/projects/${state.currentProjectId}/export-python`);
       
       if (!response.ok) {
         throw new Error('Failed to generate Python project');
@@ -645,7 +647,7 @@ export const useStore = create<AppState>((set, get) => ({
       }
 
       // 2. Chama backend passando a malha inteira do Canvas
-      const response = await fetch("http://localhost:8000/api/v1/run-crew", {
+      const response = await fetch(`${API_URL}/api/v1/run-crew`, {
         method: "POST",
         headers,
         body: JSON.stringify(payload)
@@ -907,7 +909,7 @@ export const useStore = create<AppState>((set, get) => ({
         get().fetchSettings()
       ]);
 
-      const response = await fetch(`http://localhost:8000/api/v1/projects/${projectId}`);
+      const response = await fetch(`${API_URL}/api/v1/projects/${projectId}`);
       if (!response.ok) throw new Error('Falha ao carregar projeto');
       const project = await response.json();
 
@@ -949,7 +951,7 @@ export const useStore = create<AppState>((set, get) => ({
 
   fetchProjects: async () => {
     try {
-      const response = await fetch('http://localhost:8000/api/v1/projects');
+      const response = await fetch(`${API_URL}/api/v1/projects`);
       if (!response.ok) throw new Error('Failed to fetch projects');
       const projects = await response.json();
       set({ savedProjects: projects });
@@ -982,13 +984,13 @@ export const useStore = create<AppState>((set, get) => ({
 
       let response;
       if (state.currentProjectId) {
-        response = await fetch(`http://localhost:8000/api/v1/projects/${state.currentProjectId}`, {
+        response = await fetch(`${API_URL}/api/v1/projects/${state.currentProjectId}`, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload)
         });
       } else {
-        response = await fetch('http://localhost:8000/api/v1/projects', {
+        response = await fetch(`${API_URL}/api/v1/projects`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload)
@@ -1015,7 +1017,7 @@ export const useStore = create<AppState>((set, get) => ({
 
   deleteProject: async (projectId: string) => {
     try {
-      const response = await fetch(`http://localhost:8000/api/v1/projects/${projectId}`, {
+      const response = await fetch(`${API_URL}/api/v1/projects/${projectId}`, {
         method: 'DELETE'
       });
       if (!response.ok) throw new Error('Failed to delete project');
@@ -1163,7 +1165,7 @@ export const useStore = create<AppState>((set, get) => ({
 
   duplicateProject: async (id: string) => {
     try {
-      const response = await fetch(`http://localhost:8000/api/v1/projects/${id}`);
+      const response = await fetch(`${API_URL}/api/v1/projects/${id}`);
       if (!response.ok) throw new Error('Failed to fetch project for duplication');
 
       const project = await response.json();
@@ -1174,7 +1176,7 @@ export const useStore = create<AppState>((set, get) => ({
         canvas_data: project.canvas_data
       };
 
-      const saveResponse = await fetch('http://localhost:8000/api/v1/projects', {
+      const saveResponse = await fetch(`${API_URL}/api/v1/projects`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(duplicatedProject),
@@ -1202,7 +1204,7 @@ export const useStore = create<AppState>((set, get) => ({
     };
 
     try {
-      const response = await fetch('http://localhost:8000/api/v1/projects', {
+      const response = await fetch(`${API_URL}/api/v1/projects`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
@@ -1246,7 +1248,7 @@ export const useStore = create<AppState>((set, get) => ({
         }
       };
 
-      const response = await fetch('http://localhost:8000/api/v1/projects', {
+      const response = await fetch(`${API_URL}/api/v1/projects`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
@@ -1273,7 +1275,7 @@ export const useStore = create<AppState>((set, get) => ({
 
   fetchWorkspaces: async () => {
     try {
-      const response = await fetch('http://localhost:8000/api/v1/workspaces');
+      const response = await fetch(`${API_URL}/api/v1/workspaces`);
       if (!response.ok) throw new Error('Failed to fetch workspaces');
       const workspaces = await response.json();
       set({ workspaces });
@@ -1284,7 +1286,7 @@ export const useStore = create<AppState>((set, get) => ({
 
   addWorkspace: async (workspace) => {
     try {
-      const response = await fetch('http://localhost:8000/api/v1/workspaces', {
+      const response = await fetch(`${API_URL}/api/v1/workspaces`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(workspace),
@@ -1304,7 +1306,7 @@ export const useStore = create<AppState>((set, get) => ({
 
   updateWorkspace: async (id, workspace) => {
     try {
-      const response = await fetch(`http://localhost:8000/api/v1/workspaces/${id}`, {
+      const response = await fetch(`${API_URL}/api/v1/workspaces/${id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(workspace),
@@ -1321,7 +1323,7 @@ export const useStore = create<AppState>((set, get) => ({
 
   deleteWorkspace: async (id: string) => {
     try {
-      const response = await fetch(`http://localhost:8000/api/v1/workspaces/${id}`, {
+      const response = await fetch(`${API_URL}/api/v1/workspaces/${id}`, {
         method: 'DELETE',
       });
 
@@ -1350,7 +1352,7 @@ export const useStore = create<AppState>((set, get) => ({
 
   openWorkspace: async (id: string) => {
     try {
-      const response = await fetch(`http://localhost:8000/api/v1/workspaces/${id}/open`, {
+      const response = await fetch(`${API_URL}/api/v1/workspaces/${id}/open`, {
         method: 'POST',
       });
 
@@ -1367,7 +1369,7 @@ export const useStore = create<AppState>((set, get) => ({
 
   fetchSettings: async () => {
     try {
-      const response = await fetch('http://localhost:8000/api/v1/settings');
+      const response = await fetch(`${API_URL}/api/v1/settings`);
       if (!response.ok) throw new Error('Failed to fetch settings');
       const settings = await response.json();
       set({ 
@@ -1382,7 +1384,7 @@ export const useStore = create<AppState>((set, get) => ({
 
   downloadWorkspaceZip: async (wsId: string, path: string = "") => {
     try {
-      const url = `http://localhost:8000/api/v1/workspaces/${wsId}/download-zip?path=${encodeURIComponent(path)}`;
+      const url = `${API_URL}/api/v1/workspaces/${wsId}/download-zip?path=${encodeURIComponent(path)}`;
       const link = document.createElement('a');
       link.href = url;
       link.setAttribute('download', '');
@@ -1398,7 +1400,7 @@ export const useStore = create<AppState>((set, get) => ({
 
   updateProjectMetadata: async (id: string, name: string, description: string) => {
     try {
-      const response = await fetch(`http://localhost:8000/api/v1/projects/${id}`, {
+      const response = await fetch(`${API_URL}/api/v1/projects/${id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name, description }),
@@ -1417,7 +1419,7 @@ export const useStore = create<AppState>((set, get) => ({
 
   fetchCredentials: async () => {
     try {
-      const response = await fetch('http://localhost:8000/api/v1/credentials');
+      const response = await fetch(`${API_URL}/api/v1/credentials`);
       if (!response.ok) throw new Error('Failed to fetch credentials');
       const credentials = await response.json();
       set({ credentials });
@@ -1428,7 +1430,7 @@ export const useStore = create<AppState>((set, get) => ({
 
   addCredential: async (cred) => {
     try {
-      const response = await fetch('http://localhost:8000/api/v1/credentials', {
+      const response = await fetch(`${API_URL}/api/v1/credentials`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(cred),
@@ -1446,7 +1448,7 @@ export const useStore = create<AppState>((set, get) => ({
 
   deleteCredential: async (id) => {
     try {
-      const response = await fetch(`http://localhost:8000/api/v1/credentials/${id}`, {
+      const response = await fetch(`${API_URL}/api/v1/credentials/${id}`, {
         method: 'DELETE',
       });
 
@@ -1462,7 +1464,7 @@ export const useStore = create<AppState>((set, get) => ({
 
   fetchModels: async () => {
     try {
-      const response = await fetch('http://localhost:8000/api/v1/models');
+      const response = await fetch(`${API_URL}/api/v1/models`);
       if (!response.ok) throw new Error('Failed to fetch models');
       const data = await response.json();
 
@@ -1512,7 +1514,7 @@ export const useStore = create<AppState>((set, get) => ({
     };
 
     try {
-      const response = await fetch('http://localhost:8000/api/v1/models', {
+      const response = await fetch(`${API_URL}/api/v1/models`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(modelData),
@@ -1541,7 +1543,7 @@ export const useStore = create<AppState>((set, get) => ({
     if (modelUpdate.isDefault !== undefined) mappedUpdate.is_default = modelUpdate.isDefault;
 
     try {
-      const response = await fetch(`http://localhost:8000/api/v1/models/${id}`, {
+      const response = await fetch(`${API_URL}/api/v1/models/${id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(mappedUpdate),
@@ -1559,7 +1561,7 @@ export const useStore = create<AppState>((set, get) => ({
 
   deleteModel: async (id) => {
     try {
-      const response = await fetch(`http://localhost:8000/api/v1/models/${id}`, {
+      const response = await fetch(`${API_URL}/api/v1/models/${id}`, {
         method: 'DELETE',
       });
 
@@ -1575,7 +1577,7 @@ export const useStore = create<AppState>((set, get) => ({
 
   setDefaultModelConfig: async (id) => {
     try {
-      const response = await fetch(`http://localhost:8000/api/v1/models/${id}/set-default`, {
+      const response = await fetch(`${API_URL}/api/v1/models/${id}/set-default`, {
         method: 'POST',
       });
 
@@ -1604,7 +1606,7 @@ export const useStore = create<AppState>((set, get) => ({
     const workflowDescription = (crewNode?.data as any)?.description || '';
 
     try {
-      const response = await fetch('http://localhost:8000/api/v1/ai/suggest', {
+      const response = await fetch(`${API_URL}/api/v1/ai/suggest`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -1635,7 +1637,7 @@ export const useStore = create<AppState>((set, get) => ({
     const workflowDescription = (crewNode?.data as any)?.description || '';
 
     try {
-      const response = await fetch('http://localhost:8000/api/v1/ai/bulk-suggest', {
+      const response = await fetch(`${API_URL}/api/v1/ai/bulk-suggest`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -1678,7 +1680,7 @@ export const useStore = create<AppState>((set, get) => ({
     const agentName = (agentNode?.data as any)?.name;
 
     try {
-      const response = await fetch('http://localhost:8000/api/v1/ai/task-bulk-suggest', {
+      const response = await fetch(`${API_URL}/api/v1/ai/task-bulk-suggest`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -1715,7 +1717,7 @@ export const useStore = create<AppState>((set, get) => ({
   
   updateSettings: async (settings) => {
     try {
-      const response = await fetch('http://localhost:8000/api/v1/settings', {
+      const response = await fetch(`${API_URL}/api/v1/settings`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(settings),

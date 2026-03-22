@@ -1,0 +1,20 @@
+# Dockerfile para Desenvolvimento (Hot Reloading)
+FROM node:20-alpine
+
+WORKDIR /app
+
+# Copia arquivos de dependência
+COPY package*.json ./
+
+# Instala as dependências (usando cache)
+RUN npm install --legacy-peer-deps
+
+# No dev, o código costuma ser montado via volume, mas copiar aqui permite
+# que a imagem funcione minimamente em isolamento se necessário.
+COPY . .
+
+# Expõe a porta padrão do Vite
+EXPOSE 5173
+
+# O "--host" é crucial para que o Vite aceite conexões de fora do container (Docker bridge)
+CMD ["npm", "run", "dev", "--", "--host"]

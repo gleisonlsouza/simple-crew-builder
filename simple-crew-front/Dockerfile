@@ -1,21 +1,23 @@
-# Build frontend image with Node.js 20 (Debian for better native module support)
-FROM node:20
-
-# Set working directory
+# Estágio 1: Build
+FROM node:20-alpine AS builder
 WORKDIR /app
 
-# Copy dependency files first for caching
-COPY package.json package-lock.json* ./
+COPY package*.json ./
+RUN npm install --legacy-peer-deps
 
-# Increase npm timeout for reliability
-RUN npm config set fetch-retry-maxtimeout 600000 && \
-    npm install --legacy-peer-deps
-
-# Copy the rest of the application
 COPY . .
+# Build sem VITE_API_URL = URLs relativas (Nginx faz o proxy)
+RUN npm run build 
 
-# Expose port
-EXPOSE 5173
+# Estágio 2: Produção (Nginx + Reverse Proxy)
+FROM nginx:alpine
 
-# Run the frontend in dev mode for easy testing
-CMD ["npm", "run", "dev", "--", "--host", "0.0.0.0"]
+# Copia a config customizada do Nginx (com reverse proxy para /api/)
+COPY nginx.conf /etc/nginx/conf.d/default.conf
+
+# Copia os arquivos estáticos do build
+COPY --from=builder /app/dist /usr/share/nginx/html
+
+EXPOSE 80
+
+CMD ["nginx", "-g", "daemon off;"]
