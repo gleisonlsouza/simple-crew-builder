@@ -30,12 +30,12 @@ export const AboutModal: React.FC<AboutModalProps> = ({ isOpen, onClose }) => {
       />
 
       {/* Modal Card with premium styling */}
-      <div className="bg-brand-card w-full max-w-lg rounded-[2.5rem] border border-brand-border shadow-[0_0_50px_rgba(79,70,229,0.1)] relative z-10 animate-in fade-in zoom-in-95 duration-300 overflow-hidden">
+      <div className="bg-brand-card w-full max-w-lg rounded-[2.5rem] border border-brand-border shadow-[0_0_50px_rgba(79,70,229,0.1)] relative z-10 animate-in fade-in zoom-in-95 duration-300 overflow-hidden flex flex-col max-h-[90vh]">
 
         {/* Decorative Top Gradient */}
         <div className="absolute top-0 left-0 right-0 h-40 bg-gradient-to-b from-indigo-500/10 to-transparent pointer-events-none" />
 
-        <div className="relative p-10 pt-16">
+        <div className="relative flex-1 overflow-y-auto custom-scrollbar p-10 pt-16 min-h-0">
           {/* Close Button */}
           <button
             onClick={onClose}
@@ -59,7 +59,7 @@ export const AboutModal: React.FC<AboutModalProps> = ({ isOpen, onClose }) => {
                 title="Click to see what's new"
                 className="bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 text-[10px] font-bold px-3 py-1 rounded-full uppercase tracking-widest border border-indigo-500/20 cursor-pointer hover:bg-indigo-600 hover:text-white hover:border-indigo-600 transition-all active:scale-95 flex items-center gap-1.5 shadow-sm"
               >
-                Beta v0.0.3
+                Beta v0.0.4
                 <Sparkles className="w-3 h-3 transition-transform group-hover/version:rotate-12" />
               </button>
             </div>

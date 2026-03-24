@@ -37,7 +37,7 @@ export const PatchNotesModal: React.FC<PatchNotesModalProps> = ({ isOpen, onClos
         {/* Decorative Top Gradient */}
         <div className="absolute top-0 left-0 right-0 h-32 bg-gradient-to-b from-indigo-500/10 to-transparent pointer-events-none sticky top-0 z-20" />
 
-        <div className="relative flex flex-col h-full">
+        <div className="relative flex flex-col min-h-0 h-full">
           {/* Header */}
           <div className="p-8 pb-4 flex items-start justify-between relative z-10">
             <div className="flex items-center gap-4">
@@ -65,7 +65,7 @@ export const PatchNotesModal: React.FC<PatchNotesModalProps> = ({ isOpen, onClos
           </div>
 
           {/* Content Area */}
-          <div className="flex-1 overflow-y-auto px-8 pb-10 custom-scrollbar relative z-10">
+          <div className="flex-1 overflow-y-auto px-8 pb-10 custom-scrollbar relative z-10 min-h-0">
             {loading ? (
               <div className="flex flex-col items-center justify-center py-20 space-y-4">
                 <RefreshCw className="w-8 h-8 text-indigo-500 animate-spin opacity-50" />
