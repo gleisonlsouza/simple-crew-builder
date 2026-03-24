@@ -142,9 +142,36 @@ body,
   background-clip: content-box;
 }
 
-::-webkit-scrollbar-thumb:hover {
+::-webkit-scrollbar-thumb:hover, .custom-scrollbar::-webkit-scrollbar-thumb:hover {
   background: var(--accent-primary) !important;
   background-clip: content-box;
+}
+
+.custom-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-main) transparent;
+}
+
+.custom-scrollbar::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: var(--text-muted);
+  border-radius: 10px;
+  border: 1px solid transparent;
+  background-clip: content-box;
+  opacity: 0.4;
+}
+
+.dark .custom-scrollbar::-webkit-scrollbar-thumb {
+  background: var(--border-main);
+  opacity: 0.4;
 }
 
 /* Firefox Support */
