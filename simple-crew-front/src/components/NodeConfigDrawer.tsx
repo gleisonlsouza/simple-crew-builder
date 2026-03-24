@@ -460,11 +460,15 @@ export function NodeConfigDrawer() {
       {suggestionState.isOpen && (
         <div 
           className="fixed z-[100] bg-brand-card border border-brand-border rounded-xl shadow-2xl py-1.5 w-64 overflow-hidden animate-in fade-in zoom-in duration-150"
-          style={{
-            top: (suggestionState.anchorRect?.bottom || 0) + 4,
-            left: suggestionState.anchorRect?.left || 0,
-            maxHeight: '200px'
-          }}
+          style={(() => {
+            const rect = suggestionState.anchorRect;
+            const spaceBelow = rect ? window.innerHeight - rect.bottom : 0;
+            const dropdownHeight = 220;
+            if (rect && spaceBelow < dropdownHeight) {
+              return { bottom: window.innerHeight - rect.top + 4, left: rect.left, maxHeight: '200px' };
+            }
+            return { top: (rect?.bottom || 0) + 4, left: rect?.left || 0, maxHeight: '200px' };
+          })()}
         >
           <div className="px-3 py-1.5 border-b border-brand-border mb-1">
             <span className="text-[10px] font-bold text-brand-muted uppercase tracking-wider">Crew Input Variables</span>
@@ -1442,11 +1446,11 @@ export function NodeConfigDrawer() {
 
               <div className="flex flex-col gap-1.5 mt-2">
                 <label className="text-[11px] font-bold text-brand-muted uppercase tracking-wider">Output File</label>
-                <input 
-                  type="text" 
+                <HighlightedTextField
+                  type="input"
                   value={(data as any).output_file || ''}
-                  onChange={(e) => updateNodeData(activeNode.id, { output_file: e.target.value })}
-                  className="w-full bg-brand-bg border border-brand-border rounded-lg px-3 py-1.5 text-sm text-brand-text outline-none focus:ring-2 focus:ring-blue-500/40 transition-all"
+                  onKeyDown={(e) => handleFieldKeyDown(e)}
+                  onChange={(e) => handleFieldChange(e, 'output_file', (val) => updateNodeData(activeNode.id, { output_file: val }))}
                   placeholder="e.g. report.md"
                 />
               </div>
