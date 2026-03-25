@@ -7,8 +7,16 @@ import os
 
 def get_search_knowledge_base_tool(kb_id: str):
     @tool("company_knowledge_search")
-    def search_knowledge_base(query: str):
-        """Search the company knowledge base for technical documentation, code snippets, and project rules. Use this for ANY question about system architecture, framework details, or specific files."""
+    def search_knowledge_base(query: str, limit: int = 5, offset: int = 0):
+        """
+        Search the company knowledge base for technical documentation, code snippets, and project rules.
+        Use this for ANY question about system architecture, framework details, or specific files.
+
+        Args:
+            query (str): The search string or question to look for in the knowledge base.
+            limit (int): Maximum number of chunks to return (default: 5). Use this to control result density.
+            offset (int): Number of chunks to skip from the beginning (default: 0). Use this for pagination.
+        """
         
         # 1. Recupera Configuração do Modelo do Banco de Dados
         with Session(engine) as db_session:
@@ -34,14 +42,18 @@ def get_search_knowledge_base_tool(kb_id: str):
         from ..core.database.neo4j_db import neo4j_manager
         driver = neo4j_manager.driver
         
+        # O parâmetro topK deve ser dinâmico para garantir uma pool de candidatos segura antes do filtro do kb_id
+        top_k = limit + offset + 20
+        
         cypher = """
         MATCH (kb:KnowledgeBase {id: $kb_id})
-        CALL db.index.vector.queryNodes('kb_vector_index', 50, $query_vector)
+        CALL db.index.vector.queryNodes('kb_vector_index', $top_k, $query_vector)
         YIELD node AS chunk, score
         MATCH (chunk)-[:BELONGS_TO]->(kb)
         RETURN chunk.text AS text, score
         ORDER BY score DESC
-        LIMIT 5
+        SKIP $offset
+        LIMIT $limit
         """
         
         try:
@@ -50,7 +62,10 @@ def get_search_knowledge_base_tool(kb_id: str):
                 result = neo4j_session.run(
                     cypher, 
                     kb_id=kb_id, 
-                    query_vector=query_vector
+                    query_vector=query_vector,
+                    top_k=top_k,
+                    offset=offset,
+                    limit=limit
                 )
                 
                 context_chunks = []
