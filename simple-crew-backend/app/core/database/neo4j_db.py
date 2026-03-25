@@ -27,21 +27,21 @@ class Neo4jManager:
             self._driver = None
             print("--- Neo4j Driver Closed ---")
 
-    def create_vector_index(self):
-        """Cria o índice de vetor no Neo4j se não existir."""
-        query = """
+    def create_vector_index(self, dimension: int):
+        """Cria o índice de vetor no Neo4j se não existir com a dimensão dinâmica."""
+        query = f"""
         CREATE VECTOR INDEX kb_vector_index IF NOT EXISTS
         FOR (n:Chunk)
         ON (n.embedding)
-        OPTIONS {indexConfig: {
-         `vector.dimensions`: 1536,
+        OPTIONS {{indexConfig: {{
+         `vector.dimensions`: {int(dimension)},
          `vector.similarity_function`: 'cosine'
-        }}
+        }}}}
         """
         try:
             with self.driver.session() as session:
                 session.run(query)
-                print("--- Neo4j Vector Index Verified/Created ---")
+                print(f"--- Neo4j Vector Index Verified/Created (Dim: {dimension}) ---")
         except Exception as e:
             print(f"Erro ao criar índice vetorial: {e}")
 

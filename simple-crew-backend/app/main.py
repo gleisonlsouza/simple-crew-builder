@@ -39,8 +39,8 @@ async def lifespan(app: FastAPI):
     # Inicializa o driver do Neo4j
     neo4j_manager.init_driver()
     
-    # Garante que o índice vetorial exista
-    neo4j_manager.create_vector_index()
+    # O índice será criado dinamicamente (Lazy Creation) durante a primeira ingestão
+    # neo4j_manager.create_vector_index()
     
     yield
     

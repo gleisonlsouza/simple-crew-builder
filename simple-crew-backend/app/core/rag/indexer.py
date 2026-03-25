@@ -66,6 +66,9 @@ def process_document(kb_id: str, file_path: str, doc_id: str = None):
     
     try:
         with driver.session() as neo4j_session:
+            # Flag para criar o índice apenas uma vez por execução de documento
+            index_created = False
+            
             for i, chunk in enumerate(chunks):
                 # Gera o embedding
                 response = client.embeddings.create(
@@ -73,6 +76,12 @@ def process_document(kb_id: str, file_path: str, doc_id: str = None):
                     model=model_name
                 )
                 embedding = response.data[0].embedding
+                
+                # Lazy Creation do Índice Vetorial: detecta dimensão do primeiro chunk e cria se necessário
+                if not index_created:
+                    dimension = len(embedding)
+                    neo4j_manager.create_vector_index(dimension)
+                    index_created = True
                 
                 # Salva o Chunk no Neo4j com vínculo à KB e ao Documento
                 query = """
