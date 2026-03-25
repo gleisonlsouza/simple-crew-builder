@@ -5,11 +5,12 @@ services:
     container_name: simple-crew-db
     restart: always
     environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
-      POSTGRES_DB: simple-crew-builder
-    ports:
-      - "5432:5432"
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_DB: ${POSTGRES_DB:-simple-crew-builder}
+    # Security: Internal communication only. Use .env to override if needed for local tools.
+    # ports:
+    #   - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     networks:
@@ -22,10 +23,14 @@ services:
     restart: always
     depends_on:
       - db
+      - neo4j
     environment:
-      - DATABASE_URL=postgresql://postgres:postgres@db:5432/simple-crew-builder
-      - POSTGRES_DATABASE_URL=postgresql://postgres:postgres@db:5432/simple-crew-builder
-      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@db:5432/${POSTGRES_DB:-simple-crew-builder}
+      - POSTGRES_DATABASE_URL=postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@db:5432/${POSTGRES_DB:-simple-crew-builder}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - NEO4J_URI=${NEO4J_URI:-bolt://neo4j:7687}
+      - NEO4J_USERNAME=${NEO4J_USERNAME:-neo4j}
+      - NEO4J_PASSWORD=${NEO4J_PASSWORD:-simplecrew2026}
     networks:
       - simple-crew-network
     ports:
@@ -51,9 +56,12 @@ services:
     container_name: simple-crew-neo4j
     restart: always
     environment:
-      - NEO4J_AUTH=${NEO4J_USERNAME:-neo4j}/${NEO4J_PASSWORD}
+      - NEO4J_AUTH=${NEO4J_USERNAME:-neo4j}/${NEO4J_PASSWORD:-simplecrew2026}
       - NEO4J_PLUGINS=["apoc"]
       - NEO4J_dbms_security_procedures_unrestricted=apoc.*
+    ports:
+      - "7474:7474" # Neo4j Browser
+      - "7687:7687" # Bolt protocol
     volumes:
       - neo4j_data_prod:/data
       - neo4j_logs_prod:/logs
