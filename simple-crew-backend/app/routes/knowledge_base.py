@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
 from typing import List
 import os
 import shutil
+import uuid
 from neo4j import Session as Neo4jSession
 from ..core.database.neo4j_db import get_neo4j_session
 from ..schemas import KnowledgeBaseCreate, KnowledgeBaseResponse, KnowledgeBaseDocumentResponse
@@ -170,7 +171,7 @@ async def upload_documents(
                         MERGE (d)-[:BELONGS_TO]->(kb)
                         RETURN d
                         """
-                        neo4j_session.run(f_query, 
+                        session.run(f_query, 
                             kb_id=kb_id, 
                             doc_id=f_doc_id, 
                             filename=f_rel_path, # Nome amigável com path relativo
@@ -254,3 +255,47 @@ async def delete_document(
     session.run(query_del_doc, doc_id=doc_id)
             
     return {"message": "Documento e arquivos físicos excluídos com sucesso"}
+    
+@router.delete("/{kb_id}")
+async def delete_knowledge_base(
+    kb_id: str,
+    session: Neo4jSession = Depends(get_neo4j_session)
+):
+    """Exclui uma Knowledge Base inteira, todos os seus documentos, chunks e arquivos físicos."""
+    
+    # 1. Verifica se a KB existe e busca o nome (opcional, para log)
+    query_check = "MATCH (kb:KnowledgeBase {id: $kb_id}) RETURN kb.name AS name"
+    result = session.run(query_check, kb_id=kb_id)
+    record = result.single()
+    
+    if not record:
+        raise HTTPException(status_code=404, detail="Knowledge Base não encontrada")
+    
+    kb_name = record["name"]
+
+    # 2. Deleção em Cascata no Neo4j (KB, Documentos e Chunks vinculados)
+    # Usamos DETACH DELETE para garantir que relacionamentos também sejam removidos.
+    query_cascade_del = """
+    MATCH (kb:KnowledgeBase {id: $kb_id})
+    OPTIONAL MATCH (kb)<-[:BELONGS_TO]-(d:Document)
+    OPTIONAL MATCH (d)<-[:FROM_DOCUMENT]-(c:Chunk)
+    DETACH DELETE kb, d, c
+    """
+    try:
+        session.run(query_cascade_del, kb_id=kb_id)
+        print(f"DEBUG: Neo4j cascade delete complete for KB: {kb_name} ({kb_id})")
+    except Exception as e:
+        print(f"DEBUG: Erro na deleção Neo4j: {e}")
+        raise HTTPException(status_code=500, detail=f"Erro ao deletar no Neo4j: {str(e)}")
+
+    # 3. Limpeza do Sistema de Arquivos
+    kb_dir = os.path.join(UPLOAD_DIR, kb_id)
+    if os.path.exists(kb_dir):
+        try:
+            shutil.rmtree(kb_dir)
+            print(f"DEBUG: Diretório {kb_dir} removido com sucesso.")
+        except Exception as e:
+            print(f"DEBUG: Erro ao remover diretório {kb_dir}: {e}")
+            # Não falhamos o request se o arquivo físico falhar, mas logamos
+            
+    return {"message": f"Knowledge Base '{kb_name}' e todos os seus dados foram excluídos com sucesso."}

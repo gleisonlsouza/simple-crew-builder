@@ -1,6 +1,7 @@
 import os
 from pypdf import PdfReader
 from docx import Document
+from .enterprise_code_parser import EXTENSION_TO_LANGUAGE
 
 def extract_text_from_file(file_path: str) -> str:
     """
@@ -26,7 +27,7 @@ def extract_text_from_file(file_path: str) -> str:
             doc = Document(file_path)
             return "\n".join([para.text for para in doc.paragraphs]).strip()
         
-        elif ext in ['.txt', '.md']:
+        elif ext in ['.txt', '.md'] or ext in EXTENSION_TO_LANGUAGE:
             with open(file_path, 'r', encoding='utf-8') as f:
                 return f.read().strip()
         

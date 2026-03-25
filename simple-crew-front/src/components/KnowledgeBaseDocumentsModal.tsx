@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { X, Upload, FileText, Loader2, HardDrive, CheckCircle2, Trash2, AlertTriangle } from 'lucide-react';
+import { X, Upload, FileText, Loader2, HardDrive, CheckCircle2, Trash2, AlertTriangle, Folder, ChevronRight, ChevronDown } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useStore } from '../store';
 import type { KnowledgeBase, KnowledgeBaseDocument } from '../types';
@@ -11,6 +11,98 @@ interface Props {
   kb: KnowledgeBase;
   onClose: () => void;
 }
+
+interface FileNode {
+  name: string;
+  fullPath: string;
+  type: 'file' | 'folder';
+  document?: KnowledgeBaseDocument;
+  children: Record<string, FileNode>;
+}
+
+const FileTreeItem: React.FC<{ 
+  node: FileNode; 
+  level: number;
+  onDelete: (id: string) => void;
+  formatSize: (bytes?: number) => string;
+  formatDate: (date: string) => string;
+}> = ({ node, level, onDelete, formatSize, formatDate }) => {
+  const [isOpen, setIsOpen] = useState(true);
+  const isFolder = node.type === 'folder';
+
+  return (
+    <div className="select-none">
+      <div 
+        className={`
+          flex items-center justify-between p-2 rounded-xl transition-all group
+          ${isFolder ? 'hover:bg-brand-bg/80 cursor-pointer' : 'hover:bg-brand-bg/30 border border-transparent hover:border-brand-border/50'}
+        `}
+        style={{ paddingLeft: `${level * 1.2 + 0.5}rem` }}
+        onClick={() => isFolder && setIsOpen(!isOpen)}
+      >
+        <div className="flex items-center gap-2.5 flex-1 min-w-0">
+          {isFolder ? (
+            <>
+              <div className="w-5 h-5 flex items-center justify-center">
+                {isOpen ? <ChevronDown className="w-4 h-4 text-brand-muted" /> : <ChevronRight className="w-4 h-4 text-brand-muted" />}
+              </div>
+              <Folder className={`w-4 h-4 ${isOpen ? 'text-indigo-500 fill-indigo-500/20' : 'text-brand-muted'}`} />
+            </>
+          ) : (
+            <>
+              <div className="w-5 h-5 flex items-center justify-center">
+                <FileText className="w-4 h-4 text-brand-muted group-hover:text-emerald-500 transition-colors" />
+              </div>
+            </>
+          )}
+          <span className={`text-sm truncate ${isFolder ? 'font-bold text-brand-text' : 'text-brand-muted group-hover:text-brand-text'}`}>
+            {node.name}
+          </span>
+        </div>
+
+        {!isFolder && node.document && (
+          <div className="flex items-center gap-4 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
+            <span className="text-[10px] text-brand-muted hidden sm:inline">{formatSize(node.document.size)}</span>
+            <span className="text-[10px] font-bold text-emerald-500 bg-emerald-500/10 px-2 py-0.5 rounded-full flex items-center gap-1 scale-90">
+              <CheckCircle2 className="w-3 h-3" />
+              INDEXED
+            </span>
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onDelete(node.document!.id);
+              }}
+              className="p-1.5 text-brand-muted hover:text-red-500 hover:bg-red-500/10 rounded-lg transition-all"
+              title="Delete Document"
+            >
+              <Trash2 className="w-4 h-4" />
+            </button>
+          </div>
+        )}
+      </div>
+
+      {isFolder && isOpen && (
+        <div className="mt-0.5 border-l border-brand-border/20 ml-[1.1rem]">
+          {Object.values(node.children)
+            .sort((a, b) => {
+              if (a.type !== b.type) return a.type === 'folder' ? -1 : 1;
+              return a.name.localeCompare(b.name);
+            })
+            .map(child => (
+              <FileTreeItem 
+                key={child.fullPath} 
+                node={child} 
+                level={level + 1} 
+                onDelete={onDelete}
+                formatSize={formatSize}
+                formatDate={formatDate}
+              />
+            ))}
+        </div>
+      )}
+    </div>
+  );
+};
 
 export const KnowledgeBaseDocumentsModal: React.FC<Props> = ({ kb, onClose }) => {
   const [documents, setDocuments] = useState<KnowledgeBaseDocument[]>([]);
@@ -129,6 +221,35 @@ export const KnowledgeBaseDocumentsModal: React.FC<Props> = ({ kb, onClose }) =>
     }
   };
 
+  const buildFileTree = (docs: KnowledgeBaseDocument[]): FileNode => {
+    const root: FileNode = { name: 'root', fullPath: '', type: 'folder', children: {} };
+
+    docs.forEach(doc => {
+      const parts = doc.filename.split('/');
+      let current = root;
+
+      parts.forEach((part, index) => {
+        const isLast = index === parts.length - 1;
+        const fullPath = parts.slice(0, index + 1).join('/');
+
+        if (!current.children[part]) {
+          current.children[part] = {
+            name: part,
+            fullPath,
+            type: isLast ? 'file' : 'folder',
+            document: isLast ? doc : undefined,
+            children: {}
+          };
+        }
+        current = current.children[part];
+      });
+    });
+
+    return root;
+  };
+
+  const fileTree = buildFileTree(documents);
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 animate-in fade-in duration-200">
       <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
@@ -238,40 +359,28 @@ export const KnowledgeBaseDocumentsModal: React.FC<Props> = ({ kb, onClose }) =>
                 <p className="text-sm text-brand-muted">This base is empty. Upload documents to start using RAG.</p>
               </div>
             ) : (
-              <div className="grid gap-3">
-                {documents.map((doc) => (
-                  <div key={doc.id} className="bg-brand-bg/50 border border-brand-border rounded-xl p-4 flex items-center justify-between group hover:border-brand-text/20 transition-all">
-                    <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 bg-brand-card rounded-lg flex items-center justify-center text-brand-muted group-hover:text-emerald-500 transition-colors">
-                        <FileText className="w-5 h-5" />
-                      </div>
-                      <div>
-                        <p className="text-sm font-bold text-brand-text line-clamp-1">{doc.filename}</p>
-                        <div className="flex items-center gap-3 mt-0.5">
-                          <span className="text-[10px] text-brand-muted">{formatSize(doc.size)}</span>
-                          <span className="text-[10px] text-white/20">•</span>
-                          <span className="text-[10px] text-brand-muted">{formatDate(doc.created_at)}</span>
-                        </div>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-[10px] font-bold text-emerald-500 bg-emerald-500/10 px-2 py-0.5 rounded-full flex items-center gap-1">
-                        <CheckCircle2 className="w-3 h-3" />
-                        INDEXED
-                      </span>
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleDeleteDocument(doc.id);
-                        }}
-                        className="p-1.5 text-brand-muted hover:text-red-500 hover:bg-red-500/10 rounded-lg transition-all"
-                        title="Delete Document"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    </div>
+              <div className="bg-brand-bg/20 border border-brand-border/50 rounded-2xl p-4 overflow-hidden">
+                {Object.values(fileTree.children).length === 0 ? (
+                  <div className="py-12 text-center">
+                    <p className="text-sm text-brand-muted">Loading tree...</p>
                   </div>
-                ))}
+                ) : (
+                  Object.values(fileTree.children)
+                    .sort((a, b) => {
+                      if (a.type !== b.type) return a.type === 'folder' ? -1 : 1;
+                      return a.name.localeCompare(b.name);
+                    })
+                    .map(node => (
+                      <FileTreeItem 
+                        key={node.fullPath}
+                        node={node}
+                        level={0}
+                        onDelete={handleDeleteDocument}
+                        formatSize={formatSize}
+                        formatDate={formatDate}
+                      />
+                    ))
+                )}
               </div>
             )}
           </div>

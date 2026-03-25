@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Database, Calendar, Loader2, Info, X, Files } from 'lucide-react';
+import { Plus, Database, Calendar, Loader2, Info, X, Files, Trash2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import type { KnowledgeBase } from '../types';
 import { KnowledgeBaseDocumentsModal } from './KnowledgeBaseDocumentsModal';
+import { ConfirmationModal } from './ConfirmationModal';
 
 const API_URL = import.meta.env.VITE_API_URL || '';
 
@@ -13,6 +14,8 @@ export const KnowledgeBaseSettings: React.FC = () => {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [newKB, setNewKB] = useState({ name: '', description: '' });
   const [selectedKB, setSelectedKB] = useState<KnowledgeBase | null>(null);
+  const [kbToDelete, setKbToDelete] = useState<KnowledgeBase | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const fetchKnowledgeBases = async () => {
     setIsLoading(true);
@@ -57,6 +60,28 @@ export const KnowledgeBaseSettings: React.FC = () => {
       toast.error(error.message);
     } finally {
       setIsCreating(false);
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!kbToDelete) return;
+
+    setIsDeleting(true);
+    try {
+      const response = await fetch(`${API_URL}/api/knowledge-bases/${kbToDelete.id}`, {
+        method: 'DELETE',
+      });
+
+      if (!response.ok) throw new Error('Failed to delete knowledge base');
+      
+      toast.success('Knowledge Base deleted successfully!');
+      // Update local state instead of re-fetching
+      setKnowledgeBases(prev => prev.filter(kb => kb.id !== kbToDelete.id));
+    } catch (error: any) {
+      toast.error(error.message);
+    } finally {
+      setIsDeleting(false);
+      setKbToDelete(null);
     }
   };
 
@@ -196,6 +221,13 @@ export const KnowledgeBaseSettings: React.FC = () => {
                     <Files className="w-4 h-4 group-hover/btn:rotate-12 transition-transform" />
                     Manage Documents
                   </button>
+                  <button 
+                    onClick={() => setKbToDelete(kb)}
+                    className="p-2.5 text-brand-muted hover:text-red-500 hover:bg-red-500/10 rounded-xl transition-all active:scale-95"
+                    title="Delete Knowledge Base"
+                  >
+                    <Trash2 className="w-5 h-5" />
+                  </button>
                   <div className="px-3 py-1 bg-brand-bg border border-brand-border rounded-lg text-[10px] text-brand-muted italic flex items-center gap-2">
                     <Info className="w-3.5 h-3.5 text-indigo-400" />
                     Read-only from settings
@@ -206,6 +238,16 @@ export const KnowledgeBaseSettings: React.FC = () => {
           )}
         </div>
       )}
+      
+      <ConfirmationModal 
+        isOpen={!!kbToDelete}
+        onClose={() => setKbToDelete(null)}
+        onConfirm={handleDelete}
+        title="Delete Knowledge Base"
+        message={`Are you sure you want to delete "${kbToDelete?.name}"? This will permanently remove all associated documents, chunks, and data from Neo4j and the file system. This action cannot be undone.`}
+        confirmText={isDeleting ? "Deleting..." : "Delete Permanently"}
+        variant="danger"
+      />
       
       <div className="mt-12 p-6 bg-indigo-500/5 border border-indigo-500/10 rounded-2xl flex items-start gap-4">
         <Info className="w-5 h-5 text-indigo-500 shrink-0 mt-0.5" />

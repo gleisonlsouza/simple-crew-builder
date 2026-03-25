@@ -59,7 +59,7 @@ export const AboutModal: React.FC<AboutModalProps> = ({ isOpen, onClose }) => {
                 title="Click to see what's new"
                 className="bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 text-[10px] font-bold px-3 py-1 rounded-full uppercase tracking-widest border border-indigo-500/20 cursor-pointer hover:bg-indigo-600 hover:text-white hover:border-indigo-600 transition-all active:scale-95 flex items-center gap-1.5 shadow-sm"
               >
-                Beta v0.0.4
+                Beta v0.0.5
                 <Sparkles className="w-3 h-3 transition-transform group-hover/version:rotate-12" />
               </button>
             </div>

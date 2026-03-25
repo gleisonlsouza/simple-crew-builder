@@ -36,11 +36,12 @@ def get_search_knowledge_base_tool(kb_id: str):
         
         cypher = """
         MATCH (kb:KnowledgeBase {id: $kb_id})
-        CALL db.index.vector.queryNodes('kb_vector_index', 5, $query_vector)
+        CALL db.index.vector.queryNodes('kb_vector_index', 50, $query_vector)
         YIELD node AS chunk, score
         MATCH (chunk)-[:BELONGS_TO]->(kb)
         RETURN chunk.text AS text, score
         ORDER BY score DESC
+        LIMIT 5
         """
         
         try:
