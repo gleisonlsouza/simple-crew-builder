@@ -227,8 +227,14 @@ class WebhookExecution(SQLModel, table=True):
     result: Optional[str] = Field(default=None, sa_column_kwargs={"nullable": True})
     error: Optional[str] = Field(default=None, sa_column_kwargs={"nullable": True})
 
-    started_at: Optional[datetime] = Field(default=None, sa_column_kwargs={"nullable": True})
-    finished_at: Optional[datetime] = Field(default=None, sa_column_kwargs={"nullable": True})
+    started_at: Optional[datetime] = Field(
+        default=None,
+        sa_column=Column(DateTime(timezone=True), nullable=True)
+    )
+    finished_at: Optional[datetime] = Field(
+        default=None,
+        sa_column=Column(DateTime(timezone=True), nullable=True)
+    )
     created_at: datetime = Field(
         sa_column=Column(DateTime(timezone=True), server_default=func.now())
     )

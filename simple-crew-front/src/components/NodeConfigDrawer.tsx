@@ -135,7 +135,10 @@ export function NodeConfigDrawer() {
 
   // -- Webhook → Crew inputs sync helper -- //
   const syncWebhookMappingsToCrew = (updatedMappings: Record<string, string>) => {
-    const crewNode = nodes.find(n => n.type === 'crew');
+    const connectedEdge = edges.find(e => e.source === activeNodeId);
+    const crewNode = connectedEdge
+      ? nodes.find(n => n.id === connectedEdge.target && n.type === 'crew')
+      : null;
     if (!crewNode) return;
     const crewData = crewNode.data as any;
     const currentInputs = { ...(crewData.inputs || {}) };

@@ -1070,7 +1070,7 @@ def run_crew_sync(graph_data: GraphData, workspace_id: Optional[Any] = None) -> 
                 except Exception:
                     pass
 
-        def resolve_tools(node_data):
+        def resolve_tools(node_data, include_mcp=True):
             node_tools = []
             global_ids = getattr(node_data, 'globalToolIds', []) or []
             global_configs = {t.id: t for t in (graph_data.globalTools or [])}
@@ -1100,11 +1100,22 @@ def run_crew_sync(graph_data: GraphData, workspace_id: Optional[Any] = None) -> 
                         kb_id = config_data.get("knowledge_base_id")
                         if kb_id:
                             node_tools.append(get_search_knowledge_base_tool(kb_id=kb_id))
+                    elif gid in ['pdf_search', 'docx_search', 'json_search', 'xml_search', 'csv_search', 'mdx_search', 'txt_search']:
+                        tool_config = {'directory': workspace_path} if workspace_path else {}
+                        if config_data:
+                            tool_config.update(config_data)
+                        if gid == 'pdf_search': node_tools.append(PDFSearchTool(config=tool_config))
+                        elif gid == 'docx_search': node_tools.append(DOCXSearchTool(config=tool_config))
+                        elif gid == 'json_search': node_tools.append(JSONSearchTool(config=tool_config))
+                        elif gid == 'xml_search': node_tools.append(XMLSearchTool(config=tool_config))
+                        elif gid == 'csv_search': node_tools.append(CSVSearchTool(config=tool_config))
+                        elif gid == 'mdx_search': node_tools.append(MDXSearchTool(config=tool_config))
+                        elif gid == 'txt_search': node_tools.append(TXTSearchTool(config=tool_config))
                 except Exception:
                     pass
-            for mid in (getattr(node_data, 'mcpServerIds', []) or []):
-                tools = mcp_adapters_cache.get(str(mid), [])
-                node_tools.extend(tools)
+            if include_mcp:
+                for mid in (getattr(node_data, 'mcpServerIds', []) or []):
+                    node_tools.extend(mcp_adapters_cache.get(str(mid), []))
             for cid in (getattr(node_data, 'customToolIds', []) or []):
                 tool_def = next((t for t in (graph_data.customTools or []) if t.id == cid), None)
                 if not tool_def:
@@ -1155,6 +1166,7 @@ def run_crew_sync(graph_data: GraphData, workspace_id: Optional[Any] = None) -> 
                         llm_params = {"model": llm_config.model_name, "api_key": credential.key}
                         if llm_config.temperature is not None: llm_params["temperature"] = llm_config.temperature
                         if llm_config.max_tokens is not None: llm_params["max_tokens"] = llm_config.max_tokens
+                        if getattr(llm_config, 'max_completion_tokens', None) is not None: llm_params["max_completion_tokens"] = llm_config.max_completion_tokens
                         if llm_config.base_url and llm_config.base_url != "default": llm_params["base_url"] = llm_config.base_url
                         if credential.provider: llm_params["provider"] = credential.provider
                         agent_llm = LLM(**llm_params)
@@ -1180,42 +1192,56 @@ def run_crew_sync(graph_data: GraphData, workspace_id: Optional[Any] = None) -> 
             if max_retry is not None: agent_kwargs["max_retry_limit"] = max_retry
             max_rpm = getattr(node.data, 'max_rpm', None)
             if max_rpm is not None: agent_kwargs["max_rpm"] = max_rpm
-
             agents_map[node.id] = Agent(**agent_kwargs)
 
-        # --- Build Tasks ---
-        tasks_list: List[Task] = []
+        # --- Build Tasks (with workspace instruction) ---
         tasks_dict: Dict[str, Task] = {}
         agent_ids = {n.id for n in agent_nodes}
+        workspace_instruction = (
+            f"\n\nIMPORTANT: Your current working directory is '{workspace_path}'. "
+            "All file operations (read/write) MUST be done inside this directory or its subfolders. "
+            "Never attempt to access paths outside this workspace."
+        )
 
         for node in task_nodes:
             task_agent_edge = next((e for e in edges if e.target == node.id and e.source in agent_ids), None)
             if not task_agent_edge or task_agent_edge.source not in agents_map:
                 continue
             target_agent = agents_map[task_agent_edge.source]
-            task_tools = resolve_tools(node.data)
+            task_tools = resolve_tools(node.data, include_mcp=True)
             combined = {getattr(t, 'name', str(t)): t for t in (target_agent.tools or [])}
             combined.update({getattr(t, 'name', str(t)): t for t in task_tools})
-            task = Task(
-                description=node.data.description,
-                expected_output=node.data.expected_output,
-                agent=target_agent,
-                tools=list(combined.values()),
-            )
-            tasks_list.append(task)
-            tasks_dict[node.id] = task
+            task_kwargs: Dict[str, Any] = {
+                "description": node.data.description + workspace_instruction,
+                "expected_output": node.data.expected_output,
+                "agent": target_agent,
+                "tools": list(combined.values()),
+            }
+            if getattr(node.data, 'async_execution', False) is True:
+                task_kwargs['async_execution'] = True
+            if getattr(node.data, 'human_input', False) is True:
+                task_kwargs['human_input'] = True
+            if getattr(node.data, 'create_directory', True) is False:
+                task_kwargs['create_directory'] = False
+            output_file = getattr(node.data, 'output_file', None)
+            if output_file:
+                task_kwargs['output_file'] = output_file
+            tasks_dict[node.id] = Task(**task_kwargs)
 
         if not tasks_dict:
             raise ValueError("A Crew não possui nenhuma Task válida para executar.")
 
-        # --- Order tasks ---
+        # --- Order tasks (taskOrder per agent + cycle detection) ---
         final_tasks: List[Task] = []
-        visited = set()
+        visited: set = set()
+        visiting: set = set()
 
-        def add_task(tid):
+        def add_task(tid: str) -> None:
             if tid in visited or tid not in tasks_dict:
                 return
-            visited.add(tid)
+            if tid in visiting:
+                return  # cycle detected — break recursion
+            visiting.add(tid)
             node = nodes.get(tid)
             if node:
                 context_ids = getattr(node.data, 'context', []) or []
@@ -1225,16 +1251,25 @@ def run_crew_sync(graph_data: GraphData, workspace_id: Optional[Any] = None) -> 
                 context_tasks = [tasks_dict[c] for c in context_ids if c in tasks_dict]
                 if context_tasks:
                     task_instance.context = context_tasks
-            final_tasks.append(tasks_dict[tid])
+            if tid not in visited:
+                final_tasks.append(tasks_dict[tid])
+                visited.add(tid)
+            visiting.discard(tid)
 
         agent_order = getattr(crew_node.data, 'agentOrder', []) or [n.id for n in agent_nodes]
-        base_queue = []
-        agent_to_tasks = {ag_id: [] for ag_id in agent_order}
+        base_queue: List[str] = []
+        agent_to_tasks: Dict[str, List[str]] = {ag_id: [] for ag_id in agent_order}
         for edge in edges:
             if edge.source in set(agent_order) and edge.target in tasks_dict:
                 agent_to_tasks[edge.source].append(edge.target)
         for ag_id in agent_order:
-            for tid in agent_to_tasks[ag_id]:
+            ag_node = nodes.get(ag_id)
+            ag_task_order = getattr(ag_node.data, 'taskOrder', []) if ag_node else []
+            tasks_of_agent = agent_to_tasks[ag_id]
+            for tid in ag_task_order:
+                if tid in tasks_of_agent and tid not in base_queue:
+                    base_queue.append(tid)
+            for tid in tasks_of_agent:
                 if tid not in base_queue:
                     base_queue.append(tid)
         for t_node in task_nodes:
@@ -1243,8 +1278,11 @@ def run_crew_sync(graph_data: GraphData, workspace_id: Optional[Any] = None) -> 
         for tid in base_queue:
             add_task(tid)
 
-        # --- Build Crew kwargs ---
-        crew_kwargs = {
+        if not final_tasks:
+            raise ValueError("A Crew não possui nenhuma Task válida para executar.")
+
+        # --- Build Crew ---
+        crew_kwargs: Dict[str, Any] = {
             "agents": list(agents_map.values()),
             "tasks": final_tasks,
             "process": process_type,
@@ -1259,22 +1297,45 @@ def run_crew_sync(graph_data: GraphData, workspace_id: Optional[Any] = None) -> 
                 crew_kwargs["cache"] = False
             if getattr(data, 'planning', False):
                 crew_kwargs["planning"] = True
+            if getattr(data, 'share_crew', False):
+                crew_kwargs["share_crew"] = True
             max_rpm = getattr(data, 'max_rpm', None)
             if max_rpm is not None:
                 crew_kwargs["max_rpm"] = max_rpm
+            output_log = getattr(data, 'output_log_file', None)
+            if output_log:
+                crew_kwargs["output_log_file"] = output_log
+            prompt_file = getattr(data, 'prompt_file', None)
+            if prompt_file:
+                crew_kwargs["prompt_file"] = prompt_file
 
             with Session(engine) as session:
-                manager_id = getattr(data, 'manager_llm_id', None)
-                if manager_id:
-                    manager_config = session.get(LLMModel, manager_id)
-                    if manager_config:
-                        credential = session.get(Credential, manager_config.credential_id)
-                        if credential:
-                            llm_params = {"model": manager_config.model_name, "api_key": credential.key}
-                            if manager_config.base_url and manager_config.base_url != "default": llm_params["base_url"] = manager_config.base_url
-                            if manager_config.temperature is not None: llm_params["temperature"] = manager_config.temperature
-                            if credential.provider: llm_params["provider"] = credential.provider
-                            crew_kwargs["manager_llm"] = LLM(**llm_params)
+                def _load_llm(model_id: Optional[Any]) -> Optional[LLM]:
+                    if not model_id:
+                        return None
+                    cfg = session.get(LLMModel, model_id)
+                    if not cfg:
+                        return None
+                    cred = session.get(Credential, cfg.credential_id)
+                    if not cred:
+                        return None
+                    p: Dict[str, Any] = {"model": cfg.model_name, "api_key": cred.key}
+                    if cred.provider: p["provider"] = cred.provider
+                    if cfg.base_url and cfg.base_url != "default": p["base_url"] = cfg.base_url
+                    if cfg.temperature is not None: p["temperature"] = cfg.temperature
+                    if cfg.max_tokens is not None: p["max_tokens"] = cfg.max_tokens
+                    if getattr(cfg, 'max_completion_tokens', None) is not None: p["max_completion_tokens"] = cfg.max_completion_tokens
+                    return LLM(**p)
+
+                mgr_llm = _load_llm(getattr(data, 'manager_llm_id', None))
+                if mgr_llm:
+                    crew_kwargs["manager_llm"] = mgr_llm
+                plan_llm = _load_llm(getattr(data, 'planning_llm_id', None))
+                if plan_llm:
+                    crew_kwargs["planning_llm"] = plan_llm
+                fc_llm = _load_llm(getattr(data, 'function_calling_llm_id', None))
+                if fc_llm:
+                    crew_kwargs["function_calling_llm"] = fc_llm
 
             embedder_conf = getattr(data, 'embedder', None)
             if embedder_conf:
