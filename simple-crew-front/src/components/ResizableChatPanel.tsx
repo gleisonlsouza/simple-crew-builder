@@ -212,7 +212,7 @@ export function ResizableChatPanel() {
 
     // 2. Conversation history (up to last 8 messages, excluding the one just added)
     if (includeHistory) {
-      const history = messages.slice(-9, -1)
+      const history = messages.slice(-8)
         .map(m => ({ role: m.role as string, content: m.content }));
       payload.push(...history);
     }
