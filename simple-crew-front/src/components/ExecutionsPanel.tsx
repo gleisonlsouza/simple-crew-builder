@@ -3,9 +3,9 @@ import { X, RefreshCw, ChevronDown, ChevronRight } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import { useShallow } from 'zustand/shallow';
 import { useStore } from '../store';
-import type { WebhookExecution } from '../types';
+import type { Execution } from '../types';
 
-const STATUS_COLORS: Record<WebhookExecution['status'], string> = {
+const STATUS_COLORS: Record<Execution['status'], string> = {
   pending: 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30',
   running: 'bg-blue-500/20 text-blue-400 border-blue-500/30',
   success: 'bg-green-500/20 text-green-400 border-green-500/30',
@@ -38,7 +38,7 @@ function CollapsibleSection({ label, children }: { label: string; children: Reac
   );
 }
 
-function ExecutionRow({ execution }: { execution: WebhookExecution }) {
+function ExecutionRow({ execution }: { execution: Execution }) {
   const formattedDate = execution.created_at
     ? new Date(execution.created_at).toLocaleString()
     : '—';
@@ -56,7 +56,14 @@ function ExecutionRow({ execution }: { execution: WebhookExecution }) {
           <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${STATUS_COLORS[execution.status]}`}>
             {execution.status.toUpperCase()}
           </span>
-          {execution.wait_for_result !== undefined && (
+          <span className={`text-[10px] px-2 py-0.5 rounded-full border ${
+            execution.trigger_type === 'webhook'
+              ? 'bg-orange-500/10 text-orange-400 border-orange-500/20'
+              : 'bg-sky-500/10 text-sky-400 border-sky-500/20'
+          }`}>
+            {execution.trigger_type === 'webhook' ? 'webhook' : 'manual'}
+          </span>
+          {execution.trigger_type === 'webhook' && execution.wait_for_result !== undefined && (
             <span className={`text-[10px] px-2 py-0.5 rounded-full border ${
               execution.wait_for_result
                 ? 'bg-violet-500/10 text-violet-400 border-violet-500/20'
@@ -128,15 +135,15 @@ function ExecutionRow({ execution }: { execution: WebhookExecution }) {
 
 type StatusFilter = 'all' | 'success' | 'error';
 
-export function WebhookExecutionsPanel({ fullPage = false }: { fullPage?: boolean }) {
-  const { isWebhookPanelVisible, setIsWebhookPanelVisible, webhookConfig, webhookExecutions, fetchWebhookExecutions } =
+export function ExecutionsPanel({ fullPage = false }: { fullPage?: boolean }) {
+  const { isExecutionsPanelVisible, setIsExecutionsPanelVisible, currentProjectId, executions, fetchExecutions } =
     useStore(
       useShallow((state) => ({
-        isWebhookPanelVisible: state.isWebhookPanelVisible,
-        setIsWebhookPanelVisible: state.setIsWebhookPanelVisible,
-        webhookConfig: state.webhookConfig,
-        webhookExecutions: state.webhookExecutions,
-        fetchWebhookExecutions: state.fetchWebhookExecutions,
+        isExecutionsPanelVisible: state.isExecutionsPanelVisible,
+        setIsExecutionsPanelVisible: state.setIsExecutionsPanelVisible,
+        currentProjectId: state.currentProjectId,
+        executions: state.executions,
+        fetchExecutions: state.fetchExecutions,
       }))
     );
 
@@ -144,24 +151,24 @@ export function WebhookExecutionsPanel({ fullPage = false }: { fullPage?: boolea
   const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const refresh = () => {
-    if (webhookConfig?.webhook_id) {
-      fetchWebhookExecutions(webhookConfig.webhook_id);
+    if (currentProjectId) {
+      fetchExecutions(currentProjectId);
     }
   };
 
-  const isVisible = fullPage || isWebhookPanelVisible;
+  const isVisible = fullPage || isExecutionsPanelVisible;
 
   useEffect(() => {
     if (!isVisible) return;
     refresh();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isVisible, webhookConfig?.webhook_id]);
+  }, [isVisible, currentProjectId]);
 
   useEffect(() => {
     if (pollingRef.current) clearInterval(pollingRef.current);
     if (!isVisible) return;
 
-    const hasPending = webhookExecutions.some(
+    const hasPending = executions.some(
       (e) => e.status === 'pending' || e.status === 'running'
     );
     if (hasPending) {
@@ -171,7 +178,7 @@ export function WebhookExecutionsPanel({ fullPage = false }: { fullPage?: boolea
       if (pollingRef.current) clearInterval(pollingRef.current);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isVisible, webhookExecutions]);
+  }, [isVisible, executions]);
 
   if (!isVisible) return null;
 
@@ -186,7 +193,7 @@ export function WebhookExecutionsPanel({ fullPage = false }: { fullPage?: boolea
               <path d="M8 7.984c-.93.01-1.81-.36-2.45-1.01-.64-.65-.99-1.53-.95-2.44.04-.91.47-1.77 1.17-2.35.7-.58 1.61-.85 2.51-.74.9.11 1.72.58 2.26 1.3L15 9.5l1.4-2.5c-.2-.43-.3-.9-.3-1.37 0-1.7 1.3-3.13 3-3.13S22 3.93 22 5.63c0 1.7-1.3 3.13-3 3.13-.53 0-1.02-.14-1.45-.38L16 11"/>
             </svg>
           </div>
-          <h2 className="text-sm font-bold text-brand-text">Webhook Executions</h2>
+          <h2 className="text-sm font-bold text-brand-text">Executions</h2>
         </div>
         <div className="flex items-center gap-2">
           <div className="flex items-center rounded-lg border border-brand-border overflow-hidden text-[11px] font-medium">
@@ -217,7 +224,7 @@ export function WebhookExecutionsPanel({ fullPage = false }: { fullPage?: boolea
           </button>
           {!fullPage && (
             <button
-              onClick={() => setIsWebhookPanelVisible(false)}
+              onClick={() => setIsExecutionsPanelVisible(false)}
               className="p-1.5 rounded-lg text-brand-muted hover:text-brand-text hover:bg-brand-bg transition-colors"
             >
               <X className="w-4 h-4" />
@@ -230,15 +237,15 @@ export function WebhookExecutionsPanel({ fullPage = false }: { fullPage?: boolea
       <div className="flex-1 overflow-y-auto p-4 custom-scrollbar flex flex-col gap-3">
         {(() => {
           const filtered = statusFilter === 'all'
-            ? webhookExecutions
-            : webhookExecutions.filter((e) => e.status === statusFilter);
+            ? executions
+            : executions.filter((e) => e.status === statusFilter);
 
-          if (webhookExecutions.length === 0) {
+          if (executions.length === 0) {
             return (
               <div className="flex flex-col items-center justify-center h-full text-center gap-3 opacity-60">
                 <p className="text-sm text-brand-muted">No executions yet.</p>
                 <p className="text-xs text-brand-muted">
-                  Send a POST request to the webhook URL to trigger your Crew.
+                  Run your crew from the canvas or trigger it via webhook.
                 </p>
               </div>
             );

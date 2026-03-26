@@ -3,7 +3,9 @@ import os
 import shutil
 import tempfile
 import asyncio
-from datetime import datetime
+import uuid
+import traceback
+from datetime import datetime, timezone
 from contextlib import asynccontextmanager
 from typing import List, Optional, Dict, Any
 from fastapi import FastAPI, HTTPException, Depends, Header, Request, BackgroundTasks, Query, File, UploadFile, Form
@@ -11,8 +13,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, StreamingResponse
 from sqlmodel import Session, select
 from .crew_builder import run_crew_stream
-from .database import init_db, get_session
-from .models import CrewProject, User, Credential, LLMModel, MCPServer, AppSettings, CustomTool, Workspace, WebhookConfig, WebhookExecution
+from .database import init_db, get_session, engine
+from .models import CrewProject, User, Credential, LLMModel, MCPServer, AppSettings, CustomTool, Workspace, WebhookConfig, Execution, ExecutionStatus, TriggerType
 from .schemas import (
     GraphData, ProjectCreate, ProjectRead, ProjectUpdate, 
     CredentialCreate, CredentialRead, CredentialUpdate,
@@ -79,9 +81,28 @@ async def neo4j_health(session: Neo4jSession = Depends(get_neo4j_session)):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Erro na conexão com Neo4j: {str(e)}")
 
+def _tracked_stream(execution_id: uuid.UUID, gen):
+    """Wraps a sync generator to update Execution status when the stream finishes."""
+    error_msg = None
+    try:
+        for chunk in gen:
+            yield chunk
+    except Exception as e:
+        error_msg = f"{str(e)}\n{traceback.format_exc()}"
+    finally:
+        with Session(engine) as db:
+            execution = db.get(Execution, execution_id)
+            if execution:
+                execution.status = ExecutionStatus.ERROR if error_msg else ExecutionStatus.SUCCESS
+                execution.error = error_msg
+                execution.finished_at = datetime.now(timezone.utc)
+                db.add(execution)
+                db.commit()
+
+
 @app.post("/api/v1/run-crew")
 async def execute_crew(
-    graph_data: GraphData, 
+    graph_data: GraphData,
     save_to_db: bool = Query(False),
     project_id: Optional[str] = Header(None, alias="X-Project-Id"),
     session: Session = Depends(get_session)
@@ -89,13 +110,13 @@ async def execute_crew(
     try:
         # Resolve Workspace ID: Priorities: 1. Project level, 2. Global settings
         active_workspace_id = None
-        
+
         # 1. Se informou o ID do projeto, tenta pegar o workspace dele
         if project_id:
             db_project = session.get(CrewProject, project_id)
             if db_project and db_project.workspace_id:
                 active_workspace_id = db_project.workspace_id
-        
+
         # 2. Se não tem ID ou o projeto não tem workspace setado, pega o Global (como fallback)
         if not active_workspace_id:
             settings = session.exec(select(AppSettings).where(AppSettings.user_id == ROOT_USER_ID)).first()
@@ -107,7 +128,7 @@ async def execute_crew(
             # Busca o usuário root (seed)
             statement = select(User).where(User.email == "gleison.lsouza@gmail.com")
             user = session.exec(statement).first()
-            
+
             if user:
                 # Cria um nome para a crew baseado no timestamp se estiver vazio
                 crew_name = "Nova Execução Visual"
@@ -129,11 +150,36 @@ async def execute_crew(
         # Resolve Custom Tools do Banco de Dados
         graph_data = resolve_custom_tools(graph_data, session)
 
-        # Despacha as dependências e payload JSON para a magia do nosso Parser local CrewAI Stream
-        return StreamingResponse(
-            run_crew_stream(graph_data, workspace_id=active_workspace_id), 
-            media_type="text/event-stream"
-        )
+        # Cria registro de Execution para projetos salvos
+        execution_id = None
+        if project_id:
+            try:
+                crew_inputs = {}
+                crew_node = next((n for n in graph_data.nodes if n.type == 'crew'), None)
+                if crew_node:
+                    crew_inputs = crew_node.data.inputs or {} if hasattr(crew_node.data, 'inputs') else {}
+                execution = Execution(
+                    trigger_type=TriggerType.MANUAL,
+                    project_id=uuid.UUID(project_id),
+                    status=ExecutionStatus.RUNNING,
+                    inputs_received=crew_inputs if isinstance(crew_inputs, dict) else {},
+                    started_at=datetime.now(timezone.utc),
+                )
+                session.add(execution)
+                session.commit()
+                session.refresh(execution)
+                execution_id = execution.id
+            except Exception:
+                pass  # Não bloqueia a execução se falhar ao criar o registro
+
+        gen = run_crew_stream(graph_data, workspace_id=active_workspace_id)
+
+        if execution_id:
+            return StreamingResponse(
+                _tracked_stream(execution_id, gen),
+                media_type="text/event-stream"
+            )
+        return StreamingResponse(gen, media_type="text/event-stream")
     except ValueError as ve:
         # Erros esperados capturados na nossa lógica de Parse customizada
         raise HTTPException(status_code=400, detail=str(ve))
@@ -230,9 +276,9 @@ async def delete_project(project_id: str, session: Session = Depends(get_session
     webhook_configs = session.exec(select(WebhookConfig).where(WebhookConfig.project_id == project.id)).all()
     for wc in webhook_configs:
         session.delete(wc)
-    webhook_executions = session.exec(select(WebhookExecution).where(WebhookExecution.project_id == project.id)).all()
-    for we in webhook_executions:
-        session.delete(we)
+    project_executions = session.exec(select(Execution).where(Execution.project_id == project.id)).all()
+    for ex in project_executions:
+        session.delete(ex)
     session.flush()  # Ensure dependents are deleted before the project
     session.delete(project)
     session.commit()

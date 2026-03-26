@@ -12,13 +12,13 @@ from sqlmodel import Session, select
 
 from ..crew_builder import run_crew_sync
 from ..database import engine, get_session
-from ..models import CrewProject, ExecutionStatus, WebhookConfig, WebhookExecution
+from ..models import CrewProject, ExecutionStatus, TriggerType, WebhookConfig, Execution
 from ..schemas import (
     GraphData,
     WebhookConfigCreate,
     WebhookConfigRead,
     WebhookConfigUpdate,
-    WebhookExecutionRead,
+    ExecutionRead,
 )
 
 router = APIRouter(prefix="/api/v1", tags=["webhooks"])
@@ -150,7 +150,7 @@ def _map_payload_to_inputs(payload: dict, field_mappings: dict) -> dict:
 
 def _run_background_task(execution_id: str, graph_data: GraphData, workspace_id: Optional[str]):
     with Session(engine) as session:
-        execution = session.get(WebhookExecution, uuid.UUID(execution_id))
+        execution = session.get(Execution, uuid.UUID(execution_id))
         if not execution:
             return
 
@@ -190,7 +190,8 @@ async def trigger_webhook(
     if config.secret:
         token = request.headers.get("X-Webhook-Token", "")
         if not hmac.compare_digest(config.secret, token):
-            execution = WebhookExecution(
+            execution = Execution(
+                trigger_type=TriggerType.WEBHOOK,
                 webhook_id=webhook_id,
                 project_id=config.project_id,
                 status=ExecutionStatus.ERROR,
@@ -225,7 +226,8 @@ async def trigger_webhook(
 
     graph_data = GraphData(**canvas_data)
 
-    execution = WebhookExecution(
+    execution = Execution(
+        trigger_type=TriggerType.WEBHOOK,
         webhook_id=webhook_id,
         project_id=config.project_id,
         status=ExecutionStatus.PENDING,
@@ -274,20 +276,23 @@ async def trigger_webhook(
     return {"execution_id": execution_id, "status": "pending"}
 
 
-@router.get("/executions/{execution_id}", response_model=WebhookExecutionRead)
+@router.get("/executions/{execution_id}", response_model=ExecutionRead)
 def get_execution(execution_id: str, session: Session = Depends(get_session)):
-    execution = session.get(WebhookExecution, uuid.UUID(execution_id))
+    execution = session.get(Execution, uuid.UUID(execution_id))
     if not execution:
         raise HTTPException(status_code=404, detail="Execution not found")
     return execution
 
 
-@router.get("/executions", response_model=List[WebhookExecutionRead])
+@router.get("/executions", response_model=List[ExecutionRead])
 def list_executions(
+    project_id: Optional[str] = Query(default=None),
     webhook_id: Optional[str] = Query(default=None),
     session: Session = Depends(get_session),
 ):
-    query = select(WebhookExecution)
-    if webhook_id:
-        query = query.where(WebhookExecution.webhook_id == webhook_id)
-    return session.exec(query.order_by(WebhookExecution.created_at.desc())).all()
+    query = select(Execution)
+    if project_id:
+        query = query.where(Execution.project_id == uuid.UUID(project_id))
+    elif webhook_id:
+        query = query.where(Execution.webhook_id == webhook_id)
+    return session.exec(query.order_by(Execution.created_at.desc())).all()

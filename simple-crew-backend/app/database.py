@@ -2,7 +2,7 @@ import os
 import uuid
 from sqlmodel import create_engine, SQLModel, Session, select
 from dotenv import load_dotenv
-from .models import User, CrewProject, Credential, LLMModel, AppSettings, CustomTool, Workspace, WebhookConfig, WebhookExecution
+from .models import User, CrewProject, Credential, LLMModel, AppSettings, CustomTool, Workspace, WebhookConfig, Execution
 
 load_dotenv()
 
@@ -10,22 +10,8 @@ DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://postgres:postgres@localho
 
 engine = create_engine(DATABASE_URL, echo=True)
 
-def _run_migrations():
-    """Apply additive column migrations for existing tables."""
-    migrations = [
-        "ALTER TABLE webhookexecution ADD COLUMN IF NOT EXISTS raw_payload JSONB",
-        "ALTER TABLE webhookexecution ADD COLUMN IF NOT EXISTS field_mappings_used JSONB",
-        "ALTER TABLE webhookexecution ADD COLUMN IF NOT EXISTS wait_for_result BOOLEAN",
-    ]
-    with engine.connect() as conn:
-        for sql in migrations:
-            conn.execute(__import__("sqlalchemy").text(sql))
-        conn.commit()
-
-
 def init_db():
     SQLModel.metadata.create_all(engine)
-    _run_migrations()
     
     # Seed Root User
     with Session(engine) as session:

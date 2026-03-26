@@ -15,6 +15,10 @@ class ExecutionStatus(str, Enum):
     SUCCESS = "success"
     ERROR = "error"
 
+class TriggerType(str, Enum):
+    WEBHOOK = "webhook"
+    MANUAL = "manual"
+
 class User(SQLModel, table=True):
     id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
     name: str
@@ -215,9 +219,12 @@ class WebhookConfig(SQLModel, table=True):
     )
 
 
-class WebhookExecution(SQLModel, table=True):
+class Execution(SQLModel, table=True):
+    __tablename__ = "execution"
+
     id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
-    webhook_id: str = Field(index=True)
+    trigger_type: str = Field(default=TriggerType.MANUAL)
+    webhook_id: Optional[str] = Field(default=None, index=True, sa_column_kwargs={"nullable": True})
     project_id: uuid.UUID = Field(foreign_key="crewproject.id")
     status: ExecutionStatus = Field(default=ExecutionStatus.PENDING)
     inputs_received: Dict[str, Any] = Field(default_factory=dict, sa_column=Column(JSON))
@@ -238,3 +245,7 @@ class WebhookExecution(SQLModel, table=True):
     created_at: datetime = Field(
         sa_column=Column(DateTime(timezone=True), server_default=func.now())
     )
+
+
+# Alias para compatibilidade com código legado
+WebhookExecution = Execution

@@ -143,8 +143,8 @@ export const useStore = create<AppState>((set, get) => ({
   isUsabilityDrawerOpen: false,
   isChatVisible: false,
   webhookConfig: null,
-  webhookExecutions: [],
-  isWebhookPanelVisible: false,
+  executions: [],
+  isExecutionsPanelVisible: false,
   theme: (localStorage.getItem('theme') as 'light' | 'dark') || 'light',
   isSettingsOpen: false,
   credentials: [],
@@ -326,7 +326,7 @@ export const useStore = create<AppState>((set, get) => ({
   setCurrentExplorerWsId: (id) => set({ currentExplorerWsId: id }),
   setIsUsabilityDrawerOpen: (open) => set({ isUsabilityDrawerOpen: open }),
   setIsChatVisible: (visible) => set({ isChatVisible: visible }),
-  setIsWebhookPanelVisible: (visible) => set({ isWebhookPanelVisible: visible }),
+  setIsExecutionsPanelVisible: (visible) => set({ isExecutionsPanelVisible: visible }),
 
   fetchWebhookConfig: async (projectId: string) => {
     try {
@@ -393,12 +393,12 @@ export const useStore = create<AppState>((set, get) => ({
     }
   },
 
-  fetchWebhookExecutions: async (webhookId: string) => {
+  fetchExecutions: async (projectId: string) => {
     try {
-      const response = await fetch(`${API_URL}/api/v1/executions?webhook_id=${webhookId}`);
+      const response = await fetch(`${API_URL}/api/v1/executions?project_id=${projectId}`);
       if (!response.ok) return;
       const executions = await response.json();
-      set({ webhookExecutions: executions });
+      set({ executions });
     } catch {
       // silently ignore
     }
@@ -748,8 +748,8 @@ export const useStore = create<AppState>((set, get) => ({
         nodeStatuses: {},
         nodeErrors: {},
         webhookConfig: null,
-        webhookExecutions: [],
-        isWebhookPanelVisible: false,
+        executions: [],
+        isExecutionsPanelVisible: false,
       });
 
       get().showNotification("Project uploaded successfully!", "success");
@@ -1248,8 +1248,8 @@ export const useStore = create<AppState>((set, get) => ({
         nodeStatuses: {},
         nodeErrors: {},
         webhookConfig: null,
-        webhookExecutions: [],
-        isWebhookPanelVisible: false,
+        executions: [],
+        isExecutionsPanelVisible: false,
       });
 
       // Auto-fetch webhook config if canvas has a webhook node
@@ -1493,8 +1493,8 @@ export const useStore = create<AppState>((set, get) => ({
       nodeErrors: {},
       executionResult: null,
       webhookConfig: null,
-      webhookExecutions: [],
-      isWebhookPanelVisible: false,
+      executions: [],
+      isExecutionsPanelVisible: false,
     });
   },
 

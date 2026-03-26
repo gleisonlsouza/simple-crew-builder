@@ -80,9 +80,9 @@ export function NodeConfigDrawer() {
   const webhookConfig = useStore((state: AppState) => state.webhookConfig);
   const updateWebhookConfig = useStore((state: AppState) => state.updateWebhookConfig);
   const rotateWebhookSecret = useStore((state: AppState) => state.rotateWebhookSecret);
-  const fetchWebhookExecutions = useStore((state: AppState) => state.fetchWebhookExecutions);
-  const webhookExecutions = useStore((state: AppState) => state.webhookExecutions);
-  const setIsWebhookPanelVisible = useStore((state: AppState) => state.setIsWebhookPanelVisible);
+  const fetchExecutions = useStore((state: AppState) => state.fetchExecutions);
+  const executions = useStore((state: AppState) => state.executions);
+  const setIsExecutionsPanelVisible = useStore((state: AppState) => state.setIsExecutionsPanelVisible);
   const currentProjectId = useStore((state: AppState) => state.currentProjectId);
   const provisionWebhook = useStore((state: AppState) => state.provisionWebhook);
 
@@ -2440,7 +2440,7 @@ export function NodeConfigDrawer() {
                 <label className="text-xs font-bold text-brand-muted uppercase tracking-wider">Recent Executions</label>
                 <button
                   onClick={() => {
-                    if (webhookConfig?.webhook_id) fetchWebhookExecutions(webhookConfig.webhook_id);
+                    if (currentProjectId) fetchExecutions(currentProjectId);
                   }}
                   className="p-1 rounded text-brand-muted hover:text-brand-text transition-colors"
                   title="Refresh"
@@ -2448,7 +2448,7 @@ export function NodeConfigDrawer() {
                   <RefreshCw className="w-3.5 h-3.5" />
                 </button>
               </div>
-              {webhookExecutions.slice(0, 5).map((exec) => (
+              {executions.slice(0, 5).map((exec) => (
                 <div key={exec.id} className="flex items-center justify-between gap-2 px-2 py-1.5 bg-brand-bg/50 rounded-lg border border-brand-border">
                   <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${
                     exec.status === 'success' ? 'bg-green-500/20 text-green-400' :
@@ -2459,12 +2459,12 @@ export function NodeConfigDrawer() {
                   <span className="text-[10px] text-brand-muted">{new Date(exec.created_at).toLocaleString()}</span>
                 </div>
               ))}
-              {webhookExecutions.length === 0 && (
+              {executions.length === 0 && (
                 <p className="text-[11px] text-brand-muted italic">No executions yet.</p>
               )}
-              {webhookExecutions.length > 0 && (
+              {executions.length > 0 && (
                 <button
-                  onClick={() => setIsWebhookPanelVisible(true)}
+                  onClick={() => setIsExecutionsPanelVisible(true)}
                   className="self-start text-xs text-orange-500 hover:text-orange-400 underline"
                 >
                   View All

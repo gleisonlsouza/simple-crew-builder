@@ -331,9 +331,10 @@ class WebhookConfigUpdate(BaseModel):
     is_active: Optional[bool] = None
     wait_for_result: Optional[bool] = None
 
-class WebhookExecutionRead(BaseModel):
+class ExecutionRead(BaseModel):
     id: Any
-    webhook_id: str
+    trigger_type: str
+    webhook_id: Optional[str] = None
     project_id: Any
     status: str
     inputs_received: Dict[str, Any]
@@ -348,3 +349,7 @@ class WebhookExecutionRead(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+# Alias para compatibilidade
+WebhookExecutionRead = ExecutionRead

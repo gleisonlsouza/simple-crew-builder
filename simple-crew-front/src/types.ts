@@ -109,9 +109,10 @@ export interface WebhookConfig {
   updated_at: string;
 }
 
-export interface WebhookExecution {
+export interface Execution {
   id: string;
-  webhook_id: string;
+  trigger_type: 'webhook' | 'manual';
+  webhook_id?: string;
   project_id: string;
   status: 'pending' | 'running' | 'success' | 'error';
   inputs_received: Record<string, any>;
@@ -124,6 +125,9 @@ export interface WebhookExecution {
   finished_at?: string;
   created_at: string;
 }
+
+// Alias para compatibilidade
+export type WebhookExecution = Execution;
 
 export type AppEdge = Edge;
 
@@ -323,14 +327,14 @@ export interface AppState {
   setIsChatVisible: (visible: boolean) => void;
 
   webhookConfig: WebhookConfig | null;
-  webhookExecutions: WebhookExecution[];
-  isWebhookPanelVisible: boolean;
-  setIsWebhookPanelVisible: (visible: boolean) => void;
+  executions: Execution[];
+  isExecutionsPanelVisible: boolean;
+  setIsExecutionsPanelVisible: (visible: boolean) => void;
   fetchWebhookConfig: (projectId: string) => Promise<void>;
   provisionWebhook: (projectId: string) => Promise<WebhookConfig | null>;
   updateWebhookConfig: (projectId: string, data: Partial<WebhookConfig>) => Promise<void>;
   rotateWebhookSecret: (projectId: string) => Promise<string | null>;
-  fetchWebhookExecutions: (webhookId: string) => Promise<void>;
+  fetchExecutions: (projectId: string) => Promise<void>;
 
   credentials: Credential[];
   fetchCredentials: () => Promise<void>;

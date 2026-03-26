@@ -14,7 +14,7 @@ import { TaskNode } from '../nodes/TaskNode';
 import { CrewNode } from '../nodes/CrewNode';
 import { ChatNode } from '../nodes/ChatNode';
 import { WebhookNode } from '../nodes/WebhookNode';
-import { WebhookExecutionsPanel } from '../components/WebhookExecutionsPanel';
+import { ExecutionsPanel } from '../components/ExecutionsPanel';
 import { Sidebar } from '../components/Sidebar';
 
 import { NodeConfigDrawer } from '../components/NodeConfigDrawer';
@@ -318,7 +318,7 @@ function FlowBuilder() {
 
         {/* Executions View */}
         {activeView === 'executions' && (
-          <WebhookExecutionsPanel fullPage />
+          <ExecutionsPanel fullPage />
         )}
 
         <UsabilityCardsDrawer />
