@@ -1,18 +1,10 @@
-import { useState, useEffect, useRef } from 'react';
-import ReactMarkdown from 'react-markdown';
-import remarkGfm from 'remark-gfm';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useStore } from '../store';
-import { X, ChevronDown, ChevronUp, Send, Copy, Check, FileText, Trash2 } from 'lucide-react';
-import Prism from 'prismjs';
-import 'prismjs/themes/prism-tomorrow.css';
-import 'prismjs/components/prism-python';
-import 'prismjs/components/prism-typescript';
-import 'prismjs/components/prism-javascript';
-import 'prismjs/components/prism-json';
-import 'prismjs/components/prism-markdown';
-import 'prismjs/components/prism-bash';
+import { X, ChevronDown, ChevronUp, Trash2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { ConfirmationModal } from './ConfirmationModal';
+import { ChatMessage } from './ChatMessage';
+import { ChatInput } from './ChatInput';
 
 type Message = {
   id: string;
@@ -20,53 +12,6 @@ type Message = {
   content: string;
 };
 
-const MarkdownCodeBlock = ({ children, className }: { children: string; className?: string }) => {
-  const [copied, setCopied] = useState(false);
-  const language = className ? className.replace('language-', '') : 'text';
-
-  useEffect(() => {
-    Prism.highlightAll();
-  }, [children]);
-
-  const handleCopy = () => {
-    navigator.clipboard.writeText(children);
-    setCopied(true);
-    toast.success('Code copied to clipboard');
-    setTimeout(() => setCopied(false), 2000);
-  };
-
-  return (
-    <div className="my-4 rounded-xl overflow-hidden border border-slate-200 dark:border-brand-border bg-[#0d1117] group/code shadow-lg shadow-black/5 dark:shadow-black/20">
-      <div className="flex items-center justify-between px-4 py-2.5 bg-slate-900/50 dark:bg-slate-800/40 border-b border-white/5 backdrop-blur-sm">
-        <div className="flex items-center gap-2">
-          <FileText className="w-3.5 h-3.5 text-cyan-400" />
-          <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400">{language}</span>
-        </div>
-        <button 
-          onClick={handleCopy}
-          className="flex items-center gap-1.5 px-2 py-1 rounded-md bg-white/5 hover:bg-white/10 text-slate-300 hover:text-white transition-all active:scale-95 border border-white/5"
-        >
-          {copied ? (
-            <>
-              <Check className="w-3 h-3 text-emerald-400" />
-              <span className="text-[10px] font-bold text-emerald-400">Copied!</span>
-            </>
-          ) : (
-            <>
-              <Copy className="w-3 h-3" />
-              <span className="text-[10px] font-bold">Copy</span>
-            </>
-          )}
-        </button>
-      </div>
-      <div className="relative">
-        <pre className={`!bg-transparent !p-4 !m-0 !text-[11px] font-mono leading-relaxed overflow-x-auto custom-scrollbar language-${language}`}>
-          <code className={`language-${language} text-slate-200`}>{children}</code>
-        </pre>
-      </div>
-    </div>
-  );
-};
 
 export function ResizableChatPanel() {
   const isChatVisible = useStore((state) => state.isChatVisible);
@@ -89,13 +34,11 @@ export function ResizableChatPanel() {
   ];
 
   const [messages, setMessages] = useState<Message[]>(initialMessages);
-  const [inputText, setInputText] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [isConfirmModalOpen, setIsConfirmModalOpen] = useState(false);
 
   const panelRef = useRef<HTMLDivElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const inputRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
     if (!isMinimized) {
@@ -132,44 +75,18 @@ export function ResizableChatPanel() {
     };
   }, [isResizing, isMinimized]);
 
-  useEffect(() => {
-    if (!isLoading && isChatVisible && !isMinimized) {
-      const timeoutId = setTimeout(() => {
-        inputRef.current?.focus();
-      }, 0);
-      return () => clearTimeout(timeoutId);
-    }
-  }, [isLoading, isChatVisible, isMinimized]);
   
-  // Auto-resize logic
-  useEffect(() => {
-    if (inputRef.current) {
-      inputRef.current.style.height = 'auto';
-      const scrollHeight = inputRef.current.scrollHeight;
-      // Define a max height (e.g., 5-6 lines, ~150px)
-      const maxHeight = 160;
-      inputRef.current.style.height = `${Math.min(scrollHeight, maxHeight)}px`;
-      
-      // Toggle scrollbar visibility
-      if (scrollHeight > maxHeight) {
-        inputRef.current.style.overflowY = 'auto';
-      } else {
-        inputRef.current.style.overflowY = 'hidden';
-      }
-    }
-  }, [inputText]);
 
-  const handleSendMessage = async () => {
-    if (!inputText.trim() || isLoading) return;
+  const handleSendMessage = useCallback(async (text: string) => {
+    if (!text.trim() || isLoading) return;
 
     const userMessage: Message = {
       id: Date.now().toString(),
       role: 'user',
-      content: inputText
+      content: text
     };
 
     setMessages(prev => [...prev, userMessage]);
-    setInputText('');
 
     // Locating the Chat Node and its target Crew to map exactly
     const chatNode = nodes.find(n => n.type === 'chat');
@@ -248,7 +165,7 @@ export function ResizableChatPanel() {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [isLoading, nodes, edges, updateNodeData, startRealExecution, messages]);
 
   const handleClearChat = () => {
     if (messages.length <= 1) return;
@@ -260,12 +177,6 @@ export function ResizableChatPanel() {
     toast.success('Conversation cleared');
   };
 
-  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      handleSendMessage();
-    }
-  };
 
   if (!isChatVisible) return null;
 
@@ -326,80 +237,7 @@ export function ResizableChatPanel() {
             </div>
             
             {messages.map((msg) => (
-              <div 
-                key={msg.id} 
-                className={`flex gap-3 ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
-                data-testid={`chat-message-${msg.role}`}
-              >
-                {msg.role === 'assistant' && (
-                  <div className="w-8 h-8 rounded-full bg-brand-bg border border-brand-border flex items-center justify-center shrink-0">
-                    <span className="text-xs font-bold text-brand-muted">AI</span>
-                  </div>
-                )}
-                
-                <div 
-                  className={`px-4 py-2 max-w-[80%] rounded-2xl border ${
-                    msg.role === 'user' 
-                      ? 'bg-brand-accent/10 rounded-tr-none border-brand-accent/30 text-brand-text shadow-sm' 
-                      : 'bg-brand-card rounded-tl-none border-brand-border text-brand-text'
-                  }`}
-                >
-                  <div className="text-sm break-words chat-markdown">
-                    <ReactMarkdown
-                      remarkPlugins={[remarkGfm]}
-                      components={{
-                        p: ({ children }) => <p className="mb-3 last:mb-0 leading-relaxed text-[13px]">{children}</p>,
-                        strong: ({ children }) => <strong className="font-bold text-brand-text">{children}</strong>,
-                        em: ({ children }) => <em className="italic opacity-90">{children}</em>,
-                        code: ({ children, className }) => {
-                          const isBlock = className?.includes('language-') || (children && String(children).includes('\n'));
-                          if (isBlock) {
-                            return <MarkdownCodeBlock className={className}>{String(children).replace(/\n$/, '')}</MarkdownCodeBlock>;
-                          }
-                          return (
-                            <code className="bg-brand-bg rounded px-1.5 py-0.5 text-[11px] font-mono border border-brand-border text-brand-accent">
-                              {children}
-                            </code>
-                          );
-                        },
-                        pre: ({ children }) => <>{children}</>,
-                        ul: ({ children }) => <ul className="list-disc list-outside mb-3 ml-4 space-y-1.5 text-[13px]">{children}</ul>,
-                        ol: ({ children }) => <ol className="list-decimal list-outside mb-3 ml-4 space-y-1.5 text-[13px]">{children}</ol>,
-                        li: ({ children }) => <li className="pl-1 marker:text-brand-accent">{children}</li>,
-                        h1: ({ children }) => <h1 className="text-lg font-black mb-3 mt-4 text-brand-text transition-colors">{children}</h1>,
-                        h2: ({ children }) => <h2 className="text-base font-black mb-2 mt-3 text-brand-text/90 italic">{children}</h2>,
-                        h3: ({ children }) => <h3 className="text-sm font-bold mb-2 mt-2 text-brand-text/80">{children}</h3>,
-                        blockquote: ({ children }) => (
-                          <blockquote className="border-l-4 border-brand-accent/30 bg-brand-accent/5 pl-4 py-2 my-4 italic rounded-r-lg text-brand-muted">
-                            {children}
-                          </blockquote>
-                        ),
-                        a: ({ href, children }) => (
-                          <a 
-                            href={href} 
-                            target="_blank" 
-                            rel="noopener noreferrer" 
-                            className="text-brand-accent underline decoration-brand-accent/30 underline-offset-4 hover:text-brand-accent/80 transition-all font-medium"
-                          >
-                            {children}
-                          </a>
-                        ),
-                        hr: () => <hr className="border-brand-border my-6" />,
-                        table: ({ children }) => (
-                          <div className="overflow-x-auto my-4 rounded-xl border border-brand-border shadow-inner bg-brand-bg/50">
-                            <table className="w-full text-left text-xs border-collapse">
-                              {children}
-                            </table>
-                          </div>
-                        ),
-                        thead: ({ children }) => <thead className="bg-brand-bg text-brand-muted font-bold">{children}</thead>,
-                        th: ({ children }) => <th className="px-4 py-2 border-b border-brand-border">{children}</th>,
-                        td: ({ children }) => <td className="px-4 py-2 border-b border-brand-border text-brand-text/80">{children}</td>,
-                      }}
-                    >{msg.content}</ReactMarkdown>
-                  </div>
-                </div>
-              </div>
+              <ChatMessage key={msg.id} msg={msg} />
             ))}
 
             {isLoading && (
@@ -418,28 +256,7 @@ export function ResizableChatPanel() {
             <div ref={messagesEndRef} />
           </div>
 
-          <div className="flex-none p-3 border-t border-brand-border bg-brand-card">
-            <div className="relative">
-              <textarea
-                ref={inputRef}
-                rows={1}
-                value={inputText}
-                onChange={(e) => setInputText(e.target.value)}
-                onKeyDown={handleKeyDown}
-                placeholder="Type your message..."
-                disabled={isLoading}
-                className="w-full bg-brand-bg border border-brand-border rounded-xl pl-4 pr-12 py-3 text-sm text-brand-text placeholder-brand-muted focus:outline-none focus:border-brand-accent focus:ring-1 focus:ring-brand-accent transition-all font-medium disabled:opacity-50 resize-none min-h-[46px] max-h-[160px] custom-scrollbar shadow-sm"
-              />
-              <button 
-                type="button"
-                onClick={handleSendMessage}
-                disabled={!inputText.trim() || isLoading}
-                className="absolute right-2.5 bottom-2.5 p-1.5 rounded-lg bg-brand-accent hover:bg-brand-accent/80 text-white transition-colors disabled:opacity-50 shadow-lg shadow-brand-accent/20"
-              >
-                <Send className="w-4 h-4" />
-              </button>
-            </div>
-          </div>
+          <ChatInput onSendMessage={handleSendMessage} isLoading={isLoading} />
         </>
       )}
 

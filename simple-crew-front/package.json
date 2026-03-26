@@ -15,7 +15,10 @@
     "@dnd-kit/utilities": "^3.2.2",
     "@types/prismjs": "^1.26.6",
     "@xyflow/react": "^12.10.1",
+    "html-to-image": "^1.11.13",
+    "jspdf": "^4.2.1",
     "lucide-react": "^0.577.0",
+    "mermaid": "^11.13.0",
     "motion": "^12.38.0",
     "prismjs": "^1.30.0",
     "react": "^19.2.4",
@@ -24,6 +27,7 @@
     "react-markdown": "^10.1.0",
     "react-router-dom": "^7.13.1",
     "react-simple-code-editor": "^0.14.1",
+    "react-zoom-pan-pinch": "^3.7.0",
     "remark-gfm": "^4.0.1",
     "zustand": "^5.0.11"
   },
