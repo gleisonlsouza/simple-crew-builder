@@ -2313,7 +2313,7 @@ export function NodeConfigDrawer() {
                 <p className="text-[11px] text-brand-muted opacity-70 leading-relaxed">
                   When enabled, the caller waits synchronously for the Crew to finish and receives the result directly.
                 </p>
-                {(data as any).waitForResult && (
+                {webhookConfig?.wait_for_result && (
                   <p className="text-[11px] text-amber-400 mt-1 leading-relaxed">
                     The caller will be blocked until the Crew finishes. Avoid for long-running Crews.
                   </p>
@@ -2321,16 +2321,14 @@ export function NodeConfigDrawer() {
               </div>
               <button
                 role="switch"
-                aria-checked={(data as any).waitForResult ?? false}
+                aria-checked={webhookConfig?.wait_for_result ?? false}
                 onClick={() => {
-                  const newVal = !((data as any).waitForResult ?? false);
-                  updateNodeData(activeNode.id, { waitForResult: newVal });
                   if (currentProjectId && webhookConfig) {
-                    updateWebhookConfig(currentProjectId, { wait_for_result: newVal });
+                    updateWebhookConfig(currentProjectId, { wait_for_result: !webhookConfig.wait_for_result });
                   }
                 }}
                 className={`relative flex-none w-10 rounded-full border transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-orange-500 ${
-                  (data as any).waitForResult
+                  webhookConfig?.wait_for_result
                     ? 'bg-orange-500 border-orange-400'
                     : 'bg-slate-700 border-slate-600'
                 }`}
@@ -2338,7 +2336,7 @@ export function NodeConfigDrawer() {
               >
                 <span
                   className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white shadow-sm transition-transform duration-200 ${
-                    (data as any).waitForResult ? 'translate-x-4' : 'translate-x-0'
+                    webhookConfig?.wait_for_result ? 'translate-x-4' : 'translate-x-0'
                   }`}
                 />
               </button>

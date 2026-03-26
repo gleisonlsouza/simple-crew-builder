@@ -1236,6 +1236,7 @@ export const useStore = create<AppState>((set, get) => ({
         nodeErrors: {},
         webhookConfig: null,
         webhookExecutions: [],
+        isWebhookPanelVisible: false,
       });
 
       // Auto-fetch webhook config if canvas has a webhook node
@@ -1467,7 +1468,10 @@ export const useStore = create<AppState>((set, get) => ({
       currentProjectWorkspaceId: null,
       nodeStatuses: {},
       nodeErrors: {},
-      executionResult: null
+      executionResult: null,
+      webhookConfig: null,
+      webhookExecutions: [],
+      isWebhookPanelVisible: false,
     });
   },
 
