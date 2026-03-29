@@ -1,5 +1,6 @@
 from pydantic import BaseModel, field_validator
 from typing import List, Dict, Optional, Any
+from datetime import datetime
 from .models import ModelType
 
 class CustomTool(BaseModel):
@@ -109,6 +110,7 @@ class GraphData(BaseModel):
     edges: List[Edge]
     customTools: Optional[List[CustomTool]] = []
     globalTools: Optional[List[ToolConfig]] = []
+    inputs: Optional[Dict[str, Any]] = None
 
 # Schemas para CRUD de Projetos (Sprint 38)
 class ProjectBase(BaseModel):
@@ -358,3 +360,19 @@ class KnowledgeBaseDocumentResponse(BaseModel):
     filename: str
     size: Optional[int] = None
     created_at: Any
+
+# Execution History Schemas
+class ExecutionRead(BaseModel):
+    id: Any
+    project_id: Any
+    status: str
+    trigger_type: str
+    input_data: Dict[str, Any]
+    output_data: Optional[Dict[str, Any]] = None
+    graph_snapshot: Dict[str, Any]
+    duration: Optional[float] = None
+    timestamp: datetime
+
+    class Config:
+        from_attributes = True
+

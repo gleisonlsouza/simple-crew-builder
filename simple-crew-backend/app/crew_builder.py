@@ -3,6 +3,9 @@ import threading
 import queue
 import json
 import typing
+import uuid
+import datetime
+import traceback
 from typing import Dict, List, Iterator, Any, Optional
 from pathlib import Path
 from crewai import Agent, Task, Crew, Process
@@ -10,7 +13,7 @@ from crewai.tools import tool, BaseTool
 from crewai.llm import LLM
 import os
 from pydantic import BaseModel, Field
-from .models import LLMModel, Credential, MCPServer, AppSettings, Workspace
+from .models import LLMModel, Credential, MCPServer, AppSettings, Workspace, Execution, ExecutionStatus
 from .schemas import GraphData
 from mcp import StdioServerParameters
 from crewai_tools import (
@@ -215,7 +218,9 @@ def wrap_tool_with_workspace_guard(tool_instance: BaseTool, workspace_path: str)
     tool_instance._run = protected_run
     return tool_instance
 
-def run_crew_stream(graph_data: GraphData, workspace_id: Optional[Any] = None, inputs: Optional[Dict[str, Any]] = None) -> Iterator[str]:
+def run_crew_stream(graph_data: GraphData, workspace_id: Optional[Any] = None, inputs: Optional[Dict[str, Any]] = None, execution_id: Optional[typing.Union[str, uuid.UUID]] = None) -> Iterator[str]:
+    import time
+    start_time = time.time()
     nodes = {node.id: node for node in graph_data.nodes}
     edges = graph_data.edges
     
@@ -252,20 +257,28 @@ def run_crew_stream(graph_data: GraphData, workspace_id: Optional[Any] = None, i
             task_to_agent_map[edge.target] = edge.source
 
     q = queue.Queue()
+    tracked_statuses: Dict[str, str] = {}
     
     def make_agent_step_callback(agent_id: str):
         def cb(step_output):
+            tracked_statuses[agent_id] = "running"
             q.put(json.dumps({"type": "status", "nodeId": agent_id, "status": "running"}) + "\n")
         return cb
 
     def emit_task_running(task_id: str):
+        tracked_statuses[task_id] = "running"
         q.put(json.dumps({"type": "status", "nodeId": task_id, "status": "running"}) + "\n")
         agent_id = task_to_agent_map.get(task_id)
         if agent_id:
+            tracked_statuses[agent_id] = "running"
             q.put(json.dumps({"type": "status", "nodeId": agent_id, "status": "running"}) + "\n")
     
     def make_task_callback(task_id: str):
         def cb(output):
+            tracked_statuses[task_id] = "success"
+            agent_id = task_to_agent_map.get(task_id)
+            if agent_id:
+                tracked_statuses[agent_id] = "success"
             q.put(json.dumps({"type": "task_completed", "task_id": task_id}) + "\n")
             try:
                 curr_idx = ordered_task_ids.index(task_id)
@@ -279,6 +292,7 @@ def run_crew_stream(graph_data: GraphData, workspace_id: Optional[Any] = None, i
     # 5. Execução em Thread
     
     def worker():
+        nonlocal start_time
         original_stdout = sys.stdout
         sys.stdout = StreamToQueue(q)
         
@@ -1005,12 +1019,47 @@ def run_crew_stream(graph_data: GraphData, workspace_id: Optional[Any] = None, i
                 log_debug(f"Kicking off Crew with inputs: {execution_inputs}")
                 
                 result = crew.kickoff(inputs=execution_inputs)
-                q.put(json.dumps({"type": "final_result", "result": str(result)}) + "\n")
+                final_output = str(result)
+                
+                # Update Execution in database if id provided
+                if execution_id:
+                    try:
+                        with Session(engine) as session:
+                            execution = session.get(Execution, execution_id)
+                            if execution:
+                                execution.status = ExecutionStatus.SUCCESS
+                                execution.output_data = {"result": final_output, "node_statuses": tracked_statuses}
+                                execution.duration = time.time() - start_time
+                                session.add(execution)
+                                session.commit()
+                    except Exception as db_err:
+                        log_debug(f"DB Update Error (Success): {db_err}")
+
+                q.put(json.dumps({"type": "final_result", "result": final_output}) + "\n")
 
             except Exception as e:
                 import traceback
                 error_trace = traceback.format_exc()
                 log_debug(f"CRITICAL ERROR during worker execution:\n{error_trace}")
+                
+                # Update Execution status to Error
+                if execution_id:
+                    try:
+                        with Session(engine) as session:
+                            execution = session.get(Execution, execution_id)
+                            if execution:
+                                for nid, nstatus in tracked_statuses.items():
+                                    if nstatus == "running":
+                                        tracked_statuses[nid] = "error"
+                                        
+                                execution.status = ExecutionStatus.ERROR
+                                execution.output_data = {"error": str(e), "traceback": error_trace, "node_statuses": tracked_statuses}
+                                execution.duration = time.time() - start_time
+                                session.add(execution)
+                                session.commit()
+                    except Exception as db_err:
+                        log_debug(f"DB Update Error (Failure): {db_err}")
+                
                 q.put(json.dumps({"type": "error", "error": f"{str(e)}\n{error_trace}"}) + "\n")
             finally:
                 sys.stdout = original_stdout

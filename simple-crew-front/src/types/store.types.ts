@@ -130,7 +130,10 @@ export interface ProjectSlice {
   currentProjectWorkspaceName: string | null;
   isSaving: boolean;
   isExecuting: boolean;
+  isDirty: boolean; // Add isDirty flag
   abortController: AbortController | null;
+  setDirty: (dirty: boolean) => void;
+  hydrateFromSnapshot: (projectId: string, snapshot: any) => void;
   fetchProjects: () => Promise<void>;
   saveProject: (name: string, description?: string) => Promise<void>;
   updateProjectMetadata: (id: string, name: string, description: string) => Promise<void>;
@@ -207,10 +210,32 @@ export interface AISlice {
   suggestTaskBulkAiContent: (nodeId: string) => Promise<void>;
 }
 
+export interface Execution {
+  id: string;
+  project_id: string;
+  status: 'running' | 'success' | 'error';
+  trigger_type: string;
+  input_data: any;
+  output_data?: any;
+  graph_snapshot: any;
+  duration?: number;
+  timestamp: string;
+}
+
+export interface ExecutionSlice {
+  executions: Execution[];
+  currentExecution: Execution | null;
+  isLoadingExecutions: boolean;
+  fetchExecutions: (projectId: string) => Promise<void>;
+  fetchExecutionDetails: (executionId: string) => Promise<Execution | null>;
+  reRunExecution: (execution: Execution) => void;
+}
+
 export type AppState = GraphSlice & 
   UISlice & 
   ProjectSlice & 
   ConfigSlice & 
   WorkspaceSlice & 
-  AISlice;
+  AISlice &
+  ExecutionSlice;
 

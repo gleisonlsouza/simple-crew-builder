@@ -490,4 +490,46 @@ describe('projectSlice - Elite Coverage Max', () => {
         expect(mockState.customTools).toHaveLength(2);
         expect(mockState.customTools.some((t: any) => t.id === 'new-tool-1')).toBe(true);
     });
+
+    // --- HYDRATION TIME TRAVEL ---
+    it('setDirty: updates flag', () => {
+        slice.setDirty(true);
+        expect(mockState.isDirty).toBe(true);
+        slice.setDirty(false);
+        expect(mockState.isDirty).toBe(false);
+    });
+
+    it('hydrateFromSnapshot: sets dirty flag, unwraps nodes/edges, clears chat, points to execution project', () => {
+        // Prepare initial dirty state
+        mockState.messages = [{ id: '1', role: 'user', content: 'hello' }];
+        mockState.isDirty = false;
+        mockState.currentProjectId = 'live-project-id';
+
+        const snapshot = {
+            nodes: [{ id: 'snap-n1', type: 'agent', data: {} }],
+            edges: [{ id: 'snap-e1', source: 'snap-n1', target: 'snap-n2' }],
+            workspaceId: 'ws-2'
+        };
+
+        slice.hydrateFromSnapshot('snapshot-project-id', snapshot);
+
+        // Asserts
+        expect(mockState.currentProjectId).toBe('snapshot-project-id');
+        expect(mockState.nodes).toHaveLength(1);
+        expect(mockState.nodes[0].id).toBe('snap-n1');
+        expect(mockState.edges).toHaveLength(1);
+        expect(mockState.isDirty).toBe(true); // Forces user to save a new version
+        expect(mockState.currentProjectWorkspaceId).toBe('ws-2');
+        expect(mockState.currentProjectWorkspaceName).toBe('WS2');
+        
+        // Chat should be cleared (messages reset to INITIAL array or just different from hello)
+        expect(mockState.messages).not.toContainEqual({ id: '1', role: 'user', content: 'hello' });
+    });
+
+    it('hydrateFromSnapshot: falls back gracefully when workspace is missing or unknown', () => {
+        slice.hydrateFromSnapshot('snapshot-2', { nodes: [], edges: [] });
+        expect(mockState.currentProjectWorkspaceId).toBeNull();
+        expect(mockState.currentProjectWorkspaceName).toBeNull();
+        expect(mockState.isDirty).toBe(true);
+    });
 });

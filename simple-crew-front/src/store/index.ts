@@ -5,6 +5,7 @@ import { createProjectSlice } from './slices/project.slice';
 import { createConfigSlice } from './slices/config.slice';
 import { createWorkspaceSlice } from './slices/workspace.slice';
 import { createAISlice } from './slices/ai.slice';
+import { createExecutionSlice } from './slices/executions.slice';
 import type { AppState } from '../types/store.types';
 
 export const useStore = create<AppState>()((...a) => ({
@@ -14,4 +15,5 @@ export const useStore = create<AppState>()((...a) => ({
   ...createConfigSlice(...a),
   ...createWorkspaceSlice(...a),
   ...createAISlice(...a),
+  ...createExecutionSlice(...a),
 }));

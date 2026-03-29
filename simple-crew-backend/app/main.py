@@ -1,4 +1,5 @@
 import json
+import uuid
 import io
 import os
 import shutil
@@ -13,7 +14,7 @@ from fastapi.responses import FileResponse, StreamingResponse
 from sqlmodel import Session, select
 from .crew_builder import run_crew_stream
 from .database import init_db, get_session
-from .models import CrewProject, User, Credential, LLMModel, MCPServer, AppSettings, CustomTool, Workspace
+from .models import CrewProject, User, Credential, LLMModel, MCPServer, AppSettings, CustomTool, Workspace, Execution, ExecutionStatus
 from .schemas import (
     GraphData, ProjectCreate, ProjectRead, ProjectUpdate, 
     CredentialCreate, CredentialRead, CredentialUpdate,
@@ -24,7 +25,8 @@ from .schemas import (
     AppSettingsRead, AppSettingsUpdate,
     AiSuggestionRequest, AiSuggestionResponse,
     AiBulkSuggestionRequest, AiBulkSuggestionResponse,
-    AiTaskBulkSuggestionRequest, AiTaskBulkSuggestionResponse
+    AiTaskBulkSuggestionRequest, AiTaskBulkSuggestionResponse,
+    ExecutionRead
 )
 from .exporter import generate_python_project
 from .ai_service import generate_suggestion, generate_bulk_suggestion, generate_task_bulk_suggestion
@@ -129,10 +131,36 @@ async def execute_crew(
 
         # Resolve Custom Tools do Banco de Dados
         graph_data = resolve_custom_tools(graph_data, session)
+        
+        # Extrai inputs do payload enviado root
+        execution_inputs = {}
+        if graph_data.inputs:
+            execution_inputs.update(graph_data.inputs)
+            
+        # Extrai inputs injetados dinamicamente no nó da Crew pelo Chat
+        crew_node = next((n for n in graph_data.nodes if n.type == 'crew'), None)
+        if crew_node and hasattr(crew_node, 'data') and getattr(crew_node.data, 'inputs', None):
+            crew_inputs = getattr(crew_node.data, 'inputs', {})
+            # Remove chaves placeholder se necessário (Opcional para DB)
+            crew_inputs = {k: v for k, v in crew_inputs.items() if not k.startswith('input_')}
+            execution_inputs.update(crew_inputs)
+            
+        # Se mesmo após tudo estiver vazio, para chat o histórico ficaria vazio, mas tentamos nosso melhor
+        # 3. Create Execution record
+        execution = Execution(
+            project_id=uuid.UUID(project_id) if project_id else uuid.UUID(ROOT_USER_ID),
+            status=ExecutionStatus.RUNNING,
+            trigger_type="chat",
+            input_data=execution_inputs,
+            graph_snapshot=graph_data.model_dump()
+        )
+        session.add(execution)
+        session.commit()
+        session.refresh(execution)
 
         # Despacha as dependências e payload JSON para a magia do nosso Parser local CrewAI Stream
         return StreamingResponse(
-            run_crew_stream(graph_data, workspace_id=active_workspace_id), 
+            run_crew_stream(graph_data, workspace_id=active_workspace_id, inputs=execution_inputs, execution_id=execution.id), 
             media_type="text/event-stream"
         )
     except ValueError as ve:
@@ -917,11 +945,23 @@ async def handle_webhook(
     graph_data = GraphData(**target_project.canvas_data)
     workspace_id = target_project.workspace_id
     
+    # 5. Create Execution record
+    execution = Execution(
+        project_id=target_project.id,
+        status=ExecutionStatus.RUNNING,
+        trigger_type="webhook",
+        input_data=mapped_inputs,
+        graph_snapshot=target_project.canvas_data
+    )
+    session.add(execution)
+    session.commit()
+    session.refresh(execution)
+
     if data.get("waitForResult") is True:
         # Síncrono: Consome o stream e retorna o resultado final
         final_result = ""
         try:
-            stream = run_crew_stream(graph_data, workspace_id=workspace_id, inputs=mapped_inputs)
+            stream = run_crew_stream(graph_data, workspace_id=workspace_id, inputs=mapped_inputs, execution_id=execution.id)
             for event_str in stream:
                 if not event_str.strip():
                     continue
@@ -943,7 +983,7 @@ async def handle_webhook(
         # Assíncrono: Dispara em background
         def run_in_background():
             # Precisamos consumir o generator para ele rodar
-            for _ in run_crew_stream(graph_data, workspace_id=workspace_id, inputs=mapped_inputs):
+            for _ in run_crew_stream(graph_data, workspace_id=workspace_id, inputs=mapped_inputs, execution_id=execution.id):
                 pass
         
         background_tasks.add_task(run_in_background)
@@ -1068,6 +1108,19 @@ async def delete_workspace_file(
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+
+# --- Execution History Endpoints ---
+@app.get("/api/v1/projects/{project_id}/executions", response_model=List[ExecutionRead])
+async def list_project_executions(project_id: str, session: Session = Depends(get_session)):
+    statement = select(Execution).where(Execution.project_id == uuid.UUID(project_id)).order_by(Execution.timestamp.desc())
+    return session.exec(statement).all()
+
+@app.get("/api/v1/executions/{execution_id}", response_model=ExecutionRead)
+async def get_execution(execution_id: str, session: Session = Depends(get_session)):
+    execution = session.get(Execution, uuid.UUID(execution_id))
+    if not execution:
+        raise HTTPException(status_code=404, detail="Execução não encontrada")
+    return execution
 
 # --- Settings Endpoints ---
 @app.get("/api/v1/settings", response_model=AppSettingsRead)

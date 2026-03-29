@@ -25,6 +25,7 @@ import { SettingsDrawer } from '../components/SettingsDrawer';
 import { UsabilityCardsDrawer } from '../components/UsabilityCardsDrawer';
 import { ResizableChatPanel } from '../components/ResizableChatPanel';
 import AnimationView from './AnimationView';
+import ExecutionsTab from '../components/ExecutionsTab';
 
 const nodeTypes = {
   agent: AgentNode,
@@ -43,7 +44,7 @@ const getId = () => `dndnode_${crypto.randomUUID()}`;
 // 1. O Canvas Isolado (Re-renderiza 60x/seg no drag de forma ultra-leve)
 const FlowCanvas = () => {
   const { screenToFlowPosition } = useReactFlow();
-  const { nodes, edges, onNodesChange, onEdgesChange, onConnect, addNode, validateGraph, theme } = useStore(
+  const { nodes, edges, onNodesChange, onEdgesChange, onConnect, addNode, validateGraph, theme, isDirty } = useStore(
     useShallow((state) => ({
       nodes: state.nodes,
       edges: state.edges,
@@ -52,9 +53,21 @@ const FlowCanvas = () => {
       onConnect: state.onConnect,
       addNode: state.addNode,
       validateGraph: state.validateGraph,
-      theme: state.theme
+      theme: state.theme,
+      isDirty: state.isDirty
     }))
   );
+
+  const { fitView } = useReactFlow();
+
+  // Force fitView on hydrate to ensure the graph comes into view
+  useEffect(() => {
+    if (isDirty && nodes.length > 0) {
+      setTimeout(() => {
+        fitView({ duration: 800, padding: 0.3 });
+      }, 100);
+    }
+  }, [isDirty, nodes.length, fitView]);
 
   const onDragOver = useCallback((event: React.DragEvent) => {
     event.preventDefault();
@@ -155,6 +168,16 @@ function FlowBuilder() {
     if (id && id !== 'new') {
       if (lastLoadedId.current !== id) {
         lastLoadedId.current = id;
+        
+        // GUARD CLAUSE FOR HYDRATION
+        // Se isDirty for true e nós já estiverem preenchidos (Snapshot carregou),
+        // NÃO busque do backend e deixe o React Flow usar o state atual.
+        const storeState = useStore.getState();
+        if (storeState.isDirty && storeState.nodes.length > 0 && storeState.currentProjectId === id) {
+          console.log(`[Builder] Skipping initial fetch. Hydrating with ${storeState.nodes.length} nodes from Snapshot.`);
+          return;
+        }
+
         loadProject(id);
       }
     } else {
@@ -169,7 +192,7 @@ function FlowBuilder() {
     };
   }, [resetUIState]);
 
-  const [activeView, setActiveView] = React.useState<'editor' | 'animation'>('editor');
+  const [activeView, setActiveView] = React.useState<'editor' | 'animation' | 'executions'>('editor');
   const [isEditingTitle, setIsEditingTitle] = React.useState(false);
   const [editedTitle, setEditedTitle] = React.useState('');
   
@@ -258,6 +281,17 @@ function FlowBuilder() {
           >
             Animation
           </button>
+          <button
+            onClick={() => setActiveView('executions')}
+            data-testid="tab-view-executions"
+            className={`px-6 py-1.5 text-xs font-bold rounded-lg transition-all duration-300 flex items-center gap-2 ${
+              activeView === 'executions'
+                ? 'bg-gradient-to-r from-violet-600 to-indigo-600 text-white shadow-md scale-105 px-8'
+                : 'text-brand-muted hover:text-indigo-500 hover:bg-brand-card/50'
+            }`}
+          >
+            Executions
+          </button>
         </div>
 
         <div className="flex items-center gap-3">
@@ -317,6 +351,10 @@ function FlowBuilder() {
         {/* Animation View - Live Simulation */}
         {activeView === 'animation' && (
           <AnimationView />
+        )}
+        
+        {activeView === 'executions' && (
+          <ExecutionsTab onReRunSuccess={() => setActiveView('editor')} />
         )}
 
         <UsabilityCardsDrawer />

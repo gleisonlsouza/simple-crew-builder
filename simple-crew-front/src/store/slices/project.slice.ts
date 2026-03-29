@@ -16,7 +16,38 @@ export const createProjectSlice: StateCreator<AppState, [], [], ProjectSlice> = 
   currentProjectWorkspaceName: null,
   isSaving: false,
   isExecuting: false,
+  isDirty: false,
   abortController: null,
+
+  setDirty: (dirty) => set({ isDirty: dirty }),
+
+  hydrateFromSnapshot: (projectId, snapshot) => {
+    // Determine the active workspace locally if it exists
+    const localWorkspace = snapshot.workspaceId 
+      ? get().workspaces?.find(w => w.id === snapshot.workspaceId) 
+      : null;
+    const activeWorkspaceId = localWorkspace ? localWorkspace.id : null;
+
+    console.log("Hydrating with:", snapshot.nodes?.length || 0, "nodes");
+
+    const migratedNodes = migrateNodes(snapshot.nodes || []);
+    
+    set({
+      currentProjectId: projectId,
+      currentProjectWorkspaceId: activeWorkspaceId,
+      currentProjectWorkspaceName: localWorkspace?.name || null,
+      activeWorkspaceId: activeWorkspaceId,
+      nodes: migratedNodes,
+      edges: migrateEdges(snapshot.edges || []),
+      isDirty: true,
+      messages: INITIAL_CHAT_MESSAGES, // Clear chat
+      executionResult: null,
+      nodeStatuses: {},
+      nodeErrors: {},
+      nodeWarnings: {},
+      activeNodeId: null
+    });
+  },
 
   fetchProjects: async () => {
     try {
@@ -74,7 +105,8 @@ export const createProjectSlice: StateCreator<AppState, [], [], ProjectSlice> = 
         currentProjectId: saved.id,
         currentProjectName: saved.name,
         currentProjectDescription: saved.description,
-        currentProjectWorkspaceId: saved.workspace_id || null
+        currentProjectWorkspaceId: saved.workspace_id || null,
+        isDirty: false // Reset dirty flag after successful save
       });
       await state.fetchProjects();
       toast.success(isUpdate ? "Project updated!" : "Project created successfully!");

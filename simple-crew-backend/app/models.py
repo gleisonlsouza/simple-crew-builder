@@ -9,6 +9,11 @@ class ModelType(str, Enum):
     GENERATIVE = "GENERATIVE"
     EMBEDDING = "EMBEDDING"
 
+class ExecutionStatus(str, Enum):
+    RUNNING = "running"
+    SUCCESS = "success"
+    ERROR = "error"
+
 class User(SQLModel, table=True):
     id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
     name: str
@@ -65,6 +70,8 @@ class CrewProject(SQLModel, table=True):
     user: User = Relationship(back_populates="crews")
 
     workspace_id: Optional[uuid.UUID] = Field(default=None, foreign_key="workspace.id", sa_column_kwargs={"nullable": True})
+
+    executions: list["Execution"] = Relationship(back_populates="project", sa_relationship_kwargs={"cascade": "all, delete-orphan"})
 
     # Timestamps
     created_at: datetime = Field(
@@ -186,3 +193,20 @@ class AppSettings(SQLModel, table=True):
     active_workspace_id: Optional[uuid.UUID] = Field(default=None, foreign_key="workspace.id", sa_column_kwargs={"nullable": True})
     
     user: User = Relationship(back_populates="settings")
+
+class Execution(SQLModel, table=True):
+    id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
+    project_id: uuid.UUID = Field(foreign_key="crewproject.id", index=True)
+    status: ExecutionStatus = Field(default=ExecutionStatus.RUNNING)
+    trigger_type: str  # "chat" or "webhook"
+    input_data: Dict[str, Any] = Field(default_factory=dict, sa_column=Column(JSON))
+    output_data: Optional[Dict[str, Any]] = Field(default=None, sa_column=Column(JSON))
+    graph_snapshot: Dict[str, Any] = Field(default_factory=dict, sa_column=Column(JSON))
+    duration: Optional[float] = None
+    timestamp: datetime = Field(
+        sa_column=Column(DateTime(timezone=True), server_default=func.now())
+    )
+    
+    project: "CrewProject" = Relationship(back_populates="executions")
+
+# End of models
