@@ -1,5 +1,5 @@
 import React, { memo, useState } from 'react';
-import { Globe, Lock, Settings, Copy, RefreshCw, Plus, X, ToggleLeft, ToggleRight, Sparkles, Zap } from 'lucide-react';
+import { Globe, Lock, Settings, Copy, RefreshCw, Plus, X, Sparkles, Zap } from 'lucide-react';
 import { HighlightedTextField } from '../HighlightedTextField';
 import type { WebhookNodeData } from '../../types/nodes.types';
 import toast from 'react-hot-toast';
@@ -30,10 +30,10 @@ export const WebhookForm: React.FC<WebhookFormProps> = memo(({
     toast.success('URL copied to clipboard!');
   };
 
-  const handleRotateSecret = () => {
-    const newSecret = crypto.randomUUID().replace(/-/g, '');
-    updateNodeData(nodeId, { secret: newSecret });
-    toast.success('Secret rotated! Remember to save the project.');
+  const handleGenerateToken = () => {
+    const newToken = crypto.randomUUID().replace(/-/g, '');
+    updateNodeData(nodeId, { token: newToken });
+    toast.success('Token generated! Remember to save the project.');
   };
 
   const sluggify = (text: string) => {
@@ -285,44 +285,48 @@ export const WebhookForm: React.FC<WebhookFormProps> = memo(({
       {/* -- Security Tab -- */}
       {activeTab === 'security' && (
         <div className="flex flex-col gap-5 animate-in fade-in duration-200">
-          <div className="flex items-center justify-between p-4 bg-brand-bg/20 rounded-xl border border-brand-border/30">
-            <div className="flex flex-col gap-1">
-               <span className="text-xs font-bold text-brand-text uppercase">HMAC Protection</span>
-               <span className="text-[10px] text-brand-muted">Secure your endpoint with signature verification</span>
+          <div className="flex flex-col gap-3">
+            <div className="flex items-center justify-between">
+              <div className="flex flex-col gap-1">
+                <label className="text-xs font-bold text-brand-text uppercase">Bearer Token</label>
+                <span className="text-[10px] text-brand-muted">Protect your endpoint with token authentication</span>
+              </div>
+              <button
+                onClick={handleGenerateToken}
+                className="flex items-center gap-1.5 text-[10px] font-bold text-orange-500 hover:text-orange-600 transition-colors"
+              >
+                <RefreshCw className="w-3 h-3" />
+                {data.token ? 'Rotate Token' : 'Generate Token'}
+              </button>
             </div>
-            <button 
-               onClick={() => updateNodeData(nodeId, { enableHmac: !data.enableHmac })}
-               className="p-1"
-            >
-              {data.enableHmac ? <ToggleRight className="w-8 h-8 text-orange-500" /> : <ToggleLeft className="w-8 h-8 text-brand-muted" />}
-            </button>
-          </div>
 
-          {data.enableHmac && (
-            <div className="flex flex-col gap-3 animate-in slide-in-from-top-2 duration-300">
-              <div className="flex items-center justify-between">
-                <label className="text-[10px] font-bold text-brand-muted uppercase tracking-wider">HMAC Secret</label>
-                <button 
-                  onClick={handleRotateSecret}
-                  className="flex items-center gap-1.5 text-[10px] font-bold text-orange-500 hover:text-orange-600 transition-colors"
-                >
-                   <RefreshCw className="w-3 h-3" />
-                   Rotate Secret
-                </button>
+            {data.token ? (
+              <div className="flex flex-col gap-2">
+                <div className="relative group">
+                  <input
+                    type="password"
+                    readOnly
+                    value={data.token}
+                    className="w-full bg-brand-bg border border-brand-border rounded-lg pl-3 pr-10 py-2 text-xs text-brand-text font-mono"
+                  />
+                  <button
+                    onClick={() => { copyToClipboard(data.token!); }}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 hover:bg-orange-500/10 text-orange-500 rounded-md transition-colors"
+                    title="Copy token"
+                  >
+                    <Copy className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+                <p className="text-[9px] text-brand-muted leading-relaxed">
+                  Send the token in the <code className="bg-brand-bg px-1 rounded text-orange-500">Authorization: Bearer &lt;token&gt;</code> header.
+                </p>
               </div>
-              <div className="relative group">
-                <input
-                  type="password"
-                  readOnly
-                  value={data.secret || 'NOT_GENERATED'}
-                  className="w-full bg-brand-bg border border-brand-border rounded-lg px-3 py-2 text-xs text-brand-text font-mono"
-                />
+            ) : (
+              <div className="text-[10px] text-brand-muted italic bg-brand-bg/30 p-3 rounded-lg border border-dashed border-brand-border text-center">
+                No token configured. Endpoint is publicly accessible.
               </div>
-              <p className="text-[9px] text-brand-muted leading-relaxed">
-                The signature is sent in the <code className="bg-brand-bg px-1 rounded text-orange-500">X-Hub-Signature-256</code> header.
-              </p>
-            </div>
-          )}
+            )}
+          </div>
         </div>
       )}
 

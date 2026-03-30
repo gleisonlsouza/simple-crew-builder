@@ -1019,8 +1019,12 @@ def run_crew_stream(graph_data: GraphData, workspace_id: Optional[Any] = None, i
                 log_debug(f"Kicking off Crew with inputs: {execution_inputs}")
                 
                 result = crew.kickoff(inputs=execution_inputs)
-                final_output = str(result)
-                
+                final_output_str = str(result)
+                try:
+                    final_output = json.loads(final_output_str)
+                except (json.JSONDecodeError, ValueError):
+                    final_output = final_output_str
+
                 # Update Execution in database if id provided
                 if execution_id:
                     try:
