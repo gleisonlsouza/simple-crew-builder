@@ -90,8 +90,8 @@ export interface WebhookNodeData extends Record<string, unknown> {
   url: string;
   method?: 'POST' | 'GET';
   fieldMappings?: Record<string, string>;
-  enableHmac?: boolean;
-  secret?: string;
+  token?: string;
+  headers?: Record<string, string>;
   isActive?: boolean;
   waitForResult?: boolean;
   isCollapsed?: boolean;

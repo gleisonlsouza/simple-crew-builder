@@ -1,6 +1,6 @@
 import { render, screen, fireEvent } from '@testing-library/react';
 import { WebhookForm } from '../WebhookForm';
-import { vi, describe, it, expect, beforeEach } from 'vitest';
+import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest';
 import toast from 'react-hot-toast';
 
 // Mock lucide-react
@@ -12,8 +12,6 @@ vi.mock('lucide-react', () => ({
   RefreshCw: () => <div data-testid="icon-refresh" />,
   Plus: () => <div data-testid="icon-plus" />,
   X: () => <div data-testid="icon-x" />,
-  ToggleLeft: () => <div data-testid="icon-toggle-left" />,
-  ToggleRight: () => <div data-testid="icon-toggle-right" />,
   Sparkles: () => <div data-testid="icon-sparkles" />,
   Zap: () => <div data-testid="icon-zap" />,
 }));
@@ -51,14 +49,16 @@ if (typeof crypto === 'undefined') {
   (crypto as any).randomUUID = () => 'test-uuid';
 }
 
-// Mock backend URL for tests
-(window as any).VITE_API_URL = 'https://api.test.com';
-
 describe('WebhookForm', () => {
   let mockProps: any;
 
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.stubEnv('VITE_API_URL', 'https://api.test.com');
     
     mockProps = {
       data: {
@@ -70,8 +70,7 @@ describe('WebhookForm', () => {
         waitForResult: false,
         headers: { 'X-Auth': 'secret' },
         fieldMappings: { 'input1': 'data.field' },
-        enableHmac: false,
-        secret: 'hmac-secret'
+        token: undefined
       },
       nodeId: 'node-webhook-1',
       updateNodeData: vi.fn(),
@@ -164,36 +163,37 @@ describe('WebhookForm', () => {
     expect(mockProps.updateNodeData).toHaveBeenCalledWith('node-webhook-1', { headers: {} });
   });
 
-  it('handles Security tab and HMAC secret rotation', async () => {
+  it('handles Security tab and Bearer Token generation', async () => {
     const { rerender } = render(<WebhookForm {...mockProps} />);
-    
-    fireEvent.click(await screen.findByText('Security'));
-    
-    // Enable HMAC
-    const hmacToggle = await screen.findByTestId('icon-toggle-left');
-    fireEvent.click(hmacToggle);
-    expect(mockProps.updateNodeData).toHaveBeenCalledWith('node-webhook-1', { enableHmac: true });
 
-    // Rerender with enableHmac = true
+    fireEvent.click(await screen.findByText('Security'));
+
+    // No token configured — shows "Generate Token" button
+    const generateBtn = await screen.findByText('Generate Token');
+    fireEvent.click(generateBtn);
+    expect(mockProps.updateNodeData).toHaveBeenCalledWith('node-webhook-1', expect.objectContaining({
+      token: expect.any(String)
+    }));
+    expect(toast.success).toHaveBeenCalledWith('Token generated! Remember to save the project.');
+
+    // Rerender with token set — button should now say "Rotate Token"
     const updatedProps = {
       ...mockProps,
       data: {
         ...mockProps.data,
-        enableHmac: true
+        token: 'abc123'
       }
     };
     rerender(<WebhookForm {...updatedProps} />);
-    
-    // Click Security tab again
+
     fireEvent.click(await screen.findByText('Security'));
-    
-    // Rotate Secret
-    const rotateBtn = await screen.findByText('Rotate Secret');
+
+    const rotateBtn = await screen.findByText('Rotate Token');
     fireEvent.click(rotateBtn);
     expect(updatedProps.updateNodeData).toHaveBeenCalledWith('node-webhook-1', expect.objectContaining({
-      secret: expect.any(String)
+      token: expect.any(String)
     }));
-    expect(toast.success).toHaveBeenCalledWith('Secret rotated! Remember to save the project.');
+    expect(toast.success).toHaveBeenCalledWith('Token generated! Remember to save the project.');
   });
 
   it('handles field mappings (add/update/remove)', () => {

@@ -121,7 +121,7 @@ class LLMModel(SQLModel, table=True):
     model_type: ModelType = Field(default=ModelType.GENERATIVE)
     
     # Relacionamentos
-    credential_id: uuid.UUID = Field(foreign_key="credential.id")
+    credential_id: Optional[uuid.UUID] = Field(default=None, foreign_key="credential.id", nullable=True)
     user_id: uuid.UUID = Field(foreign_key="user.id")
     
     user: User = Relationship(back_populates="models")

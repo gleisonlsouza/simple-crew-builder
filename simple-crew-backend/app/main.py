@@ -443,6 +443,9 @@ async def delete_credential(credential_id: str, session: Session = Depends(get_s
     credential = session.get(Credential, credential_id)
     if not credential:
         raise HTTPException(status_code=404, detail="Credencial não encontrada")
+    models_using = session.exec(select(LLMModel).where(LLMModel.credential_id == credential.id)).all()
+    for m in models_using:
+        m.credential_id = None
     session.delete(credential)
     session.commit()
     return {"message": "Credencial removida com sucesso"}
@@ -505,6 +508,14 @@ async def delete_model(model_id: str, session: Session = Depends(get_session)):
     model = session.get(LLMModel, model_id)
     if not model:
         raise HTTPException(status_code=404, detail="Modelo não encontrado")
+    settings = session.exec(select(AppSettings).where(
+        (AppSettings.system_ai_model_id == model.id) | (AppSettings.embedding_model_id == model.id)
+    )).all()
+    for s in settings:
+        if s.system_ai_model_id == model.id:
+            s.system_ai_model_id = None
+        if s.embedding_model_id == model.id:
+            s.embedding_model_id = None
     session.delete(model)
     session.commit()
     return {"message": "Modelo removido com sucesso"}
@@ -813,20 +824,6 @@ async def get_file_content(ws_id: str, path: str, session: Session = Depends(get
         raise HTTPException(status_code=500, detail=str(e))
 
 
-import hmac
-import hashlib
-
-def verify_hmac(body: bytes, secret: str, signature: str) -> bool:
-    """Verifica a assinatura HMAC-SHA256 do payload."""
-    if not signature:
-        return False
-    # Remove prefixo 'sha256=' se houver (comum em GitHub/outros)
-    if signature.startswith('sha256='):
-        signature = signature[7:]
-    
-    expected = hmac.new(secret.encode(), body, hashlib.sha256).hexdigest()
-    return hmac.compare_digest(expected, signature)
-
 import re
 
 def resolve_path(data: Any, path: str) -> Optional[Any]:
@@ -871,10 +868,10 @@ def map_payload_to_inputs(payload: Dict[str, Any], mappings: Dict[str, str]) -> 
 
 @app.api_route("/webhook/{slug}", methods=["GET", "POST", "PUT", "PATCH", "DELETE"])
 async def handle_webhook(
-    slug: str, 
-    request: Request, 
+    slug: str,
+    request: Request,
     background_tasks: BackgroundTasks,
-    x_hub_signature: Optional[str] = Header(None, alias="X-Hub-Signature-256"),
+    authorization: Optional[str] = Header(None),
     session: Session = Depends(get_session)
 ):
     """
@@ -914,15 +911,18 @@ async def handle_webhook(
     if data.get("method") and data.get("method") != request.method:
         raise HTTPException(status_code=405, detail=f"Método {request.method} não permitido. Use {data.get('method')}")
 
-    # HMAC Verification
-    secret = data.get("secret")
-    body = await request.body()
-    if secret:
-        if not verify_hmac(body, secret, x_hub_signature):
-            raise HTTPException(status_code=401, detail="Assinatura HMAC inválida.")
+    # Token Verification
+    token = data.get("token")
+    if token:
+        bearer_token = None
+        if authorization and authorization.lower().startswith("bearer "):
+            bearer_token = authorization[7:]
+        if bearer_token != token:
+            raise HTTPException(status_code=401, detail="Token inválido ou ausente.")
 
     # 3. Preparação de Inputs
     payload = {}
+    body = await request.body()
     if body:
         try:
             payload = await request.json()
