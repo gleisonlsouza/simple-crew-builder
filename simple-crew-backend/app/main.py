@@ -443,6 +443,9 @@ async def delete_credential(credential_id: str, session: Session = Depends(get_s
     credential = session.get(Credential, credential_id)
     if not credential:
         raise HTTPException(status_code=404, detail="Credencial não encontrada")
+    models_using = session.exec(select(LLMModel).where(LLMModel.credential_id == credential.id)).all()
+    for m in models_using:
+        m.credential_id = None
     session.delete(credential)
     session.commit()
     return {"message": "Credencial removida com sucesso"}
@@ -505,6 +508,14 @@ async def delete_model(model_id: str, session: Session = Depends(get_session)):
     model = session.get(LLMModel, model_id)
     if not model:
         raise HTTPException(status_code=404, detail="Modelo não encontrado")
+    settings = session.exec(select(AppSettings).where(
+        (AppSettings.system_ai_model_id == model.id) | (AppSettings.embedding_model_id == model.id)
+    )).all()
+    for s in settings:
+        if s.system_ai_model_id == model.id:
+            s.system_ai_model_id = None
+        if s.embedding_model_id == model.id:
+            s.embedding_model_id = None
     session.delete(model)
     session.commit()
     return {"message": "Modelo removido com sucesso"}
