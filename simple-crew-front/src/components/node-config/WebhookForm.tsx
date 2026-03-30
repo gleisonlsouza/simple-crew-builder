@@ -254,20 +254,20 @@ export const WebhookForm: React.FC<WebhookFormProps> = memo(({
               </div>
               <div className="flex flex-col gap-2">
                 {Object.entries((data.headers || {}) as Record<string, string>).map(([key, value], idx) => (
-                  <div key={idx} className="flex items-center gap-2">
-                    <input 
-                      className="flex-1 bg-brand-bg border border-brand-border rounded-lg px-2 py-1.5 text-xs text-brand-text outline-none focus:ring-1 focus:ring-orange-500"
+                  <div key={idx} className="flex items-center gap-2 min-w-0">
+                    <input
+                      className="flex-1 min-w-0 bg-brand-bg border border-brand-border rounded-lg px-2 py-1.5 text-xs text-brand-text outline-none focus:ring-1 focus:ring-orange-500"
                       value={key}
                       onChange={(e) => updateHeader(key, e.target.value, value)}
                       placeholder="Header Name"
                     />
-                    <input 
-                      className="flex-1 bg-brand-bg border border-brand-border rounded-lg px-2 py-1.5 text-xs text-brand-text outline-none focus:ring-1 focus:ring-orange-500"
+                    <input
+                      className="flex-1 min-w-0 bg-brand-bg border border-brand-border rounded-lg px-2 py-1.5 text-xs text-brand-text outline-none focus:ring-1 focus:ring-orange-500"
                       value={value}
                       onChange={(e) => updateHeader(key, key, e.target.value)}
                       placeholder="Expected Value"
                     />
-                    <button onClick={() => removeHeader(key)} className="p-1 text-brand-muted hover:text-rose-500">
+                    <button onClick={() => removeHeader(key)} className="flex-shrink-0 p-1 text-brand-muted hover:text-rose-500">
                       <X className="w-3.5 h-3.5" />
                     </button>
                   </div>
@@ -351,21 +351,21 @@ export const WebhookForm: React.FC<WebhookFormProps> = memo(({
 
               <div className="flex flex-col gap-2">
                  {Object.entries((data.fieldMappings || {}) as Record<string, string>).map(([key, value], idx) => (
-                    <div key={idx} className="flex items-center gap-2">
-                       <input 
-                          className="flex-1 bg-brand-bg border border-brand-border rounded-lg px-2 py-1.5 text-xs text-brand-text outline-none focus:ring-1 focus:ring-orange-500 font-mono"
+                    <div key={idx} className="flex items-center gap-2 min-w-0">
+                       <input
+                          className="flex-1 min-w-0 bg-brand-bg border border-brand-border rounded-lg px-2 py-1.5 text-xs text-brand-text outline-none focus:ring-1 focus:ring-orange-500 font-mono"
                           value={key}
                           onChange={(e) => updateMapping(key, e.target.value, value)}
                           placeholder="Crew Input (e.g. city)"
                        />
-                       <div className="text-brand-muted text-xs">→</div>
-                       <input 
-                          className="flex-1 bg-brand-bg border border-brand-border rounded-lg px-2 py-1.5 text-xs text-brand-text outline-none focus:ring-1 focus:ring-orange-500 font-mono"
+                       <div className="flex-shrink-0 text-brand-muted text-xs">→</div>
+                       <input
+                          className="flex-1 min-w-0 bg-brand-bg border border-brand-border rounded-lg px-2 py-1.5 text-xs text-brand-text outline-none focus:ring-1 focus:ring-orange-500 font-mono"
                           value={value}
                           onChange={(e) => updateMapping(key, key, e.target.value)}
                           placeholder="JSON Path (e.g. data.geo.city)"
                        />
-                       <button onClick={() => removeMapping(key)} className="p-1 text-brand-muted hover:text-rose-500">
+                       <button onClick={() => removeMapping(key)} className="flex-shrink-0 p-1 text-brand-muted hover:text-rose-500">
                           <X className="w-3.5 h-3.5" />
                        </button>
                     </div>
