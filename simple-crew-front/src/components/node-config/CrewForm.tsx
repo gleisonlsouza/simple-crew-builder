@@ -130,35 +130,35 @@ export const CrewForm: React.FC<CrewFormProps> = memo(({
               <p className="text-[10px] text-brand-muted px-1 italic">Use {'{variable}'} syntax in agent goals or task descriptions.</p>
               
               {Object.entries(data.inputs || {}).map(([key, value], idx) => (
-                <div key={idx} className="flex gap-2 items-center">
-                  <input 
-                    className="bg-brand-bg/50 border border-brand-border rounded-lg px-2.5 py-1.5 text-xs text-brand-text flex-1 focus:border-blue-500 outline-none transition-colors" 
-                    value={key.startsWith('input_') ? '' : key} 
+                <div key={idx} className="flex gap-2 items-center min-w-0">
+                  <input
+                    className="bg-brand-bg/50 border border-brand-border rounded-lg px-2.5 py-1.5 text-xs text-brand-text flex-1 min-w-0 focus:border-blue-500 outline-none transition-colors"
+                    value={key.startsWith('input_') ? '' : key}
                     placeholder="Key"
-                    onChange={(e) => { 
-                      const newInputs: Record<string, any> = { ...data.inputs }; 
-                      delete newInputs[key]; 
-                      newInputs[e.target.value || `input_${idx}`] = value; 
-                      updateNodeData(nodeId, { inputs: newInputs }); 
-                    }} 
+                    onChange={(e) => {
+                      const newInputs: Record<string, any> = { ...data.inputs };
+                      delete newInputs[key];
+                      newInputs[e.target.value || `input_${idx}`] = value;
+                      updateNodeData(nodeId, { inputs: newInputs });
+                    }}
                   />
-                  <input 
-                    className="bg-brand-bg/50 border border-brand-border rounded-lg px-2.5 py-1.5 text-xs text-secondary flex-1 focus:border-blue-500 outline-none transition-colors" 
-                    value={value as string} 
+                  <input
+                    className="bg-brand-bg/50 border border-brand-border rounded-lg px-2.5 py-1.5 text-xs text-secondary flex-1 min-w-0 focus:border-blue-500 outline-none transition-colors"
+                    value={value as string}
                     placeholder="Default Value"
-                    onChange={(e) => { 
-                      const newInputs: Record<string, any> = { ...data.inputs }; 
-                      newInputs[key] = e.target.value; 
-                      updateNodeData(nodeId, { inputs: newInputs }); 
-                    }} 
+                    onChange={(e) => {
+                      const newInputs: Record<string, any> = { ...data.inputs };
+                      newInputs[key] = e.target.value;
+                      updateNodeData(nodeId, { inputs: newInputs });
+                    }}
                   />
-                  <button 
-                    onClick={() => { 
-                      const newInputs: Record<string, any> = { ...data.inputs }; 
-                      delete newInputs[key]; 
-                      updateNodeData(nodeId, { inputs: newInputs }); 
-                    }} 
-                    className="p-1.5 text-brand-muted hover:text-rose-500 transition-colors"
+                  <button
+                    onClick={() => {
+                      const newInputs: Record<string, any> = { ...data.inputs };
+                      delete newInputs[key];
+                      updateNodeData(nodeId, { inputs: newInputs });
+                    }}
+                    className="flex-shrink-0 p-1.5 text-brand-muted hover:text-rose-500 transition-colors"
                   >
                     <Trash2 className="w-3.5 h-3.5" />
                   </button>
