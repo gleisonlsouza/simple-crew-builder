@@ -54,7 +54,7 @@ export interface CustomTool {
 export interface MCPServer {
   id: string;
   name: string;
-  transportType: 'stdio' | 'sse';
+  transportType: 'stdio' | 'sse' | 'streamable-http';
   // Stdio fields
   command?: string;
   args?: string[];

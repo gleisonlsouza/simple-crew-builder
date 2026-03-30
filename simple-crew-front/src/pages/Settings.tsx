@@ -831,15 +831,17 @@ const SettingsPage = () => {
                             <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full uppercase tracking-wider ${
                               server.transportType === 'sse' 
                                 ? 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600' 
+                                : server.transportType === 'streamable-http'
+                                ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-600'
                                 : 'bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600'
                             }`}>
-                              {server.transportType || 'stdio'}
+                              {server.transportType === 'streamable-http' ? 'HTTP' : (server.transportType || 'stdio')}
                             </span>
                           </div>
                           
                           <div className="flex items-center gap-3 mt-1.5 flex-wrap">
-                            {server.transportType === 'sse' ? (
-                              <span className="flex items-center gap-1.5 text-[10px] font-mono text-emerald-500 bg-brand-bg border border-brand-border px-2 py-0.5 rounded-md truncate max-w-[200px]">
+                            {(server.transportType === 'sse' || server.transportType === 'streamable-http') ? (
+                              <span className={`flex items-center gap-1.5 text-[10px] font-mono bg-brand-bg border border-brand-border px-2 py-0.5 rounded-md truncate max-w-[200px] ${server.transportType === 'sse' ? 'text-emerald-500' : 'text-blue-500'}`}>
                                 <Server className="w-3 h-3" />
                                 {server.url}
                               </span>
@@ -851,9 +853,9 @@ const SettingsPage = () => {
                               </span>
                             )}
                             
-                            {server.transportType === 'sse' ? (
+                            {(server.transportType === 'sse' || server.transportType === 'streamable-http') ? (
                               Object.keys(server.headers || {}).length > 0 && (
-                                <span className="flex items-center gap-1 text-[10px] text-emerald-500 bg-emerald-500/10 px-2 py-0.5 rounded-md font-bold">
+                                <span className={`flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-md font-bold ${server.transportType === 'sse' ? 'text-emerald-500 bg-emerald-500/10' : 'text-blue-500 bg-blue-500/10'}`}>
                                   {Object.keys(server.headers || {}).length} headers
                                 </span>
                               )
@@ -1271,10 +1273,10 @@ const SettingsPage = () => {
                 </div>
                 <div>
                   <label className="block text-xs font-bold text-brand-muted uppercase tracking-wider mb-2 text-indigo-500">Transport Type</label>
-                  <div className="grid grid-cols-2 gap-2">
+                  <div className="grid grid-cols-3 gap-2">
                     <button 
                       onClick={() => setNewMCP({ ...newMCP, transportType: 'stdio' })}
-                      className={`py-3 rounded-xl text-xs font-bold border transition-all ${
+                      className={`py-3 rounded-xl text-[10px] font-bold border transition-all ${
                         newMCP.transportType === 'stdio' 
                           ? 'bg-indigo-600 border-indigo-500 text-white shadow-lg shadow-indigo-600/20' 
                           : 'bg-brand-bg border-brand-border text-brand-muted hover:border-slate-300 dark:hover:border-slate-600'
@@ -1284,7 +1286,7 @@ const SettingsPage = () => {
                     </button>
                     <button 
                       onClick={() => setNewMCP({ ...newMCP, transportType: 'sse' })}
-                      className={`py-3 rounded-xl text-xs font-bold border transition-all ${
+                      className={`py-3 rounded-xl text-[10px] font-bold border transition-all ${
                         newMCP.transportType === 'sse' 
                           ? 'bg-emerald-600 border-emerald-500 text-white shadow-lg shadow-emerald-600/20' 
                           : 'bg-brand-bg border-brand-border text-brand-muted hover:border-slate-300 dark:hover:border-slate-600'
@@ -1292,17 +1294,27 @@ const SettingsPage = () => {
                     >
                       SSE (Remote)
                     </button>
+                    <button 
+                      onClick={() => setNewMCP({ ...newMCP, transportType: 'streamable-http' })}
+                      className={`py-3 rounded-xl text-[10px] font-bold border transition-all ${
+                        newMCP.transportType === 'streamable-http' 
+                          ? 'bg-blue-600 border-blue-500 text-white shadow-lg shadow-blue-600/20' 
+                          : 'bg-brand-bg border-brand-border text-brand-muted hover:border-slate-300 dark:hover:border-slate-600'
+                      }`}
+                    >
+                      HTTP (CrewAI)
+                    </button>
                   </div>
                 </div>
               </div>
 
-              {newMCP.transportType === 'sse' ? (
+              {(newMCP.transportType === 'sse' || newMCP.transportType === 'streamable-http') ? (
                 <div className="space-y-6 animate-in slide-in-from-top-4 duration-300">
                   <div>
                     <label className="block text-xs font-bold text-brand-muted uppercase tracking-wider mb-2">Server URL</label>
                     <input 
                       placeholder="e.g. http://localhost:8000/sse"
-                      className="w-full bg-brand-bg border border-brand-border rounded-xl px-4 py-3 text-brand-text outline-none focus:ring-2 focus:ring-emerald-600 transition-all font-mono text-sm"
+                      className={`w-full bg-brand-bg border border-brand-border rounded-xl px-4 py-3 text-brand-text outline-none focus:ring-2 transition-all font-mono text-sm ${newMCP.transportType === 'sse' ? 'focus:ring-emerald-600' : 'focus:ring-blue-600'}`}
                       value={newMCP.url || ''}
                       onChange={(e) => setNewMCP({...newMCP, url: e.target.value})}
                     />
@@ -1316,14 +1328,14 @@ const SettingsPage = () => {
                       <div className="grid grid-cols-2 gap-3">
                         <input 
                           placeholder="HEADER-NAME"
-                          className="bg-brand-bg border border-brand-border rounded-lg px-3 py-2 text-xs text-brand-text outline-none focus:ring-1 focus:ring-emerald-600"
+                          className={`bg-brand-bg border border-brand-border rounded-lg px-3 py-2 text-xs text-brand-text outline-none focus:ring-1 ${newMCP.transportType === 'sse' ? 'focus:ring-emerald-600' : 'focus:ring-blue-600'}`}
                           value={newEnvVar.key}
                           onChange={(e) => setNewEnvVar({ ...newEnvVar, key: e.target.value.toUpperCase() })}
                         />
                         <div className="flex gap-2">
                           <input 
                             placeholder="Value"
-                            className="flex-1 bg-brand-bg border border-brand-border rounded-lg px-3 py-2 text-xs text-brand-text outline-none focus:ring-1 focus:ring-emerald-600"
+                            className={`flex-1 bg-brand-bg border border-brand-border rounded-lg px-3 py-2 text-xs text-brand-text outline-none focus:ring-1 ${newMCP.transportType === 'sse' ? 'focus:ring-emerald-600' : 'focus:ring-blue-600'}`}
                             value={newEnvVar.value}
                             onChange={(e) => setNewEnvVar({ ...newEnvVar, value: e.target.value })}
                           />
@@ -1337,7 +1349,7 @@ const SettingsPage = () => {
                                 setNewEnvVar({ key: '', value: '' });
                               }
                             }}
-                            className="bg-emerald-600 p-2 rounded-lg text-white hover:bg-emerald-700 transition-colors"
+                            className={`p-2 rounded-lg text-white transition-colors ${newMCP.transportType === 'sse' ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-blue-600 hover:bg-blue-700'}`}
                           >
                             <PlusCircle className="w-4 h-4" />
                           </button>
@@ -1347,7 +1359,7 @@ const SettingsPage = () => {
                       <div className="flex flex-wrap gap-2 mt-4">
                         {Object.entries(newMCP.headers || {}).map(([key, value]) => (
                           <div key={key} className="flex items-center gap-2 bg-brand-card border border-brand-border rounded-lg px-2 py-1.5 animate-in zoom-in-95 duration-200">
-                            <span className="text-[10px] font-bold text-emerald-500">{key}</span>
+                            <span className={`text-[10px] font-bold ${newMCP.transportType === 'sse' ? 'text-emerald-500' : 'text-blue-500'}`}>{key}</span>
                             <span className="text-brand-muted opacity-30">|</span>
                             <span className="text-[10px] text-brand-text truncate max-w-[100px]">{value}</span>
                             <button 
