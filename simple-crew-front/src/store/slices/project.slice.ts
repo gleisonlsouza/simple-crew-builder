@@ -317,7 +317,12 @@ export const createProjectSlice: StateCreator<AppState, [], [], ProjectSlice> = 
       edges: state.edges,
       globalTools: state.globalTools.filter(gt => usedGlobalToolIds.has(gt.id)),
       customTools: state.customTools.filter(ct => usedCustomToolIds.has(ct.id)),
-      mcpServers: state.mcpServers.filter(ms => usedMcpServerIds.has(ms.id)),
+      // Strip sensitive secrets: export only key names, not values
+      mcpServers: state.mcpServers.filter(ms => usedMcpServerIds.has(ms.id)).map(ms => ({
+        ...ms,
+        headers: Object.fromEntries(Object.keys(ms.headers || {}).map(k => [k, ''])),
+        envVars: Object.fromEntries(Object.keys(ms.envVars || {}).map(k => [k, ''])),
+      })),
       name: state.currentProjectName,
       description: state.currentProjectDescription,
       workspaceId: state.currentProjectWorkspaceId,
@@ -561,13 +566,20 @@ export const createProjectSlice: StateCreator<AppState, [], [], ProjectSlice> = 
             } else if (event.type === 'final_result') {
               if (!hasError) {
                 // Extract result from multiple possible fields
-                const result = event.result || event.final_output || event.output;
+                const rawResult = event.result || event.final_output || event.output;
+                // Always serialize to string — result may be a JSON object (e.g. {id, state, comments})
+                const result = rawResult === null || rawResult === undefined
+                  ? ''
+                  : typeof rawResult === 'string'
+                    ? rawResult
+                    : JSON.stringify(rawResult, null, 2);
                 capturedResult = result;
                 
                 const newStatuses: Record<string, NodeStatus> = { ...get().nodeStatuses };
                 state.nodes.forEach(n => { if (newStatuses[n.id] === 'running') newStatuses[n.id] = 'success'; });
                 set({ nodeStatuses: newStatuses, isConsoleExpanded: true, executionResult: result });
                 get().showNotification("Pipeline de Agentes concluído!", "success");
+
               }
             } else if (event.type === 'done') {
               if (!hasError) {

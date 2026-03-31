@@ -38,6 +38,19 @@ export const createConfigSlice: StateCreator<AppState, [], [], ConfigSlice> = (s
     } catch (error: any) { toast.error(error.message); }
   },
 
+  updateCredential: async (id, credUpdate) => {
+    try {
+      const response = await fetch(`${API_URL}/api/v1/credentials/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(credUpdate),
+      });
+      if (!response.ok) throw new Error('Failed to update credential');
+      toast.success("Credential updated successfully");
+      await get().fetchCredentials();
+    } catch (error: any) { toast.error(error.message); }
+  },
+
   deleteCredential: async (id) => {
     try {
       const response = await fetch(`${API_URL}/api/v1/credentials/${id}`, { method: 'DELETE' });

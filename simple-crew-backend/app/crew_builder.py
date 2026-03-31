@@ -345,12 +345,16 @@ def run_crew_stream(graph_data: GraphData, workspace_id: Optional[Any] = None, i
                 
                 # Coletamos todos os IDs de MCP únicos que serão usados
                 all_mcp_ids = set()
+                mcp_to_agents = {}
                 for node in agent_nodes:
                     mcp_server_ids = getattr(node.data, 'mcpServerIds', []) or []
                     if mcp_server_ids:
                         log_debug(f"Agent {node.data.name} has MCP Server IDs: {mcp_server_ids}")
                     for mid in mcp_server_ids:
                         all_mcp_ids.add(mid)
+                        if str(mid) not in mcp_to_agents:
+                            mcp_to_agents[str(mid)] = []
+                        mcp_to_agents[str(mid)].append(node.id)
                 
                 log_debug(f"Unique MCP IDs found in graph: {all_mcp_ids}")
                 if not all_mcp_ids:
@@ -390,20 +394,74 @@ def run_crew_stream(graph_data: GraphData, workspace_id: Optional[Any] = None, i
                                     log_debug(f"Failed to create StdioServerParameters or Adapter for {mcp_record.name}: {str(pe)}")
                                     continue
                             else:
-                                # SSE (Em desenvolvimento - Requer SseClientParameters do SDK MCP)
-                                log_debug(f"SSE transport not yet supported for {mcp_record.name}")
-                                continue
-                            
-                            log_debug(f"Connecting to MCP {mcp_record.name} via stack.enter_context...")
-                            try:
-                                # Entramos no contexto do adapter para ativar a conexão (Retorna a lista de ferramentas)
-                                raw_tools = stack.enter_context(adapter)
-                                log_debug(f"MCP {mcp_record.name} connected. Found {len(raw_tools if raw_tools else [])} raw tools.")
-                            except Exception as ce:
-                                log_debug(f"Failed to enter MCP context for {mcp_record.name}: {str(ce)}")
-                                continue
+                                base_url = mcp_record.url.strip()
+                                # Se o usuário escolheu um transporte remoto específico, priorizamos ele.
+                                # Se for SSE, mantemos as estratégias híbridas para resiliência.
+                                if mcp_record.transport_type == "streamable-http":
+                                    connection_strategies = [
+                                        ("streamable-http", base_url.rstrip('/')),
+                                        ("streamable-http", base_url.rstrip('/') + '/'),
+                                    ]
+                                else:
+                                    # SSE (Default ou Selecionado) - Mantém híbrido
+                                    connection_strategies = [
+                                        ("sse", base_url.rstrip('/')),
+                                        ("sse", base_url.rstrip('/') + '/'),
+                                        ("streamable-http", base_url.rstrip('/')),
+                                        ("sse", base_url.rstrip('/') + '/sse'),
+                                    ]
+                                
+                                # Remove duplicatas mantendo a ordem
+                                seen_strategies = set()
+                                unique_strategies = []
+                                for strat in connection_strategies:
+                                    if strat not in seen_strategies:
+                                        unique_strategies.append(strat)
+                                        seen_strategies.add(strat)
+                                
+                                raw_tools = None
+                                last_exception = None
+                                
+                                for transport, candidate_url in unique_strategies:
+                                    log_debug(f"Attempting MCP connection ({transport}): {candidate_url}")
+                                    try:
+                                        sse_headers = (mcp_record.headers or {}).copy()
+                                        if "Accept" not in sse_headers:
+                                            sse_headers["Accept"] = "text/event-stream"
+                                        
+                                        server_params = {
+                                            "url": candidate_url,
+                                            "transport": transport,
+                                            "headers": sse_headers
+                                        }
+                                        
+                                        adapter = MCPServerAdapter(server_params, connect_timeout=120)
+                                        
+                                        # Tentativa de entrada no contexto (Bootstrap do MCP)
+                                        raw_tools = stack.enter_context(adapter)
+                                        log_debug(f"MCP {mcp_record.name} connected successfully with {transport} at {candidate_url}. Found {len(raw_tools if raw_tools else [])} tools.")
+                                        break # Sucesso na conexão!
+                                    except Exception as ce:
+                                        last_exception = ce
+                                        error_msg = str(ce).lower()
+                                        if "405" in error_msg or "method not allowed" in error_msg:
+                                            log_debug(f"Received 405 Method Not Allowed for {transport} at {candidate_url}. Testing hybrid candidate...")
+                                            continue 
+                                        else:
+                                            # Outro erro impeditivo (ex: 401 Unauthorized) -> Para de tentar
+                                            log_debug(f"MCP connection failed terminal: {str(ce)}")
+                                            break
+                                
+                                if not raw_tools:
+                                    # Se esgotamos as estratégias sem sucesso
+                                    affected_agents = mcp_to_agents.get(str(mcp_record.id), [])
+                                    for agent_id in affected_agents:
+                                        tracked_statuses[agent_id] = "error"
+                                        q.put(json.dumps({"type": "status", "nodeId": agent_id, "status": "error"}) + "\n")
+                                    raise Exception(f"Failed to connect to MCP server '{mcp_record.name}' after hybrid strategy attempts. Last error: {str(last_exception)}")
                             
                             if not raw_tools:
+                                # Garantia extra de log
                                 log_debug(f"Warning: MCP server {mcp_record.name} returned 0 tools.")
                             
                             # Playwright Schema Injection & Filtering
@@ -412,13 +470,15 @@ def run_crew_stream(graph_data: GraphData, workspace_id: Optional[Any] = None, i
                             processed_tools = []
                             if is_playwright:
                                 allowed_suffixes = ["browser_navigate", "browser_click", "browser_type", "browser_snapshot"]
-                                for mcp_tool in raw_tools:
-                                    if any(mcp_tool.name.endswith(s) for s in allowed_suffixes):
-                                        processed_tools.append(mcp_tool)
-                                    else:
-                                        log_debug(f"Skipping non-essential Playwright tool: {mcp_tool.name}")
+                                if raw_tools:
+                                    for mcp_tool in raw_tools:
+                                        if any(mcp_tool.name.endswith(s) for s in allowed_suffixes):
+                                            processed_tools.append(mcp_tool)
+                                        else:
+                                            log_debug(f"Skipping non-essential Playwright tool: {mcp_tool.name}")
                             else:
-                                processed_tools.extend(raw_tools)
+                                if raw_tools:
+                                    processed_tools.extend(raw_tools)
                             
                             mcp_adapters_cache[str(mcp_id)] = processed_tools
                             
@@ -866,7 +926,7 @@ def run_crew_stream(graph_data: GraphData, workspace_id: Optional[Any] = None, i
                 base_task_queue = []
                 
                 # 1. Ordem oficial dos agentes
-                agent_order = getattr(crew_node.data, 'agentOrder', []) if crew_node else []
+                agent_order = (getattr(crew_node.data, 'agentOrder', []) or []) if crew_node else []
                 if not agent_order:
                     agent_order = [n.id for n in agent_nodes]
 
@@ -884,7 +944,7 @@ def run_crew_stream(graph_data: GraphData, workspace_id: Optional[Any] = None, i
                     
                     # Tenta organizar pela ordem salva no node (se o front enviou)
                     ag_node = nodes.get(ag_id)
-                    ag_task_order = getattr(ag_node.data, 'taskOrder', []) if ag_node else []
+                    ag_task_order = (getattr(ag_node.data, 'taskOrder', []) or []) if ag_node else []
                     
                     for tid in ag_task_order:
                         if tid in tasks_of_agent and tid not in base_task_queue:

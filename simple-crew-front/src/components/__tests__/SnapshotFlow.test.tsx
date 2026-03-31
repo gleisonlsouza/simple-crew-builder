@@ -1,4 +1,3 @@
-import React from 'react';
 import { render, screen, within } from '@testing-library/react';
 import { SnapshotFlow } from '../SnapshotFlow';
 import { vi, describe, it, expect, beforeEach } from 'vitest';
