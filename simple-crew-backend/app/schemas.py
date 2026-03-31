@@ -240,6 +240,25 @@ class MCPServerRead(MCPServerBase):
     created_at: Any
     updated_at: Any
 
+    @classmethod
+    def from_orm(cls, obj):
+        # Mask all header and env_var values for security — only return the key names
+        data = {}
+        for field in ['name', 'transport_type', 'command', 'args', 'url', 'id', 'created_at', 'updated_at']:
+            val = getattr(obj, field, None)
+            if val is not None:
+                data[field] = val
+
+        # Mask header values: return key → "••••••••"
+        raw_headers = getattr(obj, 'headers', None) or {}
+        data['headers'] = {k: '••••••••' for k in raw_headers} if raw_headers else {}
+
+        # Mask env_var values: return key → "••••••••"
+        raw_env_vars = getattr(obj, 'env_vars', None) or {}
+        data['env_vars'] = {k: '••••••••' for k in raw_env_vars} if raw_env_vars else {}
+
+        return cls(**data)
+
     class Config:
         from_attributes = True
 

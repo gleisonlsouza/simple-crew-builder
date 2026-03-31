@@ -438,6 +438,22 @@ async def get_credential(credential_id: str, session: Session = Depends(get_sess
         raise HTTPException(status_code=404, detail="Credencial não encontrada")
     return CredentialRead.from_orm(credential)
 
+@app.patch("/api/v1/credentials/{credential_id}", response_model=CredentialRead)
+@app.put("/api/v1/credentials/{credential_id}", response_model=CredentialRead)
+async def update_credential(credential_id: str, credential_update: CredentialUpdate, session: Session = Depends(get_session)):
+    db_credential = session.get(Credential, credential_id)
+    if not db_credential:
+        raise HTTPException(status_code=404, detail="Credencial não encontrada")
+    
+    update_data = credential_update.model_dump(exclude_unset=True)
+    for key, value in update_data.items():
+        setattr(db_credential, key, value)
+    
+    session.add(db_credential)
+    session.commit()
+    session.refresh(db_credential)
+    return CredentialRead.from_orm(db_credential)
+
 @app.delete("/api/v1/credentials/{credential_id}")
 async def delete_credential(credential_id: str, session: Session = Depends(get_session)):
     credential = session.get(Credential, credential_id)
@@ -554,20 +570,20 @@ async def create_mcp_server(mcp: MCPServerCreate, session: Session = Depends(get
     session.add(new_mcp)
     session.commit()
     session.refresh(new_mcp)
-    return new_mcp
+    return MCPServerRead.from_orm(new_mcp)
 
 @app.get("/api/v1/mcp-servers", response_model=List[MCPServerRead])
 async def list_mcp_servers(session: Session = Depends(get_session)):
     statement = select(MCPServer).where(MCPServer.user_id == ROOT_USER_ID).order_by(MCPServer.created_at.desc())
     servers = session.exec(statement).all()
-    return servers
+    return [MCPServerRead.from_orm(s) for s in servers]
 
 @app.get("/api/v1/mcp-servers/{mcp_id}", response_model=MCPServerRead)
 async def get_mcp_server(mcp_id: str, session: Session = Depends(get_session)):
     mcp = session.get(MCPServer, mcp_id)
     if not mcp:
         raise HTTPException(status_code=404, detail="Servidor MCP não encontrado")
-    return mcp
+    return MCPServerRead.from_orm(mcp)
 
 @app.patch("/api/v1/mcp-servers/{mcp_id}", response_model=MCPServerRead)
 @app.put("/api/v1/mcp-servers/{mcp_id}", response_model=MCPServerRead)
@@ -580,13 +596,33 @@ async def update_mcp_server(mcp_id: str, mcp_update: MCPServerUpdate, session: S
     if update_data.get("command"):
         update_data["command"] = normalize_command(update_data["command"])
 
+    # Preserve existing secrets: skip header/env_var entries with empty values
+    # (empty value = user didn't change the secret, keep the existing one)
+    if "headers" in update_data and update_data["headers"] is not None:
+        existing_headers = db_mcp.headers or {}
+        merged_headers = dict(existing_headers)  # Start with existing
+        for k, v in update_data["headers"].items():
+            if v and v != "":
+                merged_headers[k] = v  # Only update non-empty new values
+        # Allow deletion: keys NOT present in update_data["headers"] are removed
+        # Keys in update_data that have empty value keep their old value
+        update_data["headers"] = merged_headers
+
+    if "env_vars" in update_data and update_data["env_vars"] is not None:
+        existing_env = db_mcp.env_vars or {}
+        merged_env = dict(existing_env)
+        for k, v in update_data["env_vars"].items():
+            if v and v != "":
+                merged_env[k] = v
+        update_data["env_vars"] = merged_env
+
     for key, value in update_data.items():
         setattr(db_mcp, key, value)
     
     session.add(db_mcp)
     session.commit()
     session.refresh(db_mcp)
-    return db_mcp
+    return MCPServerRead.from_orm(db_mcp)
 
 @app.delete("/api/v1/mcp-servers/{mcp_id}")
 async def delete_mcp_server(mcp_id: str, session: Session = Depends(get_session)):
@@ -958,18 +994,34 @@ async def handle_webhook(
     session.refresh(execution)
 
     if data.get("waitForResult") is True:
-        # Síncrono: Consome o stream e retorna o resultado final
-        final_result = ""
+        # Síncrono: executa em thread separada com seu próprio event loop
+        # O MCP client usa httpx async internamente — não pode rodar sem event loop
+        import asyncio
+        import concurrent.futures
+        
+        def _run_sync():
+            """Cria um event loop dedicado para a execução síncrona do crew."""
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            final_result = ""
+            try:
+                stream = run_crew_stream(graph_data, workspace_id=workspace_id, inputs=mapped_inputs, execution_id=execution.id)
+                for event_str in stream:
+                    if not event_str.strip():
+                        continue
+                    event = json.loads(event_str)
+                    if event.get("type") == "final_result":
+                        final_result = event.get("result", "")
+                    elif event.get("type") == "error":
+                        raise Exception(event.get("error"))
+            finally:
+                loop.close()
+            return final_result
+
         try:
-            stream = run_crew_stream(graph_data, workspace_id=workspace_id, inputs=mapped_inputs, execution_id=execution.id)
-            for event_str in stream:
-                if not event_str.strip():
-                    continue
-                event = json.loads(event_str)
-                if event.get("type") == "final_result":
-                    final_result = event.get("result", "")
-                elif event.get("type") == "error":
-                    raise Exception(event.get("error"))
+            with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
+                future = executor.submit(_run_sync)
+                final_result = future.result(timeout=600)  # 10 min timeout
             
             return {
                 "status": "success",
@@ -980,11 +1032,18 @@ async def handle_webhook(
         except Exception as e:
             raise HTTPException(status_code=500, detail=f"Erro na execução síncrona: {str(e)}")
     else:
-        # Assíncrono: Dispara em background
+        # Assíncrono: Dispara em background com event loop próprio
+        # BackgroundTasks roda em thread do threadpool sem event loop — criamos um explicitamente
+        import asyncio
+
         def run_in_background():
-            # Precisamos consumir o generator para ele rodar
-            for _ in run_crew_stream(graph_data, workspace_id=workspace_id, inputs=mapped_inputs, execution_id=execution.id):
-                pass
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            try:
+                for _ in run_crew_stream(graph_data, workspace_id=workspace_id, inputs=mapped_inputs, execution_id=execution.id):
+                    pass
+            finally:
+                loop.close()
         
         background_tasks.add_task(run_in_background)
         return {
