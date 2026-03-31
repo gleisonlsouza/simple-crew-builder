@@ -55,7 +55,7 @@ const INITIAL_MODEL = {
 const SettingsPage = () => {
   const navigate = useNavigate();
   const { 
-    credentials, addCredential, deleteCredential, fetchCredentials,
+    credentials, addCredential, updateCredential, deleteCredential, fetchCredentials,
     models: modelConfigs, addModel, updateModel, deleteModel, setDefaultModelConfig, fetchModels, duplicateModel,
     globalTools, updateToolConfig,
     customTools, addCustomTool, updateCustomTool, deleteCustomTool,
@@ -100,6 +100,7 @@ const SettingsPage = () => {
   const [mcpArgsString, setMcpArgsString] = useState('');
   const [newEnvVar, setNewEnvVar] = useState({ key: '', value: '' });
   const [editingModelId, setEditingModelId] = useState<string | null>(null);
+  const [editingCredentialId, setEditingCredentialId] = useState<string | null>(null);
   const [editingMCPId, setEditingMCPId] = useState<string | null>(null);
   const [editingCustomToolId, setEditingCustomToolId] = useState<string | null>(null);
   const [editingWorkspaceId, setEditingWorkspaceId] = useState<string | null>(null);
@@ -133,11 +134,30 @@ const SettingsPage = () => {
   };
 
   const handleAddCredential = () => {
-    if (newCred.name && newCred.key) {
-      addCredential(newCred);
+    if (newCred.name && (newCred.key || editingCredentialId)) {
+      if (editingCredentialId) {
+        // If key is empty, it won't be updated on the backend if we use PATCH correctly
+        const updateData: any = { ...newCred };
+        if (!newCred.key) delete updateData.key;
+        updateCredential(editingCredentialId, updateData);
+      } else {
+        addCredential(newCred);
+      }
       setNewCred(INITIAL_CREDENTIAL);
+      setEditingCredentialId(null);
       setIsModalOpen(false);
     }
+  };
+
+  const handleEditCredential = (cred: any) => {
+    setNewCred({
+      name: cred.name,
+      description: cred.description || '',
+      key: '', // Don't show the existing key
+      provider: cred.provider || ''
+    });
+    setEditingCredentialId(cred.id);
+    setIsModalOpen(true);
   };
 
   const formatDate = (dateString: string) => {
@@ -193,9 +213,11 @@ const SettingsPage = () => {
       transportType: server.transportType || 'stdio',
       command: server.command || '',
       args: server.args || [],
-      envVars: server.envVars || {},
+      // For security: populate only the KEY names, not values
+      // Empty values signal the backend to keep existing secrets unchanged
+      envVars: Object.fromEntries(Object.keys(server.envVars || {}).map(k => [k, ''])),
       url: server.url || '',
-      headers: server.headers || {}
+      headers: Object.fromEntries(Object.keys(server.headers || {}).map(k => [k, '']))
     });
     setMcpArgsString((server.args || []).join(' '));
     setEditingMCPId(server.id);
@@ -418,6 +440,7 @@ const SettingsPage = () => {
                 </div>
                 <button 
                   onClick={() => {
+                    setEditingCredentialId(null);
                     setNewCred(INITIAL_CREDENTIAL);
                     setIsModalOpen(true);
                   }}
@@ -464,13 +487,22 @@ const SettingsPage = () => {
                         </div>
                       </div>
                       
-                      <button 
-                        onClick={() => requestDelete('credential', cred.id, cred.name)}
-                        className="p-2 text-brand-muted hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-all opacity-0 group-hover:opacity-100"
-                        title="Delete"
-                      >
-                        <Trash2 className="w-5 h-5" />
-                      </button>
+                      <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-all">
+                        <button 
+                          onClick={() => handleEditCredential(cred)}
+                          className="p-2 text-brand-muted hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 rounded-lg transition-all"
+                          title="Edit"
+                        >
+                          <Edit className="w-5 h-5" />
+                        </button>
+                        <button 
+                          onClick={() => requestDelete('credential', cred.id, cred.name)}
+                          className="p-2 text-brand-muted hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-all"
+                          title="Delete"
+                        >
+                          <Trash2 className="w-5 h-5" />
+                        </button>
+                      </div>
                     </div>
                   ))
                 )}
@@ -976,11 +1008,11 @@ const SettingsPage = () => {
       {/* Modal - New Credential */}
       {isModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 animate-in fade-in duration-200">
-          <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => { setIsModalOpen(false); setNewCred(INITIAL_CREDENTIAL); }} />
+          <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => { setIsModalOpen(false); setEditingCredentialId(null); setNewCred(INITIAL_CREDENTIAL); }} />
           <div className="relative w-full max-w-md bg-brand-card border border-brand-border rounded-3xl shadow-2xl p-8 animate-in zoom-in-95 duration-200">
             <div className="flex items-center justify-between mb-6">
-              <h2 className="text-xl font-bold text-brand-text">Add New Credential</h2>
-              <button onClick={() => { setIsModalOpen(false); setNewCred(INITIAL_CREDENTIAL); }} className="p-2 hover:bg-brand-bg rounded-full text-brand-muted transition-colors">
+              <h2 className="text-xl font-bold text-brand-text">{editingCredentialId ? 'Edit Credential' : 'Add New Credential'}</h2>
+              <button onClick={() => { setIsModalOpen(false); setEditingCredentialId(null); setNewCred(INITIAL_CREDENTIAL); }} className="p-2 hover:bg-brand-bg rounded-full text-brand-muted transition-colors">
                 <X className="w-6 h-6" />
               </button>
             </div>
@@ -1012,7 +1044,7 @@ const SettingsPage = () => {
                 <div className="relative">
                   <input 
                     type={showKeys['new'] ? 'text' : 'password'}
-                    placeholder="sk-..."
+                    placeholder={editingCredentialId ? 'Leave empty to keep existing key...' : 'sk-...'}
                     className="w-full bg-brand-bg border border-brand-border rounded-xl pl-4 pr-16 py-3 text-brand-text outline-none focus:ring-2 focus:ring-indigo-600 transition-all font-mono"
                     value={newCred.key}
                     onChange={(e) => setNewCred({...newCred, key: e.target.value})}
@@ -1047,17 +1079,17 @@ const SettingsPage = () => {
 
               <div className="pt-4 flex gap-3">
                 <button 
-                  onClick={() => { setIsModalOpen(false); setNewCred(INITIAL_CREDENTIAL); }}
+                  onClick={() => { setIsModalOpen(false); setEditingCredentialId(null); setNewCred(INITIAL_CREDENTIAL); }}
                   className="flex-1 py-3 bg-brand-bg border border-brand-border text-brand-text rounded-xl font-bold hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-red-500 transition-colors"
                 >
                   Cancel
                 </button>
                 <button 
-                  disabled={!newCred.name || !newCred.key}
+                  disabled={!newCred.name || (!newCred.key && !editingCredentialId)}
                   onClick={handleAddCredential}
                   className="flex-1 py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold shadow-lg shadow-indigo-600/20 transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  Save Credential
+                  {editingCredentialId ? 'Update Credential' : 'Save Credential'}
                 </button>
               </div>
             </div>
@@ -1334,14 +1366,15 @@ const SettingsPage = () => {
                         />
                         <div className="flex gap-2">
                           <input 
-                            placeholder="Value"
+                            placeholder={editingMCPId ? 'Leave empty to keep existing value' : 'Value'}
                             className={`flex-1 bg-brand-bg border border-brand-border rounded-lg px-3 py-2 text-xs text-brand-text outline-none focus:ring-1 ${newMCP.transportType === 'sse' ? 'focus:ring-emerald-600' : 'focus:ring-blue-600'}`}
                             value={newEnvVar.value}
                             onChange={(e) => setNewEnvVar({ ...newEnvVar, value: e.target.value })}
                           />
                           <button 
                             onClick={() => {
-                              if (newEnvVar.key && newEnvVar.value) {
+                              // Allow empty value in edit mode (signals "keep existing secret")
+                              if (newEnvVar.key && (newEnvVar.value || editingMCPId)) {
                                 setNewMCP({
                                   ...newMCP,
                                   headers: { ...(newMCP.headers || {}), [newEnvVar.key]: newEnvVar.value }
@@ -1361,7 +1394,8 @@ const SettingsPage = () => {
                           <div key={key} className="flex items-center gap-2 bg-brand-card border border-brand-border rounded-lg px-2 py-1.5 animate-in zoom-in-95 duration-200">
                             <span className={`text-[10px] font-bold ${newMCP.transportType === 'sse' ? 'text-emerald-500' : 'text-blue-500'}`}>{key}</span>
                             <span className="text-brand-muted opacity-30">|</span>
-                            <span className="text-[10px] text-brand-text truncate max-w-[100px]">{value}</span>
+                            {/* Always show masked value — real value stays in DB */}
+                            <span className="text-[10px] text-brand-muted font-mono">{value ? value : '••••••••'}</span>
                             <button 
                               onClick={() => {
                                 const newHeaders = { ...(newMCP.headers || {}) };
@@ -1419,7 +1453,7 @@ const SettingsPage = () => {
                         />
                         <div className="flex gap-2">
                           <input 
-                            placeholder="VALUE"
+                            placeholder={editingMCPId ? 'Leave empty to keep existing value' : 'VALUE'}
                             className="flex-1 bg-brand-bg border border-brand-border rounded-lg px-3 py-2 text-xs text-brand-text outline-none focus:ring-1 focus:ring-indigo-600"
                             value={newEnvVar.value}
                             onChange={(e) => setNewEnvVar({ ...newEnvVar, value: e.target.value })}
@@ -1446,7 +1480,8 @@ const SettingsPage = () => {
                           <div key={key} className="flex items-center gap-2 bg-brand-card border border-brand-border rounded-lg px-2 py-1.5 animate-in zoom-in-95 duration-200">
                             <span className="text-[10px] font-bold text-indigo-500">{key}</span>
                             <span className="text-brand-muted opacity-30">|</span>
-                            <span className="text-[10px] text-brand-text truncate max-w-[100px]">{value}</span>
+                            {/* Always show masked value — real value stays in DB */}
+                            <span className="text-[10px] text-brand-muted font-mono">{value ? value : '••••••••'}</span>
                             <button 
                               onClick={() => {
                                 const newEnv = { ...(newMCP.envVars || {}) };

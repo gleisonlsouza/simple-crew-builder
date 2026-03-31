@@ -161,6 +161,7 @@ export interface ConfigSlice {
   defaultModel: string;
   fetchCredentials: () => Promise<void>;
   addCredential: (credential: Omit<Credential, 'id' | 'created_at'>) => Promise<void>;
+  updateCredential: (id: string, credential: Partial<Omit<Credential, 'id' | 'created_at'>>) => Promise<void>;
   deleteCredential: (id: string) => Promise<void>;
   fetchModels: () => Promise<void>;
   addModel: (model: Omit<ModelConfig, 'id'>) => Promise<void>;
