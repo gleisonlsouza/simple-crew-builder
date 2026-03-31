@@ -840,8 +840,14 @@ def run_crew_stream(graph_data: GraphData, workspace_id: Optional[Any] = None, i
                     combined_tools_dict.update({getattr(t, 'name', str(t)): t for t in this_task_tools})
                     combined_tools = list(combined_tools_dict.values())
 
+                    # workspace_task_instruction é uma string estática com '{workspace_path}'.
+                    # Quando concatenada ao description e processada pelo CrewAI (str.format_map),
+                    # os {{ do description são unescapados para {, e depois re-interpretados como
+                    # templates faltando. Escapamos a instrução estática para evitar isso.
+                    safe_instruction = workspace_task_instruction.replace("{", "{{").replace("}", "}}")
+
                     task_kwargs = {
-                        "description": description + workspace_task_instruction,
+                        "description": description + safe_instruction,
                         "expected_output": expected_output,
                         "agent": target_agent,
                         "tools": combined_tools,
