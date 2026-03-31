@@ -396,11 +396,11 @@ export const AgentForm: React.FC<AgentFormProps> = memo(({
                     <input 
                       type="checkbox" 
                       className="sr-only"
-                      checked={field === 'verbose' || field === 'respect_context_window' || field === 'cache' || field === 'use_system_prompt' ? data[field] !== false : data[field] === true}
+                      checked={field === 'verbose' || field === 'respect_context_window' ? data[field] !== false : data[field] === true}
                       onChange={(e) => updateNodeData(nodeId, { [field]: e.target.checked })}
                     />
-                    <div className={`w-8 h-4 bg-brand-bg border border-brand-border rounded-full transition-colors ${(field === 'verbose' || field === 'respect_context_window' || field === 'cache' || field === 'use_system_prompt' ? data[field] !== false : data[field] === true) ? 'bg-indigo-500/20 border-indigo-500' : ''}`}>
-                      <div className={`absolute top-0.5 left-0.5 w-3 h-3 rounded-full transition-transform ${(field === 'verbose' || field === 'respect_context_window' || field === 'cache' || field === 'use_system_prompt' ? data[field] !== false : data[field] === true) ? 'translate-x-4 bg-indigo-500' : 'bg-brand-muted'}`} />
+                    <div className={`w-8 h-4 bg-brand-bg border border-brand-border rounded-full transition-colors ${(field === 'verbose' || field === 'respect_context_window' ? data[field] !== false : data[field] === true) ? 'bg-indigo-500/20 border-indigo-500' : ''}`}>
+                      <div className={`absolute top-0.5 left-0.5 w-3 h-3 rounded-full transition-transform ${(field === 'verbose' || field === 'respect_context_window' ? data[field] !== false : data[field] === true) ? 'translate-x-4 bg-indigo-500' : 'bg-brand-muted'}`} />
                     </div>
                   </div>
                   <span className="text-[10px] text-brand-text uppercase font-bold group-hover:text-indigo-400 transition-colors">{(field as string).replace(/_/g, ' ')}</span>
