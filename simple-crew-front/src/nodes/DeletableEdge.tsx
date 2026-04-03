@@ -7,8 +7,8 @@ import {
 } from '@xyflow/react';
 import { Trash2 } from 'lucide-react';
 import { useShallow } from 'zustand/shallow';
-import { useStore } from '../store';
-import type { NodeStatus } from '../types';
+import { useStore } from '../store/index';
+import type { NodeStatus } from '../types/store.types';
 
 export function DeletableEdge({
   id,

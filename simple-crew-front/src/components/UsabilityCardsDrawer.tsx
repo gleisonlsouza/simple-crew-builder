@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { X, LayoutTemplate, Search, MessageCircle, Plus } from 'lucide-react';
+import { X, LayoutTemplate, Search, MessageCircle, Plus, Globe } from 'lucide-react';
 import { useReactFlow } from '@xyflow/react';
-import { useStore } from '../store';
+import { useStore } from '../store/index';
 
 export function UsabilityCardsDrawer() {
   const isUsabilityDrawerOpen = useStore((state) => state.isUsabilityDrawerOpen);
@@ -123,8 +123,53 @@ export function UsabilityCardsDrawer() {
               </div>
             </div>
 
+            {/* Webhook Trigger Card */}
+            <div
+              className="group relative flex flex-col gap-3 p-4 bg-brand-bg/50 border border-brand-border rounded-xl hover:border-orange-500/50 hover:bg-brand-card transition-all cursor-grab active:cursor-grabbing"
+              data-testid="drag-card-webhook-trigger"
+              onDragStart={(event) => {
+                setIsDragging(true);
+                event.dataTransfer.setData('application/reactflow', 'webhook');
+                event.dataTransfer.effectAllowed = 'move';
+              }}
+              onDragEnd={() => setIsDragging(false)}
+              draggable
+            >
+              <button
+                data-testid="btn-add-webhook-trigger"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  const state = useStore.getState();
+                  const timestamp = Date.now().toString().slice(-4);
+                  state.addNodeWithAutoPosition('webhook', {
+                    name: `Webhook ${timestamp}`,
+                    method: 'POST',
+                    isActive: true,
+                    waitForResult: false,
+                    headers: {},
+                    fieldMappings: {},
+                    isCollapsed: false
+                  });
+                  setTimeout(() => fitView({ padding: 0.2, duration: 400 }), 50);
+                  setIsUsabilityDrawerOpen(false);
+                }}
+                className="absolute top-2 right-2 p-1.5 rounded-md text-slate-400 opacity-0 group-hover:opacity-100 hover:text-white hover:bg-orange-500 transition-all z-10"
+                title="Add to canvas"
+              >
+                <Plus className="w-4 h-4" />
+              </button>
+
+              <div className="w-10 h-10 bg-orange-500/10 rounded-lg flex items-center justify-center group-hover:bg-orange-500/20 transition-colors">
+                <Globe className="w-5 h-5 text-orange-500 dark:text-orange-400" />
+              </div>
+              <div className="space-y-1">
+                <h3 className="text-sm font-bold text-brand-text">Webhook Trigger</h3>
+                <p className="text-[10px] text-brand-muted leading-tight">Trigger the Crew via external HTTP requests.</p>
+              </div>
+            </div>
+
             {/* Placeholder cards */}
-            {[...Array(5)].map((_, i) => (
+            {[...Array(4)].map((_, i) => (
               <div
                 key={i}
                 className="group relative flex flex-col gap-3 p-4 bg-brand-bg/50 border border-brand-border rounded-xl hover:border-fuchsia-500/50 hover:bg-brand-card transition-all cursor-pointer"

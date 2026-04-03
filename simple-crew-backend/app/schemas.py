@@ -1,5 +1,6 @@
 from pydantic import BaseModel, field_validator
 from typing import List, Dict, Optional, Any
+from datetime import datetime
 from .models import ModelType
 
 class CustomTool(BaseModel):
@@ -21,6 +22,60 @@ class NodeData(BaseModel):
     mcpServerIds: Optional[List[str]] = None
     customToolIds: Optional[List[str]] = None
     globalToolIds: Optional[List[Any]] = None
+    
+    # LLM & Logic Fields
+    modelId: Optional[str] = None
+    temperature: Optional[float] = None
+    manager_llm_id: Optional[str] = None
+    planning_llm_id: Optional[str] = None
+    function_calling_llm_id: Optional[str] = None
+    
+    # Execution & Configuration Fields
+    verbose: Optional[bool] = None
+    allow_delegation: Optional[bool] = None
+    cache: Optional[bool] = None
+    allow_code_execution: Optional[bool] = None
+    respect_context_window: Optional[bool] = None
+    use_system_prompt: Optional[bool] = None
+    max_iter: Optional[int] = None
+    max_retry_limit: Optional[int] = None
+    max_rpm: Optional[int] = None
+    max_execution_time: Optional[int] = None
+    code_execution_mode: Optional[str] = None
+    reasoning: Optional[bool] = None
+    max_reasoning_attempts: Optional[int] = None
+    multimodal: Optional[bool] = None
+    inject_date: Optional[bool] = None
+    date_format: Optional[str] = None
+    system_template: Optional[str] = None
+    prompt_template: Optional[str] = None
+    response_template: Optional[str] = None
+    
+    # Task specific
+    async_execution: Optional[bool] = None
+    human_input: Optional[bool] = None
+    create_directory: Optional[bool] = None
+    output_file: Optional[str] = None
+    
+    # Crew specific
+    memory: Optional[bool] = None
+    planning: Optional[bool] = None
+    share_crew: Optional[bool] = None
+    agentOrder: Optional[List[str]] = None
+    taskOrder: Optional[List[str]] = None
+    inputs: Optional[Dict[str, Any]] = None
+    embedder: Optional[Any] = None
+    output_log_file: Optional[str] = None
+    prompt_file: Optional[str] = None
+
+    # Webhook specific
+    path: Optional[str] = None
+    method: Optional[str] = None
+    isActive: Optional[bool] = None
+    waitForResult: Optional[bool] = None
+    secret: Optional[str] = None
+    fieldMappings: Optional[Dict[str, str]] = None
+
     # Permitir chaves adicionais como isCollapsed de forma crua, caso necessite depois
     class Config:
         extra = "allow"
@@ -55,6 +110,7 @@ class GraphData(BaseModel):
     edges: List[Edge]
     customTools: Optional[List[CustomTool]] = []
     globalTools: Optional[List[ToolConfig]] = []
+    inputs: Optional[Dict[str, Any]] = None
 
 # Schemas para CRUD de Projetos (Sprint 38)
 class ProjectBase(BaseModel):
@@ -184,6 +240,25 @@ class MCPServerRead(MCPServerBase):
     created_at: Any
     updated_at: Any
 
+    @classmethod
+    def from_orm(cls, obj):
+        # Mask all header and env_var values for security — only return the key names
+        data = {}
+        for field in ['name', 'transport_type', 'command', 'args', 'url', 'id', 'created_at', 'updated_at']:
+            val = getattr(obj, field, None)
+            if val is not None:
+                data[field] = val
+
+        # Mask header values: return key → "••••••••"
+        raw_headers = getattr(obj, 'headers', None) or {}
+        data['headers'] = {k: '••••••••' for k in raw_headers} if raw_headers else {}
+
+        # Mask env_var values: return key → "••••••••"
+        raw_env_vars = getattr(obj, 'env_vars', None) or {}
+        data['env_vars'] = {k: '••••••••' for k in raw_env_vars} if raw_env_vars else {}
+
+        return cls(**data)
+
     class Config:
         from_attributes = True
 
@@ -304,3 +379,19 @@ class KnowledgeBaseDocumentResponse(BaseModel):
     filename: str
     size: Optional[int] = None
     created_at: Any
+
+# Execution History Schemas
+class ExecutionRead(BaseModel):
+    id: Any
+    project_id: Any
+    status: str
+    trigger_type: str
+    input_data: Dict[str, Any]
+    output_data: Optional[Dict[str, Any]] = None
+    graph_snapshot: Dict[str, Any]
+    duration: Optional[float] = None
+    timestamp: datetime
+
+    class Config:
+        from_attributes = True
+

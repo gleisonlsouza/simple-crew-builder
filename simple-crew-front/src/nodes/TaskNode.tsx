@@ -2,8 +2,8 @@ import { memo, useState, useEffect } from 'react';
 import { Handle, Position, type NodeProps, type Node } from '@xyflow/react';
 import { useShallow } from 'zustand/shallow';
 import { CheckSquare, Trash2, Loader2, CheckCircle2, AlertCircle, Clock, Settings, Plus, X, Terminal } from 'lucide-react';
-import { useStore } from '../store';
-import type { TaskNodeData } from '../types';
+import { useStore } from '../store/index';
+import type { TaskNodeData } from '../types/nodes.types';
 import { ToolConfigurationModal } from '../components/ToolConfigurationModal';
 
 export const TaskNode = memo(({ id, data }: NodeProps<Node<TaskNodeData, 'task'>>) => {

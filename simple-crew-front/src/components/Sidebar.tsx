@@ -2,7 +2,7 @@ import React, { useRef, useState } from 'react';
 import { User, CheckSquare, Users, Upload, Settings, PlusCircle, FolderOpen, X, ExternalLink, Info, Plus, LayoutTemplate } from 'lucide-react';
 import { useReactFlow } from '@xyflow/react';
 import toast from 'react-hot-toast';
-import { useStore } from '../store';
+import { useStore } from '../store/index';
 
 export function Sidebar() {
   const setIsSettingsOpen = useStore((state) => state.setIsSettingsOpen);

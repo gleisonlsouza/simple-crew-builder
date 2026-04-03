@@ -303,9 +303,33 @@ Gerado com ❤️ por **Simple Crew Builder**
                 
                 zip_file.writestr(f"{tools_package_path}/{tool_slug}.py", tool_file_content)
 
-        if has_custom_tools:
             # Add __init__.py to make it a package
             zip_file.writestr(f"{tools_package_path}/__init__.py", "# Custom tools package\n")
+
+        # 5.5 utils.py (Common utilities for exported project)
+        utils_content = """import os
+
+def normalize_command(command: str) -> str:
+    \"\"\"
+    Normaliza o comando baseado no sistema operacional atual.
+    \"\"\"
+    if not command:
+        return command
+    
+    is_windows = os.name == "nt"
+    
+    if command.lower() in ["npx", "npm"]:
+        if is_windows:
+            return f"{command}.cmd"
+        return command
+        
+    if not is_windows:
+        if command.lower().endswith(".cmd") or command.lower().endswith(".exe"):
+            return os.path.splitext(command)[0]
+    
+    return command
+"""
+        zip_file.writestr(f"{package_path}/utils.py", utils_content)
 
         # Coleta de Parâmetros (Placeholders)
         all_placeholders = set()
@@ -418,12 +442,12 @@ Gerado com ❤️ por **Simple Crew Builder**
         mcp_setup_code = ""
         mcp_import = ""
         if mcp_servers:
-            mcp_import = "\nfrom contextlib import ExitStack\nfrom crewai_tools import MCPServerAdapter\nfrom mcp import StdioServerParameters"
+            mcp_import = "\nfrom contextlib import ExitStack\nfrom crewai_tools import MCPServerAdapter\nfrom mcp import StdioServerParameters\nfrom .utils import normalize_command"
             mcp_setup_code = "\n    mcp_tools = {}\n    with ExitStack() as stack:\n"
             for s in mcp_servers:
                 mcp_setup_code += f"        # Setup {s['name']}\n"
                 mcp_setup_code += f"        params_{to_snake_case(s['name'])} = StdioServerParameters(\n"
-                mcp_setup_code += f"            command={json.dumps(s['command'])},\n"
+                mcp_setup_code += f"            command=normalize_command({json.dumps(s['command'])}) if {json.dumps(s['command'])} else None,\n"
                 mcp_setup_code += f"            args={json.dumps(s['args']) or '[]'},\n"
                 mcp_setup_code += f"            env={json.dumps(s['env_vars']) or 'None'}\n"
                 mcp_setup_code += f"        )\n"
@@ -471,7 +495,14 @@ def generate_crew_py(agent_nodes, task_nodes, crew_node, edges, nodes, class_nam
 
         # Setup Default Tools (globalTools)
         global_ids = getattr(node.data, 'globalToolIds', []) or []
-        for gid in global_ids:
+        for entry in global_ids:
+            gid = entry
+            if isinstance(entry, dict):
+                gid = entry.get("id")
+            
+            if not gid:
+                continue
+
             config = global_configs.get(gid)
             if not config or not config.isEnabled:
                 continue
@@ -642,7 +673,14 @@ def generate_crew_py(agent_nodes, task_nodes, crew_node, edges, nodes, class_nam
         global_tool_ids = getattr(node.data, 'globalToolIds', []) or []
         task_tools_list = []
         
-        for gid in global_tool_ids:
+        for entry in global_tool_ids:
+            gid = entry
+            if isinstance(entry, dict):
+                gid = entry.get("id")
+            
+            if not gid:
+                continue
+
             if gid == 'serper':
                 task_tools_list.append("SerperDevTool()")
                 needed_crewai_tools.add("SerperDevTool")

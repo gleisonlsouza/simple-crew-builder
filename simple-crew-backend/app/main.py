@@ -1,3 +1,5 @@
+import json
+import uuid
 import io
 import os
 import shutil
@@ -12,7 +14,7 @@ from fastapi.responses import FileResponse, StreamingResponse
 from sqlmodel import Session, select
 from .crew_builder import run_crew_stream
 from .database import init_db, get_session
-from .models import CrewProject, User, Credential, LLMModel, MCPServer, AppSettings, CustomTool, Workspace
+from .models import CrewProject, User, Credential, LLMModel, MCPServer, AppSettings, CustomTool, Workspace, Execution, ExecutionStatus
 from .schemas import (
     GraphData, ProjectCreate, ProjectRead, ProjectUpdate, 
     CredentialCreate, CredentialRead, CredentialUpdate,
@@ -23,13 +25,15 @@ from .schemas import (
     AppSettingsRead, AppSettingsUpdate,
     AiSuggestionRequest, AiSuggestionResponse,
     AiBulkSuggestionRequest, AiBulkSuggestionResponse,
-    AiTaskBulkSuggestionRequest, AiTaskBulkSuggestionResponse
+    AiTaskBulkSuggestionRequest, AiTaskBulkSuggestionResponse,
+    ExecutionRead
 )
 from .exporter import generate_python_project
 from .ai_service import generate_suggestion, generate_bulk_suggestion, generate_task_bulk_suggestion
 from .core.database.neo4j_db import neo4j_manager, get_neo4j_session
 from neo4j import Session as Neo4jSession
 from .routes import knowledge_base
+from .utils import normalize_command
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -127,10 +131,36 @@ async def execute_crew(
 
         # Resolve Custom Tools do Banco de Dados
         graph_data = resolve_custom_tools(graph_data, session)
+        
+        # Extrai inputs do payload enviado root
+        execution_inputs = {}
+        if graph_data.inputs:
+            execution_inputs.update(graph_data.inputs)
+            
+        # Extrai inputs injetados dinamicamente no nó da Crew pelo Chat
+        crew_node = next((n for n in graph_data.nodes if n.type == 'crew'), None)
+        if crew_node and hasattr(crew_node, 'data') and getattr(crew_node.data, 'inputs', None):
+            crew_inputs = getattr(crew_node.data, 'inputs', {})
+            # Remove chaves placeholder se necessário (Opcional para DB)
+            crew_inputs = {k: v for k, v in crew_inputs.items() if not k.startswith('input_')}
+            execution_inputs.update(crew_inputs)
+            
+        # Se mesmo após tudo estiver vazio, para chat o histórico ficaria vazio, mas tentamos nosso melhor
+        # 3. Create Execution record
+        execution = Execution(
+            project_id=uuid.UUID(project_id) if project_id else uuid.UUID(ROOT_USER_ID),
+            status=ExecutionStatus.RUNNING,
+            trigger_type="chat",
+            input_data=execution_inputs,
+            graph_snapshot=graph_data.model_dump()
+        )
+        session.add(execution)
+        session.commit()
+        session.refresh(execution)
 
         # Despacha as dependências e payload JSON para a magia do nosso Parser local CrewAI Stream
         return StreamingResponse(
-            run_crew_stream(graph_data, workspace_id=active_workspace_id), 
+            run_crew_stream(graph_data, workspace_id=active_workspace_id, inputs=execution_inputs, execution_id=execution.id), 
             media_type="text/event-stream"
         )
     except ValueError as ve:
@@ -280,6 +310,8 @@ async def export_project_python(project_id: str, session: Session = Depends(get_
                         "model": llm_config.model_name,
                         "provider": provider
                     }
+                else:
+                    print(f"--- WARNING: No LLM config found for agent {node.id}. Using default or skipped. ---")
                 
                 # Function Calling LLM
                 fc_id = getattr(node.data, 'function_calling_llm_id', None)
@@ -376,6 +408,8 @@ async def export_project_python(project_id: str, session: Session = Depends(get_
             headers={"Content-Disposition": f"attachment; filename={filename}"}
         )
     except Exception as e:
+        import traceback
+        traceback.print_exc() # Print full stack trace to console
         raise HTTPException(status_code=500, detail=f"Erro ao gerar exportação: {str(e)}")
 
 # --- CRUD de Credenciais ---
@@ -404,11 +438,30 @@ async def get_credential(credential_id: str, session: Session = Depends(get_sess
         raise HTTPException(status_code=404, detail="Credencial não encontrada")
     return CredentialRead.from_orm(credential)
 
+@app.patch("/api/v1/credentials/{credential_id}", response_model=CredentialRead)
+@app.put("/api/v1/credentials/{credential_id}", response_model=CredentialRead)
+async def update_credential(credential_id: str, credential_update: CredentialUpdate, session: Session = Depends(get_session)):
+    db_credential = session.get(Credential, credential_id)
+    if not db_credential:
+        raise HTTPException(status_code=404, detail="Credencial não encontrada")
+    
+    update_data = credential_update.model_dump(exclude_unset=True)
+    for key, value in update_data.items():
+        setattr(db_credential, key, value)
+    
+    session.add(db_credential)
+    session.commit()
+    session.refresh(db_credential)
+    return CredentialRead.from_orm(db_credential)
+
 @app.delete("/api/v1/credentials/{credential_id}")
 async def delete_credential(credential_id: str, session: Session = Depends(get_session)):
     credential = session.get(Credential, credential_id)
     if not credential:
         raise HTTPException(status_code=404, detail="Credencial não encontrada")
+    models_using = session.exec(select(LLMModel).where(LLMModel.credential_id == credential.id)).all()
+    for m in models_using:
+        m.credential_id = None
     session.delete(credential)
     session.commit()
     return {"message": "Credencial removida com sucesso"}
@@ -471,6 +524,14 @@ async def delete_model(model_id: str, session: Session = Depends(get_session)):
     model = session.get(LLMModel, model_id)
     if not model:
         raise HTTPException(status_code=404, detail="Modelo não encontrado")
+    settings = session.exec(select(AppSettings).where(
+        (AppSettings.system_ai_model_id == model.id) | (AppSettings.embedding_model_id == model.id)
+    )).all()
+    for s in settings:
+        if s.system_ai_model_id == model.id:
+            s.system_ai_model_id = None
+        if s.embedding_model_id == model.id:
+            s.embedding_model_id = None
     session.delete(model)
     session.commit()
     return {"message": "Modelo removido com sucesso"}
@@ -497,27 +558,32 @@ async def set_default_model(model_id: str, session: Session = Depends(get_sessio
 # --- CRUD de Gerenciamento de MCP Servers ---
 @app.post("/api/v1/mcp-servers", response_model=MCPServerRead)
 async def create_mcp_server(mcp: MCPServerCreate, session: Session = Depends(get_session)):
+    # Sanitiza o comando antes de salvar (Garante portabilidade)
+    mcp_data = mcp.model_dump()
+    if mcp_data.get("command"):
+        mcp_data["command"] = normalize_command(mcp_data["command"])
+
     new_mcp = MCPServer(
-        **mcp.model_dump(),
+        **mcp_data,
         user_id=ROOT_USER_ID
     )
     session.add(new_mcp)
     session.commit()
     session.refresh(new_mcp)
-    return new_mcp
+    return MCPServerRead.from_orm(new_mcp)
 
 @app.get("/api/v1/mcp-servers", response_model=List[MCPServerRead])
 async def list_mcp_servers(session: Session = Depends(get_session)):
     statement = select(MCPServer).where(MCPServer.user_id == ROOT_USER_ID).order_by(MCPServer.created_at.desc())
     servers = session.exec(statement).all()
-    return servers
+    return [MCPServerRead.from_orm(s) for s in servers]
 
 @app.get("/api/v1/mcp-servers/{mcp_id}", response_model=MCPServerRead)
 async def get_mcp_server(mcp_id: str, session: Session = Depends(get_session)):
     mcp = session.get(MCPServer, mcp_id)
     if not mcp:
         raise HTTPException(status_code=404, detail="Servidor MCP não encontrado")
-    return mcp
+    return MCPServerRead.from_orm(mcp)
 
 @app.patch("/api/v1/mcp-servers/{mcp_id}", response_model=MCPServerRead)
 @app.put("/api/v1/mcp-servers/{mcp_id}", response_model=MCPServerRead)
@@ -527,13 +593,36 @@ async def update_mcp_server(mcp_id: str, mcp_update: MCPServerUpdate, session: S
         raise HTTPException(status_code=404, detail="Servidor MCP não encontrado")
     
     update_data = mcp_update.model_dump(exclude_unset=True)
+    if update_data.get("command"):
+        update_data["command"] = normalize_command(update_data["command"])
+
+    # Preserve existing secrets: skip header/env_var entries with empty values
+    # (empty value = user didn't change the secret, keep the existing one)
+    if "headers" in update_data and update_data["headers"] is not None:
+        existing_headers = db_mcp.headers or {}
+        merged_headers = dict(existing_headers)  # Start with existing
+        for k, v in update_data["headers"].items():
+            if v and v != "":
+                merged_headers[k] = v  # Only update non-empty new values
+        # Allow deletion: keys NOT present in update_data["headers"] are removed
+        # Keys in update_data that have empty value keep their old value
+        update_data["headers"] = merged_headers
+
+    if "env_vars" in update_data and update_data["env_vars"] is not None:
+        existing_env = db_mcp.env_vars or {}
+        merged_env = dict(existing_env)
+        for k, v in update_data["env_vars"].items():
+            if v and v != "":
+                merged_env[k] = v
+        update_data["env_vars"] = merged_env
+
     for key, value in update_data.items():
         setattr(db_mcp, key, value)
     
     session.add(db_mcp)
     session.commit()
     session.refresh(db_mcp)
-    return db_mcp
+    return MCPServerRead.from_orm(db_mcp)
 
 @app.delete("/api/v1/mcp-servers/{mcp_id}")
 async def delete_mcp_server(mcp_id: str, session: Session = Depends(get_session)):
@@ -771,6 +860,199 @@ async def get_file_content(ws_id: str, path: str, session: Session = Depends(get
         raise HTTPException(status_code=500, detail=str(e))
 
 
+import re
+
+def resolve_path(data: Any, path: str) -> Optional[Any]:
+    """Resolve a path like 'user.friends[0].name' in data."""
+    # Split by dot or brackets for robust resolution
+    parts = re.split(r'\.|\[|\]', path)
+    parts = [p for p in parts if p] # Remove empty parts
+    
+    val = data
+    for p in parts:
+        if isinstance(val, dict):
+            val = val.get(p)
+        elif isinstance(val, list):
+            try:
+                # Handle numeric index for lists
+                val = val[int(p)]
+            except (ValueError, IndexError, TypeError):
+                return None
+        else:
+            return None
+    return val
+
+def map_payload_to_inputs(payload: Dict[str, Any], mappings: Dict[str, str]) -> Dict[str, Any]:
+    """Mapeia campos do payload para inputs do Crew suportando n8n format e arrays."""
+    inputs = {}
+    if not mappings:
+        return inputs
+        
+    for target_key, source_path in mappings.items():
+        # Suporte ao formato n8n: {{ $json.path.to.key }}
+        path = source_path.strip()
+        if path.startswith('{{') and path.endswith('}}'):
+            path = path[2:-2].strip()
+        if path.startswith('$json.'):
+            path = path[6:]
+            
+        val = resolve_path(payload, path)
+        if val is not None:
+            inputs[target_key] = val
+            
+    return inputs
+
+@app.api_route("/webhook/{slug}", methods=["GET", "POST", "PUT", "PATCH", "DELETE"])
+async def handle_webhook(
+    slug: str,
+    request: Request,
+    background_tasks: BackgroundTasks,
+    authorization: Optional[str] = Header(None),
+    session: Session = Depends(get_session)
+):
+    """
+    Endpoint dinâmico para triggers de Webhook.
+    Busca o projeto que contém um nó webhook com o path (slug) correspondente.
+    """
+    # 1. Busca todos os projetos para encontrar o que tem o webhook configurado
+    # Em produção com muitos projetos, isso deve ser um índice ou query JSON otimizada.
+    statement = select(CrewProject)
+    projects = session.exec(statement).all()
+    
+    target_project = None
+    target_node = None
+    
+    for p in projects:
+        nodes = p.canvas_data.get("nodes", [])
+        for n in nodes:
+            if n.get("type") == "webhook":
+                node_data = n.get("data", {})
+                if node_data.get("path") == slug:
+                    target_project = p
+                    target_node = n
+                    break
+        if target_project:
+            break
+            
+    if not target_project or not target_node:
+        raise HTTPException(status_code=404, detail=f"Webhook path '/{slug}' não encontrado em nenhum projeto ativo.")
+    
+    data = target_node.get("data", {})
+    
+    # 2. Verificações de Segurança e Estado
+    if data.get("isActive") is False:
+        raise HTTPException(status_code=403, detail="Este webhook está desativado.")
+        
+    # Validar método se especificado
+    if data.get("method") and data.get("method") != request.method:
+        raise HTTPException(status_code=405, detail=f"Método {request.method} não permitido. Use {data.get('method')}")
+
+    # Token Verification
+    token = data.get("token")
+    if token:
+        bearer_token = None
+        if authorization and authorization.lower().startswith("bearer "):
+            bearer_token = authorization[7:]
+        if bearer_token != token:
+            raise HTTPException(status_code=401, detail="Token inválido ou ausente.")
+
+    # 3. Preparação de Inputs
+    payload = {}
+    body = await request.body()
+    if body:
+        try:
+            payload = await request.json()
+        except:
+            # Tenta form data se falhar JSON
+            try:
+                form_data = await request.form()
+                payload = dict(form_data)
+            except:
+                pass
+                
+    mappings = data.get("fieldMappings", {})
+    mapped_inputs = map_payload_to_inputs(payload, mappings)
+    
+    # Se não houver mappings, injeta o payload inteiro em 'webhook_payload' como fallback
+    if not mapped_inputs:
+        mapped_inputs = {"webhook_payload": payload}
+
+    # 4. Execução
+    graph_data = GraphData(**target_project.canvas_data)
+    workspace_id = target_project.workspace_id
+    
+    # 5. Create Execution record
+    execution = Execution(
+        project_id=target_project.id,
+        status=ExecutionStatus.RUNNING,
+        trigger_type="webhook",
+        input_data=mapped_inputs,
+        graph_snapshot=target_project.canvas_data
+    )
+    session.add(execution)
+    session.commit()
+    session.refresh(execution)
+
+    if data.get("waitForResult") is True:
+        # Síncrono: executa em thread separada com seu próprio event loop
+        # O MCP client usa httpx async internamente — não pode rodar sem event loop
+        import asyncio
+        import concurrent.futures
+        
+        def _run_sync():
+            """Cria um event loop dedicado para a execução síncrona do crew."""
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            final_result = ""
+            try:
+                stream = run_crew_stream(graph_data, workspace_id=workspace_id, inputs=mapped_inputs, execution_id=execution.id)
+                for event_str in stream:
+                    if not event_str.strip():
+                        continue
+                    event = json.loads(event_str)
+                    if event.get("type") == "final_result":
+                        final_result = event.get("result", "")
+                    elif event.get("type") == "error":
+                        raise Exception(event.get("error"))
+            finally:
+                loop.close()
+            return final_result
+
+        try:
+            with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
+                future = executor.submit(_run_sync)
+                final_result = future.result(timeout=600)  # 10 min timeout
+            
+            return {
+                "status": "success",
+                "webhook": slug,
+                "project": target_project.name,
+                "output": final_result
+            }
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Erro na execução síncrona: {str(e)}")
+    else:
+        # Assíncrono: Dispara em background com event loop próprio
+        # BackgroundTasks roda em thread do threadpool sem event loop — criamos um explicitamente
+        import asyncio
+
+        def run_in_background():
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            try:
+                for _ in run_crew_stream(graph_data, workspace_id=workspace_id, inputs=mapped_inputs, execution_id=execution.id):
+                    pass
+            finally:
+                loop.close()
+        
+        background_tasks.add_task(run_in_background)
+        return {
+            "status": "accepted",
+            "message": "Execução iniciada em background.",
+            "webhook": slug,
+            "project": target_project.name
+        }
+
 @app.get("/api/v1/workspaces/{ws_id}/download-zip")
 async def download_workspace_zip(
     ws_id: str, 
@@ -885,6 +1167,19 @@ async def delete_workspace_file(
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+
+# --- Execution History Endpoints ---
+@app.get("/api/v1/projects/{project_id}/executions", response_model=List[ExecutionRead])
+async def list_project_executions(project_id: str, session: Session = Depends(get_session)):
+    statement = select(Execution).where(Execution.project_id == uuid.UUID(project_id)).order_by(Execution.timestamp.desc())
+    return session.exec(statement).all()
+
+@app.get("/api/v1/executions/{execution_id}", response_model=ExecutionRead)
+async def get_execution(execution_id: str, session: Session = Depends(get_session)):
+    execution = session.get(Execution, uuid.UUID(execution_id))
+    if not execution:
+        raise HTTPException(status_code=404, detail="Execução não encontrada")
+    return execution
 
 # --- Settings Endpoints ---
 @app.get("/api/v1/settings", response_model=AppSettingsRead)

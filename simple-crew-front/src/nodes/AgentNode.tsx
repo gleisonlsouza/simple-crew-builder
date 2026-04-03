@@ -2,8 +2,10 @@ import { memo, useState } from 'react';
 import { Handle, Position, type NodeProps, type Node } from '@xyflow/react';
 import { useShallow } from 'zustand/shallow';
 import { User, Trash2, ChevronDown, ChevronUp, CheckSquare, Loader2, CheckCircle2, AlertCircle, Clock, Cpu, Link, Settings, Package, Terminal, Plus, X } from 'lucide-react';
-import { useStore } from '../store';
-import type { AgentNodeData, NodeStatus } from '../types';
+import { useStore } from '../store/index';
+import type { AgentNodeData } from '../types/nodes.types';
+import type { NodeStatus } from '../types/store.types';
+
 import { ToolConfigurationModal } from '../components/ToolConfigurationModal';
 
 export const AgentNode = memo(({ id, data }: NodeProps<Node<AgentNodeData, 'agent'>>) => {

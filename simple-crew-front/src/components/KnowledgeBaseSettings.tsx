@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Plus, Database, Calendar, Loader2, Info, X, Files, Trash2 } from 'lucide-react';
 import toast from 'react-hot-toast';
-import type { KnowledgeBase } from '../types';
+import type { KnowledgeBase } from '../types/store.types';
 import { KnowledgeBaseDocumentsModal } from './KnowledgeBaseDocumentsModal';
 import { ConfirmationModal } from './ConfirmationModal';
 

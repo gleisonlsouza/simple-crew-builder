@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { AlertOctagon, CheckCircle2, Info, AlertTriangle, X } from 'lucide-react';
-import { useStore } from '../store';
-import type { AppState } from '../types';
+import { useStore } from '../store/index';
+import type { AppState } from '../types/store.types';
 
 export function Toast() {
   const notification = useStore((state: AppState) => state.notification);

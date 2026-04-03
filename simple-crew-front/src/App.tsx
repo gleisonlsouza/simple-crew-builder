@@ -3,7 +3,7 @@ import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import Dashboard from './pages/Dashboard';
 import Builder from './pages/Builder';
 import SettingsPage from './pages/Settings';
-import { useStore } from './store';
+import { useStore } from './store/index';
 import { WorkspaceExplorer } from './components/WorkspaceExplorer';
 
 function App() {
