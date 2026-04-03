@@ -1,4 +1,5 @@
 import React, { useCallback, useRef, useEffect } from 'react';
+import { v4 as uuidv4 } from 'uuid';
 import { Toaster } from 'react-hot-toast';
 import { ReactFlow, Background, Controls, MiniMap, ReactFlowProvider, useReactFlow, BackgroundVariant } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
@@ -39,7 +40,7 @@ const edgeTypes = {
   deletable: DeletableEdge,
 };
 
-const getId = () => `dndnode_${crypto.randomUUID()}`;
+const getId = () => `dndnode_${uuidv4()}`;
 
 // 1. O Canvas Isolado (Re-renderiza 60x/seg no drag de forma ultra-leve)
 const FlowCanvas = () => {
@@ -84,7 +85,7 @@ const FlowCanvas = () => {
       const timestamp = Date.now().toString().slice(-4);
       if (type === 'agent') data = { name: `New Agent ${timestamp}`, role: '', goal: '', backstory: '', isCollapsed: false };
       else if (type === 'task') data = { name: `New Task ${timestamp}`, description: '', expected_output: '' };
-      else if (type === 'crew') data = { process: 'sequential', isCollapsed: false };
+      else if (type === 'crew') data = { process: 'sequential', memory: false, cache: false, isCollapsed: false };
       else if (type === 'chat') {
         data = { name: 'Chat Trigger', description: 'Start the Crew from a user\'s text message.', isCollapsed: false, inputMapping: 'chat_input' };
       } else if (type === 'webhook') {

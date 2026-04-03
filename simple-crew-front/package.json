@@ -33,6 +33,7 @@
     "react-simple-code-editor": "^0.14.1",
     "react-zoom-pan-pinch": "^3.7.0",
     "remark-gfm": "^4.0.1",
+    "uuid": "^13.0.0",
     "zustand": "^5.0.11"
   },
   "devDependencies": {
@@ -45,6 +46,7 @@
     "@types/node": "^24.12.0",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
+    "@types/uuid": "^10.0.0",
     "@vitejs/plugin-react": "^6.0.0",
     "@vitest/coverage-v8": "^4.1.2",
     "eslint": "^9.39.4",

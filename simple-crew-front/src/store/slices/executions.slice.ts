@@ -1,4 +1,5 @@
 import type { StateCreator } from 'zustand';
+import { v4 as uuidv4 } from 'uuid';
 import type { AppState, ExecutionSlice, Execution } from '../../types/store.types';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
@@ -56,7 +57,7 @@ export const createExecutionSlice: StateCreator<
       
       state.setMessages((prev: any) => [
         ...prev,
-        { id: crypto.randomUUID(), role: 'user', content: `Re-running with input: ${input}` }
+        { id: uuidv4(), role: 'user', content: `Re-running with input: ${input}` }
       ]);
       
       // Open chat and start execution
