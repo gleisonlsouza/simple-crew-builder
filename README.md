@@ -11,16 +11,24 @@
 
 ---
 
-## ✨ Enterprise Features (v0.0.5+)
+## ✨ Enterprise Features (v0.0.6+)
 
 Simple Crew Builder has evolved into a robust orchestration platform with advanced observability and integration capabilities:
 
 - **🔗 Dynamic Webhook Triggers**: Direct integration with tools like n8n or Make. Configure custom paths with automatic sluggification and real-time mapping of incoming JSON payloads.
 - **👁️ Execution Observability**: A dedicated dashboard to monitor every run. Includes visual snapshots of the graph state at execution time, detailed logs, and success/error status.
 - **⏳ Time Machine (Re-run Snapshot)**: One-click hydration of the workspace from any historical execution. Fix errors and re-run with the exact same configuration.
-- **🧠 Knowledge Base (RAG) Engine**: Neo4j-powered long-term memory, enabling agents to persist knowledge across sessions.
+- **🧠 Knowledge Base (RAG) Engine**: Neo4j-powered long-term memory with **Context Intelligence** (`top_k` optimization per agent responsibility).
+- **🎨 Mermaid Diagram Export**: Visual orchestrator with native **PNG/SVG export** for documentation and architecture sharing.
 - **📁 Enterprise Code Parsing**: Index entire repositories (React, Python, etc.) via `.zip` uploads, automatically ignoring non-essential files.
 - **🔌 MCP Native**: Full support for Model Context Protocol (MCP) servers and the custom Python tool ecosystem.
+
+---
+
+> [!CAUTION]
+> ### ⚠️ Migration & Data Safety (v0.0.5 → v0.0.6)
+> 
+> Before upgrading to `v0.0.6`, please **backup your Workflows and databases**. If you encounter issues pulling the latest image, you may need to run `docker compose down -v` to clear previous volume caches, but **this will permanently delete all local data**. Only perform this action if your data is backed up.
 
 ---
 
@@ -84,7 +92,7 @@ We maintain high architectural standards to ensure stability in complex AI workf
 ### Coverage & Reliability
 We follow an **Elite Coverage (>80%)** standard for all new components and logic slices.
 
-- **Frontend Tests**: Powered by **Vitest** and **React Testing Library**.
+- **Frontend Tests**: Powered by **Vitest**, **React Testing Library**, and **Playwright** (E2E).
 - **Coverage Command**:
   ```bash
   cd simple-crew-front
