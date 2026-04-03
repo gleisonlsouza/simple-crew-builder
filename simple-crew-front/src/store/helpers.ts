@@ -41,8 +41,8 @@ export const migrateNodes = (nodes: any[]): AppNode[] => {
       const crewData: CrewNodeData = {
         process: data.process || 'sequential',
         verbose: data.verbose !== undefined ? data.verbose : true,
-        memory: data.memory !== undefined ? data.memory : true,
-        cache: data.cache !== undefined ? data.cache : true,
+        memory: data.memory !== undefined ? data.memory : false,
+        cache: data.cache !== undefined ? data.cache : false,
         planning: data.planning || false,
         share_crew: data.share_crew || false,
         ...data
