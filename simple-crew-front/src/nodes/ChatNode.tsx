@@ -2,8 +2,8 @@ import { memo } from 'react';
 import { Handle, Position, type NodeProps, type Node } from '@xyflow/react';
 import { useShallow } from 'zustand/shallow';
 import { MessageCircle, Trash2, Settings } from 'lucide-react';
-import { useStore } from '../store';
-import type { ChatNodeData } from '../types';
+import { useStore } from '../store/index';
+import type { ChatNodeData } from '../types/nodes.types';
 
 export const ChatNode = memo(({ id, data }: NodeProps<Node<ChatNodeData, 'chat'>>) => {
   const { deleteNode, setActiveNode } = useStore(

@@ -1,5 +1,6 @@
 import os
 import uuid
+from sqlalchemy import text
 from sqlmodel import create_engine, SQLModel, Session, select
 from dotenv import load_dotenv
 from .models import User, CrewProject, Credential, LLMModel, AppSettings, CustomTool, Workspace
@@ -12,6 +13,15 @@ engine = create_engine(DATABASE_URL, echo=True)
 
 def init_db():
     SQLModel.metadata.create_all(engine)
+    
+    # Schema Migration for existing databases (Postgres specific)
+    try:
+        with engine.begin() as conn:
+            conn.execute(text("ALTER TABLE llmmodel ALTER COLUMN credential_id DROP NOT NULL"))
+            print("--- Migration: credential_id is now nullable in llmmodel! ---")
+    except Exception as e:
+        # Expected to fail if not using Postgres or specialized environment, but safe to skip
+        print(f"--- Migration Note: Manual alter skipped (expected if not Postgres): {e} ---")
     
     # Seed Root User
     with Session(engine) as session:

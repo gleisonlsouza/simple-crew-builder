@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react';
-import { useStore } from '../store';
+import { useStore } from '../store/index';
 import { Terminal, X, Minimize2, Maximize2, Loader2, Sparkles, CheckCircle2 } from 'lucide-react';
 
 export function ConsoleDrawer() {
@@ -75,6 +75,7 @@ export function ConsoleDrawer() {
       {/* Body */}
       <div
         ref={scrollRef}
+        data-testid="console-body"
         className={`flex-1 overflow-y-auto p-4 scroll-smooth ${isConsoleExpanded ? 'block' : 'hidden'}`}
       >
         {executionResult ? (

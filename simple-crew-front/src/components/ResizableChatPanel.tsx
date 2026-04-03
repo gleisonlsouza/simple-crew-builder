@@ -1,17 +1,10 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { useStore } from '../store';
+import { useStore } from '../store/index';
 import { X, ChevronDown, ChevronUp, Trash2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { ConfirmationModal } from './ConfirmationModal';
 import { ChatMessage } from './ChatMessage';
 import { ChatInput } from './ChatInput';
-
-type Message = {
-  id: string;
-  role: 'user' | 'assistant';
-  content: string;
-};
-
 
 export function ResizableChatPanel() {
   const isChatVisible = useStore((state) => state.isChatVisible);
@@ -20,20 +13,14 @@ export function ResizableChatPanel() {
   const updateNodeData = useStore((state) => state.updateNodeData);
   const nodes = useStore((state) => state.nodes);
   const edges = useStore((state) => state.edges);
+  const messages = useStore((state) => state.messages);
+  const setMessages = useStore((state) => state.setMessages);
+  const clearChat = useStore((state) => state.clearChat);
 
   const [chatHeight, setChatHeight] = useState(300);
   const [isResizing, setIsResizing] = useState(false);
   const [isMinimized, setIsMinimized] = useState(false);
   
-  const initialMessages: Message[] = [
-    {
-      id: 'welcome-1',
-      role: 'assistant',
-      content: 'Hello! I am connected to your Crew. How can we help you today?'
-    }
-  ];
-
-  const [messages, setMessages] = useState<Message[]>(initialMessages);
   const [isLoading, setIsLoading] = useState(false);
   const [isConfirmModalOpen, setIsConfirmModalOpen] = useState(false);
 
@@ -80,9 +67,9 @@ export function ResizableChatPanel() {
   const handleSendMessage = useCallback(async (text: string) => {
     if (!text.trim() || isLoading) return;
 
-    const userMessage: Message = {
+    const userMessage = {
       id: Date.now().toString(),
-      role: 'user',
+      role: 'user' as const,
       content: text
     };
 
@@ -165,7 +152,7 @@ export function ResizableChatPanel() {
     } finally {
       setIsLoading(false);
     }
-  }, [isLoading, nodes, edges, updateNodeData, startRealExecution, messages]);
+  }, [isLoading, nodes, edges, updateNodeData, startRealExecution, messages, setMessages]);
 
   const handleClearChat = () => {
     if (messages.length <= 1) return;
@@ -173,7 +160,7 @@ export function ResizableChatPanel() {
   };
 
   const confirmClearChat = () => {
-    setMessages(initialMessages);
+    clearChat();
     toast.success('Conversation cleared');
   };
 

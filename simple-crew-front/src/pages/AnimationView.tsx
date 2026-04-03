@@ -30,7 +30,7 @@ import { RobotIcon } from '../components/Animation/RobotIcon';
 import { Station } from '../components/Animation/Station';
 import { SimulationLog } from '../components/Animation/SimulationLog';
 import { ResultComputerScreen } from '../components/Animation/ResultComputerScreen';
-import { useStore } from '../store';
+import { useStore } from '../store/index';
 
 // --- Helpers ---
 

@@ -16,7 +16,7 @@ import {
   Upload,
   HelpCircle
 } from 'lucide-react';
-import { useStore } from '../store';
+import { useStore } from '../store/index';
 import { SettingsDrawer } from '../components/SettingsDrawer';
 import { ConfirmationModal } from '../components/ConfirmationModal';
 import { AboutModal } from '../components/AboutModal';
@@ -28,6 +28,7 @@ const Dashboard = () => {
   const setIsSettingsOpen = useStore((state) => state.setIsSettingsOpen);
   const fetchProjects = useStore((state) => state.fetchProjects);
   const fetchCredentials = useStore((state) => state.fetchCredentials);
+  const fetchWorkspaces = useStore((state) => state.fetchWorkspaces);
   const deleteProject = useStore((state) => state.deleteProject);
   const updateProjectMetadata = useStore((state) => state.updateProjectMetadata);
 
@@ -48,7 +49,8 @@ const Dashboard = () => {
   useEffect(() => {
     fetchProjects();
     fetchCredentials();
-  }, [fetchProjects, fetchCredentials]);
+    fetchWorkspaces();
+  }, [fetchProjects, fetchCredentials, fetchWorkspaces]);
 
   // Close menu on click outside
   useEffect(() => {

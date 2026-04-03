@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { X, Settings2, Save, AlertCircle, Loader2 } from 'lucide-react';
-import type { ToolConfig } from '../types';
+import type { ToolConfig } from '../types/config.types';
 import { CustomSelect } from './CustomSelect';
 
 interface ToolConfigurationModalProps {

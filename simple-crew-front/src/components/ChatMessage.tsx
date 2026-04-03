@@ -6,11 +6,7 @@ import Prism from 'prismjs';
 import toast from 'react-hot-toast';
 import { MermaidRenderer } from './MermaidRenderer';
 
-type Message = {
-  id: string;
-  role: 'user' | 'assistant';
-  content: string;
-};
+import { type ChatMessage as ChatMessageType } from '../types/store.types';
 
 const MarkdownCodeBlock = ({ children, className }: { children: string; className?: string }) => {
   const [copied, setCopied] = useState(false);
@@ -60,7 +56,7 @@ const MarkdownCodeBlock = ({ children, className }: { children: string; classNam
   );
 };
 
-export const ChatMessage = React.memo(({ msg }: { msg: Message }) => {
+export const ChatMessage = React.memo(({ msg }: { msg: ChatMessageType }) => {
   const markdownComponents = useMemo(() => ({
     p: ({ children }: any) => <p className="mb-3 last:mb-0 leading-relaxed text-[13px]">{children}</p>,
     strong: ({ children }: any) => <strong className="font-bold text-brand-text">{children}</strong>,

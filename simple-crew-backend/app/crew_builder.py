@@ -3,6 +3,9 @@ import threading
 import queue
 import json
 import typing
+import uuid
+import datetime
+import traceback
 from typing import Dict, List, Iterator, Any, Optional
 from pathlib import Path
 from crewai import Agent, Task, Crew, Process
@@ -10,7 +13,7 @@ from crewai.tools import tool, BaseTool
 from crewai.llm import LLM
 import os
 from pydantic import BaseModel, Field
-from .models import LLMModel, Credential, MCPServer, AppSettings, Workspace
+from .models import LLMModel, Credential, MCPServer, AppSettings, Workspace, Execution, ExecutionStatus
 from .schemas import GraphData
 from mcp import StdioServerParameters
 from crewai_tools import (
@@ -35,6 +38,8 @@ from sqlmodel import Session, select
 from dotenv import load_dotenv
 from contextlib import ExitStack, redirect_stdout
 import contextlib
+
+from .utils import normalize_command
 
 load_dotenv()
 
@@ -213,7 +218,9 @@ def wrap_tool_with_workspace_guard(tool_instance: BaseTool, workspace_path: str)
     tool_instance._run = protected_run
     return tool_instance
 
-def run_crew_stream(graph_data: GraphData, workspace_id: Optional[Any] = None) -> Iterator[str]:
+def run_crew_stream(graph_data: GraphData, workspace_id: Optional[Any] = None, inputs: Optional[Dict[str, Any]] = None, execution_id: Optional[typing.Union[str, uuid.UUID]] = None) -> Iterator[str]:
+    import time
+    start_time = time.time()
     nodes = {node.id: node for node in graph_data.nodes}
     edges = graph_data.edges
     
@@ -228,6 +235,10 @@ def run_crew_stream(graph_data: GraphData, workspace_id: Optional[Any] = None) -
     execution_inputs = getattr(crew_node.data, 'inputs', {}) or {}
     # Filtra apenas keys reais (remove os placeholders temporários do frontend)
     execution_inputs = {k: v for k, v in execution_inputs.items() if not k.startswith('input_')}
+    
+    # Mescla com inputs externos (ex: vindo de Webhook)
+    if inputs:
+        execution_inputs.update(inputs)
 
     process_type = Process.sequential
     if crew_node.data.process == "hierarchical":
@@ -246,20 +257,28 @@ def run_crew_stream(graph_data: GraphData, workspace_id: Optional[Any] = None) -
             task_to_agent_map[edge.target] = edge.source
 
     q = queue.Queue()
+    tracked_statuses: Dict[str, str] = {}
     
     def make_agent_step_callback(agent_id: str):
         def cb(step_output):
+            tracked_statuses[agent_id] = "running"
             q.put(json.dumps({"type": "status", "nodeId": agent_id, "status": "running"}) + "\n")
         return cb
 
     def emit_task_running(task_id: str):
+        tracked_statuses[task_id] = "running"
         q.put(json.dumps({"type": "status", "nodeId": task_id, "status": "running"}) + "\n")
         agent_id = task_to_agent_map.get(task_id)
         if agent_id:
+            tracked_statuses[agent_id] = "running"
             q.put(json.dumps({"type": "status", "nodeId": agent_id, "status": "running"}) + "\n")
     
     def make_task_callback(task_id: str):
         def cb(output):
+            tracked_statuses[task_id] = "success"
+            agent_id = task_to_agent_map.get(task_id)
+            if agent_id:
+                tracked_statuses[agent_id] = "success"
             q.put(json.dumps({"type": "task_completed", "task_id": task_id}) + "\n")
             try:
                 curr_idx = ordered_task_ids.index(task_id)
@@ -273,6 +292,7 @@ def run_crew_stream(graph_data: GraphData, workspace_id: Optional[Any] = None) -
     # 5. Execução em Thread
     
     def worker():
+        nonlocal start_time
         original_stdout = sys.stdout
         sys.stdout = StreamToQueue(q)
         
@@ -325,12 +345,16 @@ def run_crew_stream(graph_data: GraphData, workspace_id: Optional[Any] = None) -
                 
                 # Coletamos todos os IDs de MCP únicos que serão usados
                 all_mcp_ids = set()
+                mcp_to_agents = {}
                 for node in agent_nodes:
                     mcp_server_ids = getattr(node.data, 'mcpServerIds', []) or []
                     if mcp_server_ids:
                         log_debug(f"Agent {node.data.name} has MCP Server IDs: {mcp_server_ids}")
                     for mid in mcp_server_ids:
                         all_mcp_ids.add(mid)
+                        if str(mid) not in mcp_to_agents:
+                            mcp_to_agents[str(mid)] = []
+                        mcp_to_agents[str(mid)].append(node.id)
                 
                 log_debug(f"Unique MCP IDs found in graph: {all_mcp_ids}")
                 if not all_mcp_ids:
@@ -346,9 +370,7 @@ def run_crew_stream(graph_data: GraphData, workspace_id: Optional[Any] = None) -
                         
                         try:
                             if mcp_record.transport_type == 'stdio':
-                                command = mcp_record.command
-                                if command == "npx" and os.name == "nt":
-                                    command = "npx.cmd"
+                                command = normalize_command(mcp_record.command)
                                 
                                 env = dict(os.environ)
                                 env["UV_PYTHON"] = "3.12"
@@ -372,20 +394,74 @@ def run_crew_stream(graph_data: GraphData, workspace_id: Optional[Any] = None) -
                                     log_debug(f"Failed to create StdioServerParameters or Adapter for {mcp_record.name}: {str(pe)}")
                                     continue
                             else:
-                                # SSE (Em desenvolvimento - Requer SseClientParameters do SDK MCP)
-                                log_debug(f"SSE transport not yet supported for {mcp_record.name}")
-                                continue
-                            
-                            log_debug(f"Connecting to MCP {mcp_record.name} via stack.enter_context...")
-                            try:
-                                # Entramos no contexto do adapter para ativar a conexão (Retorna a lista de ferramentas)
-                                raw_tools = stack.enter_context(adapter)
-                                log_debug(f"MCP {mcp_record.name} connected. Found {len(raw_tools if raw_tools else [])} raw tools.")
-                            except Exception as ce:
-                                log_debug(f"Failed to enter MCP context for {mcp_record.name}: {str(ce)}")
-                                continue
+                                base_url = mcp_record.url.strip()
+                                # Se o usuário escolheu um transporte remoto específico, priorizamos ele.
+                                # Se for SSE, mantemos as estratégias híbridas para resiliência.
+                                if mcp_record.transport_type == "streamable-http":
+                                    connection_strategies = [
+                                        ("streamable-http", base_url.rstrip('/')),
+                                        ("streamable-http", base_url.rstrip('/') + '/'),
+                                    ]
+                                else:
+                                    # SSE (Default ou Selecionado) - Mantém híbrido
+                                    connection_strategies = [
+                                        ("sse", base_url.rstrip('/')),
+                                        ("sse", base_url.rstrip('/') + '/'),
+                                        ("streamable-http", base_url.rstrip('/')),
+                                        ("sse", base_url.rstrip('/') + '/sse'),
+                                    ]
+                                
+                                # Remove duplicatas mantendo a ordem
+                                seen_strategies = set()
+                                unique_strategies = []
+                                for strat in connection_strategies:
+                                    if strat not in seen_strategies:
+                                        unique_strategies.append(strat)
+                                        seen_strategies.add(strat)
+                                
+                                raw_tools = None
+                                last_exception = None
+                                
+                                for transport, candidate_url in unique_strategies:
+                                    log_debug(f"Attempting MCP connection ({transport}): {candidate_url}")
+                                    try:
+                                        sse_headers = (mcp_record.headers or {}).copy()
+                                        if "Accept" not in sse_headers:
+                                            sse_headers["Accept"] = "text/event-stream"
+                                        
+                                        server_params = {
+                                            "url": candidate_url,
+                                            "transport": transport,
+                                            "headers": sse_headers
+                                        }
+                                        
+                                        adapter = MCPServerAdapter(server_params, connect_timeout=120)
+                                        
+                                        # Tentativa de entrada no contexto (Bootstrap do MCP)
+                                        raw_tools = stack.enter_context(adapter)
+                                        log_debug(f"MCP {mcp_record.name} connected successfully with {transport} at {candidate_url}. Found {len(raw_tools if raw_tools else [])} tools.")
+                                        break # Sucesso na conexão!
+                                    except Exception as ce:
+                                        last_exception = ce
+                                        error_msg = str(ce).lower()
+                                        if "405" in error_msg or "method not allowed" in error_msg:
+                                            log_debug(f"Received 405 Method Not Allowed for {transport} at {candidate_url}. Testing hybrid candidate...")
+                                            continue 
+                                        else:
+                                            # Outro erro impeditivo (ex: 401 Unauthorized) -> Para de tentar
+                                            log_debug(f"MCP connection failed terminal: {str(ce)}")
+                                            break
+                                
+                                if not raw_tools:
+                                    # Se esgotamos as estratégias sem sucesso
+                                    affected_agents = mcp_to_agents.get(str(mcp_record.id), [])
+                                    for agent_id in affected_agents:
+                                        tracked_statuses[agent_id] = "error"
+                                        q.put(json.dumps({"type": "status", "nodeId": agent_id, "status": "error"}) + "\n")
+                                    raise Exception(f"Failed to connect to MCP server '{mcp_record.name}' after hybrid strategy attempts. Last error: {str(last_exception)}")
                             
                             if not raw_tools:
+                                # Garantia extra de log
                                 log_debug(f"Warning: MCP server {mcp_record.name} returned 0 tools.")
                             
                             # Playwright Schema Injection & Filtering
@@ -394,13 +470,15 @@ def run_crew_stream(graph_data: GraphData, workspace_id: Optional[Any] = None) -
                             processed_tools = []
                             if is_playwright:
                                 allowed_suffixes = ["browser_navigate", "browser_click", "browser_type", "browser_snapshot"]
-                                for mcp_tool in raw_tools:
-                                    if any(mcp_tool.name.endswith(s) for s in allowed_suffixes):
-                                        processed_tools.append(mcp_tool)
-                                    else:
-                                        log_debug(f"Skipping non-essential Playwright tool: {mcp_tool.name}")
+                                if raw_tools:
+                                    for mcp_tool in raw_tools:
+                                        if any(mcp_tool.name.endswith(s) for s in allowed_suffixes):
+                                            processed_tools.append(mcp_tool)
+                                        else:
+                                            log_debug(f"Skipping non-essential Playwright tool: {mcp_tool.name}")
                             else:
-                                processed_tools.extend(raw_tools)
+                                if raw_tools:
+                                    processed_tools.extend(raw_tools)
                             
                             mcp_adapters_cache[str(mcp_id)] = processed_tools
                             
@@ -419,6 +497,8 @@ def run_crew_stream(graph_data: GraphData, workspace_id: Optional[Any] = None) -
                     global_ids = getattr(node_data, 'globalToolIds', []) or []
                     global_configs = {t.id: t for t in (graph_data.globalTools or [])}
                     
+                    disabled_ids = getattr(node_data, 'disabledToolIds', []) or []
+                    
                     for entry in global_ids:
                         gid = entry
                         config_data = {}
@@ -427,6 +507,10 @@ def run_crew_stream(graph_data: GraphData, workspace_id: Optional[Any] = None) -
                             gid = entry.get("id")
                             config_data = entry.get("config", {})
                             
+                        if gid in disabled_ids:
+                            log_debug(f"Tool '{gid}' is disabled for {node_name}. Skipping.")
+                            continue
+
                         config = global_configs.get(gid)
                         if not config or not config.isEnabled:
                             continue
@@ -477,6 +561,9 @@ def run_crew_stream(graph_data: GraphData, workspace_id: Optional[Any] = None) -
                         log_debug(f"Node {node_name} requesting tools for MCP IDs: {mcp_ids}")
                         for mid in mcp_ids:
                             mid_str = str(mid)
+                            if mid_str in disabled_ids:
+                                log_debug(f"MCP Server '{mid_str}' is disabled for {node_name}. Skipping.")
+                                continue
                             if mid_str in mcp_adapters_cache:
                                 tools_to_add = mcp_adapters_cache[mid_str]
                                 if isinstance(tools_to_add, list):
@@ -489,6 +576,9 @@ def run_crew_stream(graph_data: GraphData, workspace_id: Optional[Any] = None) -
                     
                     custom_ids = getattr(node_data, 'customToolIds', []) or []
                     for cid in custom_ids:
+                        if cid in disabled_ids:
+                            log_debug(f"Custom Tool '{cid}' is disabled for {node_name}. Skipping.")
+                            continue
                         tool_def = next((t for t in (graph_data.customTools or []) if t.id == cid), None)
                         if not tool_def:
                             log_debug(f"Warning: Custom tool {cid} code not found in graph_data.")
@@ -601,6 +691,9 @@ def run_crew_stream(graph_data: GraphData, workspace_id: Optional[Any] = None) -
                                     "api_key": credential.key,
                                 }
                                 if llm_config.temperature is not None: llm_params["temperature"] = llm_config.temperature
+                                if getattr(node.data, 'temperature', None) is not None:
+                                    llm_params["temperature"] = node.data.temperature
+                                    
                                 if llm_config.max_tokens is not None: llm_params["max_tokens"] = llm_config.max_tokens
                                 if getattr(llm_config, 'max_completion_tokens', None) is not None: llm_params["max_completion_tokens"] = llm_config.max_completion_tokens
                                 if llm_config.base_url and llm_config.base_url != "default": llm_params["base_url"] = llm_config.base_url
@@ -710,17 +803,20 @@ def run_crew_stream(graph_data: GraphData, workspace_id: Optional[Any] = None) -
                     expected_output = node.data.expected_output
                     task_name = node.data.name or f"Task_{node.id}"
                     
-                    # Encontra o agente vinculado a esta task (borda onde a origem é um agente)
+                    # Encontra o agente vinculado a esta task
+                    # Prioridade 1: Borda visual (Edge)
                     agent_ids = {n.id for n in agent_nodes}
                     task_agent_edge = next((e for e in edges if e.target == node.id and e.source in agent_ids), None)
                     
-                    if not task_agent_edge: 
-                        log_debug(f"Warning: Task {node.id} has no agent assigned via edge. Skipping.")
-                        continue
-                        
-                    source_agent_id = task_agent_edge.source
-                    if source_agent_id not in agents_map: 
-                        log_debug(f"Warning: Agent {source_agent_id} for task {node.id} not found in agents_map. Skipping.")
+                    source_agent_id = None
+                    if task_agent_edge:
+                        source_agent_id = task_agent_edge.source
+                    else:
+                        # Prioridade 2: Campo explícito agentId (configurado no drawer)
+                        source_agent_id = getattr(node.data, 'agentId', None)
+                    
+                    if not source_agent_id or source_agent_id not in agents_map: 
+                        log_debug(f"Warning: Task {task_name} (ID: {node.id}) has no valid agent assigned. Skipping.")
                         continue
                     
                     target_agent = agents_map[source_agent_id]
@@ -744,8 +840,14 @@ def run_crew_stream(graph_data: GraphData, workspace_id: Optional[Any] = None) -
                     combined_tools_dict.update({getattr(t, 'name', str(t)): t for t in this_task_tools})
                     combined_tools = list(combined_tools_dict.values())
 
+                    # workspace_task_instruction é uma string estática com '{workspace_path}'.
+                    # Quando concatenada ao description e processada pelo CrewAI (str.format_map),
+                    # os {{ do description são unescapados para {, e depois re-interpretados como
+                    # templates faltando. Escapamos a instrução estática para evitar isso.
+                    safe_instruction = workspace_task_instruction.replace("{", "{{").replace("}", "}}")
+
                     task_kwargs = {
-                        "description": description + workspace_task_instruction,
+                        "description": description + safe_instruction,
                         "expected_output": expected_output,
                         "agent": target_agent,
                         "tools": combined_tools,
@@ -760,6 +862,14 @@ def run_crew_stream(graph_data: GraphData, workspace_id: Optional[Any] = None) -
                         
                     if getattr(node.data, 'create_directory', True) is False:
                         task_kwargs['create_directory'] = False
+
+                    if getattr(node.data, 'output_json', False) is True:
+                        task_kwargs['output_json'] = True
+
+                    if getattr(node.data, 'output_pydantic', False) is True:
+                        # Note: In a real scenario, this would require a Pydantic class.
+                        # For now, we set it as True if found, but CrewAI usually expects a class.
+                        task_kwargs['output_pydantic'] = True
                         
                     output_file = getattr(node.data, 'output_file', None)
                     if output_file:
@@ -822,7 +932,7 @@ def run_crew_stream(graph_data: GraphData, workspace_id: Optional[Any] = None) -
                 base_task_queue = []
                 
                 # 1. Ordem oficial dos agentes
-                agent_order = getattr(crew_node.data, 'agentOrder', []) if crew_node else []
+                agent_order = (getattr(crew_node.data, 'agentOrder', []) or []) if crew_node else []
                 if not agent_order:
                     agent_order = [n.id for n in agent_nodes]
 
@@ -840,7 +950,7 @@ def run_crew_stream(graph_data: GraphData, workspace_id: Optional[Any] = None) -
                     
                     # Tenta organizar pela ordem salva no node (se o front enviou)
                     ag_node = nodes.get(ag_id)
-                    ag_task_order = getattr(ag_node.data, 'taskOrder', []) if ag_node else []
+                    ag_task_order = (getattr(ag_node.data, 'taskOrder', []) or []) if ag_node else []
                     
                     for tid in ag_task_order:
                         if tid in tasks_of_agent and tid not in base_task_queue:
@@ -975,12 +1085,51 @@ def run_crew_stream(graph_data: GraphData, workspace_id: Optional[Any] = None) -
                 log_debug(f"Kicking off Crew with inputs: {execution_inputs}")
                 
                 result = crew.kickoff(inputs=execution_inputs)
-                q.put(json.dumps({"type": "final_result", "result": str(result)}) + "\n")
+                final_output_str = str(result)
+                try:
+                    final_output = json.loads(final_output_str)
+                except (json.JSONDecodeError, ValueError):
+                    final_output = final_output_str
+
+                # Update Execution in database if id provided
+                if execution_id:
+                    try:
+                        with Session(engine) as session:
+                            execution = session.get(Execution, execution_id)
+                            if execution:
+                                execution.status = ExecutionStatus.SUCCESS
+                                execution.output_data = {"result": final_output, "node_statuses": tracked_statuses}
+                                execution.duration = time.time() - start_time
+                                session.add(execution)
+                                session.commit()
+                    except Exception as db_err:
+                        log_debug(f"DB Update Error (Success): {db_err}")
+
+                q.put(json.dumps({"type": "final_result", "result": final_output}) + "\n")
 
             except Exception as e:
                 import traceback
                 error_trace = traceback.format_exc()
                 log_debug(f"CRITICAL ERROR during worker execution:\n{error_trace}")
+                
+                # Update Execution status to Error
+                if execution_id:
+                    try:
+                        with Session(engine) as session:
+                            execution = session.get(Execution, execution_id)
+                            if execution:
+                                for nid, nstatus in tracked_statuses.items():
+                                    if nstatus == "running":
+                                        tracked_statuses[nid] = "error"
+                                        
+                                execution.status = ExecutionStatus.ERROR
+                                execution.output_data = {"error": str(e), "traceback": error_trace, "node_statuses": tracked_statuses}
+                                execution.duration = time.time() - start_time
+                                session.add(execution)
+                                session.commit()
+                    except Exception as db_err:
+                        log_debug(f"DB Update Error (Failure): {db_err}")
+                
                 q.put(json.dumps({"type": "error", "error": f"{str(e)}\n{error_trace}"}) + "\n")
             finally:
                 sys.stdout = original_stdout

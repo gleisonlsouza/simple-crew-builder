@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Send } from 'lucide-react';
+import { Send, Square } from 'lucide-react';
+import { useStore } from '../store/index';
 
 interface ChatInputProps {
   onSendMessage: (text: string) => void;
@@ -8,6 +9,7 @@ interface ChatInputProps {
 
 export const ChatInput: React.FC<ChatInputProps> = ({ onSendMessage, isLoading }) => {
   const [inputText, setInputText] = useState('');
+  const stopExecution = useStore((state) => state.stopExecution);
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
@@ -62,14 +64,26 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onSendMessage, isLoading }
           disabled={isLoading}
           className="w-full bg-brand-bg border border-brand-border rounded-xl pl-4 pr-12 py-3 text-sm text-brand-text placeholder-brand-muted focus:outline-none focus:border-brand-accent focus:ring-1 focus:ring-brand-accent transition-all font-medium disabled:opacity-50 resize-none min-h-[46px] max-h-[160px] custom-scrollbar shadow-sm"
         />
-        <button 
-          type="button"
-          onClick={handleSubmit}
-          disabled={!inputText.trim() || isLoading}
-          className="absolute right-2.5 bottom-2.5 p-1.5 rounded-lg bg-brand-accent hover:bg-brand-accent/80 text-white transition-colors disabled:opacity-50 shadow-lg shadow-brand-accent/20"
-        >
-          <Send className="w-4 h-4" />
-        </button>
+        <div className="flex items-center gap-2 absolute right-2.5 bottom-2.5">
+          {isLoading && (
+            <button
+              type="button"
+              onClick={() => stopExecution()}
+              className="p-1.5 rounded-lg bg-rose-500 hover:bg-rose-600 text-white transition-colors shadow-lg shadow-rose-500/20"
+              title="Stop Execution"
+            >
+              <Square className="w-4 h-4 fill-current" />
+            </button>
+          )}
+          <button 
+            type="button"
+            onClick={handleSubmit}
+            disabled={!inputText.trim() || isLoading}
+            className="p-1.5 rounded-lg bg-brand-accent hover:bg-brand-accent/80 text-white transition-colors disabled:opacity-50 shadow-lg shadow-brand-accent/20"
+          >
+            <Send className="w-4 h-4" />
+          </button>
+        </div>
       </div>
     </div>
   );

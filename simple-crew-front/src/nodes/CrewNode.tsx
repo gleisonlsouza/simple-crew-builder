@@ -2,8 +2,8 @@ import { memo, useState } from 'react';
 import { Handle, Position, type NodeProps, type Node } from '@xyflow/react';
 import { useShallow } from 'zustand/shallow';
 import { Users, Trash2, ChevronDown, ChevronUp, Loader2, CheckCircle2, Link, Settings } from 'lucide-react';
-import { useStore } from '../store';
-import type { CrewNodeData } from '../types';
+import { useStore } from '../store/index';
+import type { CrewNodeData } from '../types/nodes.types';
 
 export const CrewNode = memo(({ id, data }: NodeProps<Node<CrewNodeData, 'crew'>>) => {
   const { deleteNode, toggleCollapse, nodes, onConnect, setActiveNode } = useStore(

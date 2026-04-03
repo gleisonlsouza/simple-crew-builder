@@ -29,19 +29,33 @@ import {
   Layout,
   Type
 } from 'lucide-react';
-import { useStore } from '../store';
+import { useStore } from '../store/index';
 import { HighlightedTextField } from '../components/HighlightedTextField';
 import { CustomSelect } from '../components/CustomSelect';
-import { type ModelConfig, type MCPServer, type CustomTool } from '../types';
+import { type ModelConfig, type MCPServer, type CustomTool } from '../types/config.types';
 import { ConfirmationModal } from '../components/ConfirmationModal';
 import { KnowledgeBaseSettings } from '../components/KnowledgeBaseSettings';
 import { Database } from 'lucide-react';
 
 
+const INITIAL_CREDENTIAL = { name: '', description: '', key: '', provider: '' };
+const INITIAL_MODEL = { 
+  name: '', 
+  model_name: '',
+  description: '', 
+  credentialId: '', 
+  baseUrl: '', 
+  temperature: undefined, 
+  maxTokens: undefined, 
+  maxCompletionTokens: undefined, 
+  isDefault: false,
+  model_type: 'GENERATIVE' as const
+};
+
 const SettingsPage = () => {
   const navigate = useNavigate();
   const { 
-    credentials, addCredential, deleteCredential, fetchCredentials,
+    credentials, addCredential, updateCredential, deleteCredential, fetchCredentials,
     models: modelConfigs, addModel, updateModel, deleteModel, setDefaultModelConfig, fetchModels, duplicateModel,
     globalTools, updateToolConfig,
     customTools, addCustomTool, updateCustomTool, deleteCustomTool,
@@ -63,19 +77,8 @@ const SettingsPage = () => {
   const [isMCPModalOpen, setIsMCPModalOpen] = useState(false);
   const [isCustomToolModalOpen, setIsCustomToolModalOpen] = useState(false);
   const [isWorkspaceModalOpen, setIsWorkspaceModalOpen] = useState(false);
-  const [newCred, setNewCred] = useState({ name: '', description: '', key: '', provider: '' });
-  const [newModel, setNewModel] = useState<Omit<ModelConfig, 'id'>>({ 
-    name: '', 
-    model_name: '',
-    description: '', 
-    credentialId: '', 
-    baseUrl: '', 
-    temperature: undefined, 
-    maxTokens: undefined, 
-    maxCompletionTokens: undefined, 
-    isDefault: false,
-    model_type: 'GENERATIVE'
-  });
+  const [newCred, setNewCred] = useState(INITIAL_CREDENTIAL);
+  const [newModel, setNewModel] = useState<Omit<ModelConfig, 'id'>>(INITIAL_MODEL);
   const [newMCP, setNewMCP] = useState<Omit<MCPServer, 'id'>>({
     name: '',
     transportType: 'stdio',
@@ -97,6 +100,7 @@ const SettingsPage = () => {
   const [mcpArgsString, setMcpArgsString] = useState('');
   const [newEnvVar, setNewEnvVar] = useState({ key: '', value: '' });
   const [editingModelId, setEditingModelId] = useState<string | null>(null);
+  const [editingCredentialId, setEditingCredentialId] = useState<string | null>(null);
   const [editingMCPId, setEditingMCPId] = useState<string | null>(null);
   const [editingCustomToolId, setEditingCustomToolId] = useState<string | null>(null);
   const [editingWorkspaceId, setEditingWorkspaceId] = useState<string | null>(null);
@@ -130,11 +134,30 @@ const SettingsPage = () => {
   };
 
   const handleAddCredential = () => {
-    if (newCred.name && newCred.key) {
-      addCredential(newCred);
-      setNewCred({ name: '', description: '', key: '', provider: '' });
+    if (newCred.name && (newCred.key || editingCredentialId)) {
+      if (editingCredentialId) {
+        // If key is empty, it won't be updated on the backend if we use PATCH correctly
+        const updateData: any = { ...newCred };
+        if (!newCred.key) delete updateData.key;
+        updateCredential(editingCredentialId, updateData);
+      } else {
+        addCredential(newCred);
+      }
+      setNewCred(INITIAL_CREDENTIAL);
+      setEditingCredentialId(null);
       setIsModalOpen(false);
     }
+  };
+
+  const handleEditCredential = (cred: any) => {
+    setNewCred({
+      name: cred.name,
+      description: cred.description || '',
+      key: '', // Don't show the existing key
+      provider: cred.provider || ''
+    });
+    setEditingCredentialId(cred.id);
+    setIsModalOpen(true);
   };
 
   const formatDate = (dateString: string) => {
@@ -161,18 +184,7 @@ const SettingsPage = () => {
       } else {
         addModel(modelToSave);
       }
-      setNewModel({ 
-        name: '', 
-        model_name: '',
-        description: '', 
-        credentialId: '', 
-        baseUrl: '', 
-        temperature: undefined, 
-        maxTokens: undefined, 
-        maxCompletionTokens: undefined, 
-        isDefault: false,
-        model_type: 'GENERATIVE'
-      });
+      setNewModel(INITIAL_MODEL);
       setEditingModelId(null);
       setIsModelModalOpen(false);
     }
@@ -201,9 +213,11 @@ const SettingsPage = () => {
       transportType: server.transportType || 'stdio',
       command: server.command || '',
       args: server.args || [],
-      envVars: server.envVars || {},
+      // For security: populate only the KEY names, not values
+      // Empty values signal the backend to keep existing secrets unchanged
+      envVars: Object.fromEntries(Object.keys(server.envVars || {}).map(k => [k, ''])),
       url: server.url || '',
-      headers: server.headers || {}
+      headers: Object.fromEntries(Object.keys(server.headers || {}).map(k => [k, '']))
     });
     setMcpArgsString((server.args || []).join(' '));
     setEditingMCPId(server.id);
@@ -425,7 +439,11 @@ const SettingsPage = () => {
                   <p className="text-brand-muted text-sm">Manage your API keys for different LLM providers.</p>
                 </div>
                 <button 
-                  onClick={() => setIsModalOpen(true)}
+                  onClick={() => {
+                    setEditingCredentialId(null);
+                    setNewCred(INITIAL_CREDENTIAL);
+                    setIsModalOpen(true);
+                  }}
                   className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2.5 rounded-xl font-bold shadow-lg shadow-indigo-600/20 transition-all active:scale-95"
                 >
                   <Plus className="w-5 h-5" />
@@ -469,13 +487,22 @@ const SettingsPage = () => {
                         </div>
                       </div>
                       
-                      <button 
-                        onClick={() => requestDelete('credential', cred.id, cred.name)}
-                        className="p-2 text-brand-muted hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-all opacity-0 group-hover:opacity-100"
-                        title="Delete"
-                      >
-                        <Trash2 className="w-5 h-5" />
-                      </button>
+                      <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-all">
+                        <button 
+                          onClick={() => handleEditCredential(cred)}
+                          className="p-2 text-brand-muted hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 rounded-lg transition-all"
+                          title="Edit"
+                        >
+                          <Edit className="w-5 h-5" />
+                        </button>
+                        <button 
+                          onClick={() => requestDelete('credential', cred.id, cred.name)}
+                          className="p-2 text-brand-muted hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-all"
+                          title="Delete"
+                        >
+                          <Trash2 className="w-5 h-5" />
+                        </button>
+                      </div>
                     </div>
                   ))
                 )}
@@ -491,7 +518,11 @@ const SettingsPage = () => {
                   <p className="text-brand-muted text-sm">Configure your specific AI models and parameters.</p>
                 </div>
                 <button 
-                  onClick={() => setIsModelModalOpen(true)}
+                  onClick={() => {
+                    setEditingModelId(null);
+                    setNewModel(INITIAL_MODEL);
+                    setIsModelModalOpen(true);
+                  }}
                   className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2.5 rounded-xl font-bold shadow-lg shadow-indigo-600/20 transition-all active:scale-95"
                 >
                   <Plus className="w-5 h-5" />
@@ -832,15 +863,17 @@ const SettingsPage = () => {
                             <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full uppercase tracking-wider ${
                               server.transportType === 'sse' 
                                 ? 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600' 
+                                : server.transportType === 'streamable-http'
+                                ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-600'
                                 : 'bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600'
                             }`}>
-                              {server.transportType || 'stdio'}
+                              {server.transportType === 'streamable-http' ? 'HTTP' : (server.transportType || 'stdio')}
                             </span>
                           </div>
                           
                           <div className="flex items-center gap-3 mt-1.5 flex-wrap">
-                            {server.transportType === 'sse' ? (
-                              <span className="flex items-center gap-1.5 text-[10px] font-mono text-emerald-500 bg-brand-bg border border-brand-border px-2 py-0.5 rounded-md truncate max-w-[200px]">
+                            {(server.transportType === 'sse' || server.transportType === 'streamable-http') ? (
+                              <span className={`flex items-center gap-1.5 text-[10px] font-mono bg-brand-bg border border-brand-border px-2 py-0.5 rounded-md truncate max-w-[200px] ${server.transportType === 'sse' ? 'text-emerald-500' : 'text-blue-500'}`}>
                                 <Server className="w-3 h-3" />
                                 {server.url}
                               </span>
@@ -852,9 +885,9 @@ const SettingsPage = () => {
                               </span>
                             )}
                             
-                            {server.transportType === 'sse' ? (
+                            {(server.transportType === 'sse' || server.transportType === 'streamable-http') ? (
                               Object.keys(server.headers || {}).length > 0 && (
-                                <span className="flex items-center gap-1 text-[10px] text-emerald-500 bg-emerald-500/10 px-2 py-0.5 rounded-md font-bold">
+                                <span className={`flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-md font-bold ${server.transportType === 'sse' ? 'text-emerald-500 bg-emerald-500/10' : 'text-blue-500 bg-blue-500/10'}`}>
                                   {Object.keys(server.headers || {}).length} headers
                                 </span>
                               )
@@ -975,11 +1008,11 @@ const SettingsPage = () => {
       {/* Modal - New Credential */}
       {isModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 animate-in fade-in duration-200">
-          <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => setIsModalOpen(false)} />
+          <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => { setIsModalOpen(false); setEditingCredentialId(null); setNewCred(INITIAL_CREDENTIAL); }} />
           <div className="relative w-full max-w-md bg-brand-card border border-brand-border rounded-3xl shadow-2xl p-8 animate-in zoom-in-95 duration-200">
             <div className="flex items-center justify-between mb-6">
-              <h2 className="text-xl font-bold text-brand-text">Add New Credential</h2>
-              <button onClick={() => setIsModalOpen(false)} className="p-2 hover:bg-brand-bg rounded-full text-brand-muted transition-colors">
+              <h2 className="text-xl font-bold text-brand-text">{editingCredentialId ? 'Edit Credential' : 'Add New Credential'}</h2>
+              <button onClick={() => { setIsModalOpen(false); setEditingCredentialId(null); setNewCred(INITIAL_CREDENTIAL); }} className="p-2 hover:bg-brand-bg rounded-full text-brand-muted transition-colors">
                 <X className="w-6 h-6" />
               </button>
             </div>
@@ -1011,7 +1044,7 @@ const SettingsPage = () => {
                 <div className="relative">
                   <input 
                     type={showKeys['new'] ? 'text' : 'password'}
-                    placeholder="sk-..."
+                    placeholder={editingCredentialId ? 'Leave empty to keep existing key...' : 'sk-...'}
                     className="w-full bg-brand-bg border border-brand-border rounded-xl pl-4 pr-16 py-3 text-brand-text outline-none focus:ring-2 focus:ring-indigo-600 transition-all font-mono"
                     value={newCred.key}
                     onChange={(e) => setNewCred({...newCred, key: e.target.value})}
@@ -1046,17 +1079,17 @@ const SettingsPage = () => {
 
               <div className="pt-4 flex gap-3">
                 <button 
-                  onClick={() => setIsModalOpen(false)}
+                  onClick={() => { setIsModalOpen(false); setEditingCredentialId(null); setNewCred(INITIAL_CREDENTIAL); }}
                   className="flex-1 py-3 bg-brand-bg border border-brand-border text-brand-text rounded-xl font-bold hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-red-500 transition-colors"
                 >
                   Cancel
                 </button>
                 <button 
-                  disabled={!newCred.name || !newCred.key}
+                  disabled={!newCred.name || (!newCred.key && !editingCredentialId)}
                   onClick={handleAddCredential}
                   className="flex-1 py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold shadow-lg shadow-indigo-600/20 transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  Save Credential
+                  {editingCredentialId ? 'Update Credential' : 'Save Credential'}
                 </button>
               </div>
             </div>
@@ -1067,14 +1100,14 @@ const SettingsPage = () => {
       {/* Modal - New Model */}
       {isModelModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 animate-in fade-in duration-200">
-          <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => { setIsModelModalOpen(false); setEditingModelId(null); }} />
+          <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => { setIsModelModalOpen(false); setEditingModelId(null); setNewModel(INITIAL_MODEL); }} />
           <div className="relative w-full max-w-xl bg-brand-card border border-brand-border rounded-3xl shadow-2xl p-8 animate-in zoom-in-95 duration-200 max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between mb-8">
               <div>
                 <h2 className="text-2xl font-bold text-brand-text">{editingModelId ? 'Edit AI Model' : 'Configure AI Model'}</h2>
                 <p className="text-xs text-brand-muted mt-1">Set up specific parameters for your LLM.</p>
               </div>
-              <button onClick={() => { setIsModelModalOpen(false); setEditingModelId(null); }} className="p-2 hover:bg-brand-bg rounded-full text-brand-muted transition-colors">
+              <button onClick={() => { setIsModelModalOpen(false); setEditingModelId(null); setNewModel(INITIAL_MODEL); }} className="p-2 hover:bg-brand-bg rounded-full text-brand-muted transition-colors">
                 <X className="w-6 h-6" />
               </button>
             </div>
@@ -1225,7 +1258,7 @@ const SettingsPage = () => {
 
               <div className="md:col-span-2 pt-6 flex gap-4 border-t border-brand-border mt-4">
                 <button 
-                  onClick={() => { setIsModelModalOpen(false); setEditingModelId(null); }}
+                  onClick={() => { setIsModelModalOpen(false); setEditingModelId(null); setNewModel(INITIAL_MODEL); }}
                   className="flex-1 py-3 bg-brand-bg border border-brand-border text-brand-text rounded-xl font-bold hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-red-500 transition-colors"
                 >
                   Cancel
@@ -1272,10 +1305,10 @@ const SettingsPage = () => {
                 </div>
                 <div>
                   <label className="block text-xs font-bold text-brand-muted uppercase tracking-wider mb-2 text-indigo-500">Transport Type</label>
-                  <div className="grid grid-cols-2 gap-2">
+                  <div className="grid grid-cols-3 gap-2">
                     <button 
                       onClick={() => setNewMCP({ ...newMCP, transportType: 'stdio' })}
-                      className={`py-3 rounded-xl text-xs font-bold border transition-all ${
+                      className={`py-3 rounded-xl text-[10px] font-bold border transition-all ${
                         newMCP.transportType === 'stdio' 
                           ? 'bg-indigo-600 border-indigo-500 text-white shadow-lg shadow-indigo-600/20' 
                           : 'bg-brand-bg border-brand-border text-brand-muted hover:border-slate-300 dark:hover:border-slate-600'
@@ -1285,7 +1318,7 @@ const SettingsPage = () => {
                     </button>
                     <button 
                       onClick={() => setNewMCP({ ...newMCP, transportType: 'sse' })}
-                      className={`py-3 rounded-xl text-xs font-bold border transition-all ${
+                      className={`py-3 rounded-xl text-[10px] font-bold border transition-all ${
                         newMCP.transportType === 'sse' 
                           ? 'bg-emerald-600 border-emerald-500 text-white shadow-lg shadow-emerald-600/20' 
                           : 'bg-brand-bg border-brand-border text-brand-muted hover:border-slate-300 dark:hover:border-slate-600'
@@ -1293,17 +1326,27 @@ const SettingsPage = () => {
                     >
                       SSE (Remote)
                     </button>
+                    <button 
+                      onClick={() => setNewMCP({ ...newMCP, transportType: 'streamable-http' })}
+                      className={`py-3 rounded-xl text-[10px] font-bold border transition-all ${
+                        newMCP.transportType === 'streamable-http' 
+                          ? 'bg-blue-600 border-blue-500 text-white shadow-lg shadow-blue-600/20' 
+                          : 'bg-brand-bg border-brand-border text-brand-muted hover:border-slate-300 dark:hover:border-slate-600'
+                      }`}
+                    >
+                      HTTP (CrewAI)
+                    </button>
                   </div>
                 </div>
               </div>
 
-              {newMCP.transportType === 'sse' ? (
+              {(newMCP.transportType === 'sse' || newMCP.transportType === 'streamable-http') ? (
                 <div className="space-y-6 animate-in slide-in-from-top-4 duration-300">
                   <div>
                     <label className="block text-xs font-bold text-brand-muted uppercase tracking-wider mb-2">Server URL</label>
                     <input 
                       placeholder="e.g. http://localhost:8000/sse"
-                      className="w-full bg-brand-bg border border-brand-border rounded-xl px-4 py-3 text-brand-text outline-none focus:ring-2 focus:ring-emerald-600 transition-all font-mono text-sm"
+                      className={`w-full bg-brand-bg border border-brand-border rounded-xl px-4 py-3 text-brand-text outline-none focus:ring-2 transition-all font-mono text-sm ${newMCP.transportType === 'sse' ? 'focus:ring-emerald-600' : 'focus:ring-blue-600'}`}
                       value={newMCP.url || ''}
                       onChange={(e) => setNewMCP({...newMCP, url: e.target.value})}
                     />
@@ -1317,20 +1360,21 @@ const SettingsPage = () => {
                       <div className="grid grid-cols-2 gap-3">
                         <input 
                           placeholder="HEADER-NAME"
-                          className="bg-brand-bg border border-brand-border rounded-lg px-3 py-2 text-xs text-brand-text outline-none focus:ring-1 focus:ring-emerald-600"
+                          className={`bg-brand-bg border border-brand-border rounded-lg px-3 py-2 text-xs text-brand-text outline-none focus:ring-1 ${newMCP.transportType === 'sse' ? 'focus:ring-emerald-600' : 'focus:ring-blue-600'}`}
                           value={newEnvVar.key}
                           onChange={(e) => setNewEnvVar({ ...newEnvVar, key: e.target.value.toUpperCase() })}
                         />
                         <div className="flex gap-2">
                           <input 
-                            placeholder="Value"
-                            className="flex-1 bg-brand-bg border border-brand-border rounded-lg px-3 py-2 text-xs text-brand-text outline-none focus:ring-1 focus:ring-emerald-600"
+                            placeholder={editingMCPId ? 'Leave empty to keep existing value' : 'Value'}
+                            className={`flex-1 bg-brand-bg border border-brand-border rounded-lg px-3 py-2 text-xs text-brand-text outline-none focus:ring-1 ${newMCP.transportType === 'sse' ? 'focus:ring-emerald-600' : 'focus:ring-blue-600'}`}
                             value={newEnvVar.value}
                             onChange={(e) => setNewEnvVar({ ...newEnvVar, value: e.target.value })}
                           />
                           <button 
                             onClick={() => {
-                              if (newEnvVar.key && newEnvVar.value) {
+                              // Allow empty value in edit mode (signals "keep existing secret")
+                              if (newEnvVar.key && (newEnvVar.value || editingMCPId)) {
                                 setNewMCP({
                                   ...newMCP,
                                   headers: { ...(newMCP.headers || {}), [newEnvVar.key]: newEnvVar.value }
@@ -1338,7 +1382,7 @@ const SettingsPage = () => {
                                 setNewEnvVar({ key: '', value: '' });
                               }
                             }}
-                            className="bg-emerald-600 p-2 rounded-lg text-white hover:bg-emerald-700 transition-colors"
+                            className={`p-2 rounded-lg text-white transition-colors ${newMCP.transportType === 'sse' ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-blue-600 hover:bg-blue-700'}`}
                           >
                             <PlusCircle className="w-4 h-4" />
                           </button>
@@ -1348,9 +1392,10 @@ const SettingsPage = () => {
                       <div className="flex flex-wrap gap-2 mt-4">
                         {Object.entries(newMCP.headers || {}).map(([key, value]) => (
                           <div key={key} className="flex items-center gap-2 bg-brand-card border border-brand-border rounded-lg px-2 py-1.5 animate-in zoom-in-95 duration-200">
-                            <span className="text-[10px] font-bold text-emerald-500">{key}</span>
+                            <span className={`text-[10px] font-bold ${newMCP.transportType === 'sse' ? 'text-emerald-500' : 'text-blue-500'}`}>{key}</span>
                             <span className="text-brand-muted opacity-30">|</span>
-                            <span className="text-[10px] text-brand-text truncate max-w-[100px]">{value}</span>
+                            {/* Always show masked value — real value stays in DB */}
+                            <span className="text-[10px] text-brand-muted font-mono">{value ? value : '••••••••'}</span>
                             <button 
                               onClick={() => {
                                 const newHeaders = { ...(newMCP.headers || {}) };
@@ -1408,7 +1453,7 @@ const SettingsPage = () => {
                         />
                         <div className="flex gap-2">
                           <input 
-                            placeholder="VALUE"
+                            placeholder={editingMCPId ? 'Leave empty to keep existing value' : 'VALUE'}
                             className="flex-1 bg-brand-bg border border-brand-border rounded-lg px-3 py-2 text-xs text-brand-text outline-none focus:ring-1 focus:ring-indigo-600"
                             value={newEnvVar.value}
                             onChange={(e) => setNewEnvVar({ ...newEnvVar, value: e.target.value })}
@@ -1435,7 +1480,8 @@ const SettingsPage = () => {
                           <div key={key} className="flex items-center gap-2 bg-brand-card border border-brand-border rounded-lg px-2 py-1.5 animate-in zoom-in-95 duration-200">
                             <span className="text-[10px] font-bold text-indigo-500">{key}</span>
                             <span className="text-brand-muted opacity-30">|</span>
-                            <span className="text-[10px] text-brand-text truncate max-w-[100px]">{value}</span>
+                            {/* Always show masked value — real value stays in DB */}
+                            <span className="text-[10px] text-brand-muted font-mono">{value ? value : '••••••••'}</span>
                             <button 
                               onClick={() => {
                                 const newEnv = { ...(newMCP.envVars || {}) };

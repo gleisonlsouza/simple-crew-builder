@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { X, Upload, FileText, Loader2, HardDrive, CheckCircle2, Trash2, AlertTriangle, Folder, ChevronRight, ChevronDown } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { useStore } from '../store';
-import type { KnowledgeBase, KnowledgeBaseDocument } from '../types';
+import { useStore } from '../store/index';
+import type { KnowledgeBase, KnowledgeBaseDocument } from '../types/store.types';
 import { ConfirmationModal } from './ConfirmationModal';
 
 const API_URL = import.meta.env.VITE_API_URL || '';
