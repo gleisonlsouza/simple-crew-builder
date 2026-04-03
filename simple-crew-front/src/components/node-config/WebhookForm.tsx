@@ -1,4 +1,5 @@
 import React, { memo, useState } from 'react';
+import { v4 as uuidv4 } from 'uuid';
 import { Globe, Lock, Settings, Copy, RefreshCw, Plus, X, Sparkles, Zap } from 'lucide-react';
 import { HighlightedTextField } from '../HighlightedTextField';
 import type { WebhookNodeData } from '../../types/nodes.types';
@@ -31,7 +32,7 @@ export const WebhookForm: React.FC<WebhookFormProps> = memo(({
   };
 
   const handleGenerateToken = () => {
-    const newToken = crypto.randomUUID().replace(/-/g, '');
+    const newToken = uuidv4().replace(/-/g, '');
     updateNodeData(nodeId, { token: newToken });
     toast.success('Token generated! Remember to save the project.');
   };
