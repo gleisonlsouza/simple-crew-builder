@@ -35,7 +35,8 @@ describe('Store Helpers', () => {
       expect(migrated[0].data).toMatchObject({
         process: 'sequential',
         verbose: true,
-        memory: true
+        memory: false,
+        cache: false
       });
     });
 
