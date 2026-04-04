@@ -28,7 +28,7 @@ function App() {
     } else {
       document.documentElement.classList.remove('dark');
     }
-  }, [theme, fetchModels, fetchCredentials, fetchMCPServers, fetchWorkspaces, fetchSettings]);
+  }, [theme, fetchModels, fetchCredentials, fetchMCPServers, fetchCustomTools, fetchWorkspaces, fetchSettings]);
 
   return (
     <BrowserRouter>

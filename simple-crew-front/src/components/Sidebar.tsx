@@ -35,12 +35,12 @@ export function Sidebar() {
     reader.onload = (event) => {
       try {
         const content = event.target?.result as string;
-        const json = JSON.parse(content);
+        const json = JSON.parse(content) as unknown;
         const success = loadProjectJson(json);
         if (success) {
           setTimeout(() => fitView({ duration: 800 }), 100);
         }
-      } catch (err) {
+      } catch {
         console.error("Failed to parse JSON file");
       }
     };

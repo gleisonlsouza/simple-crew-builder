@@ -2,15 +2,17 @@ import React, { useState, memo } from 'react';
 import { X, Plus, Cpu, Sparkles, Settings, Code, FileText, Calendar, ToggleLeft, ToggleRight, ChevronDown, ChevronUp } from 'lucide-react';
 import { 
   DndContext, 
-  closestCenter 
+  closestCenter,
+  useSensors
 } from '@dnd-kit/core';
+import type { DragEndEvent } from '@dnd-kit/core';
 import { 
   SortableContext, 
   verticalListSortingStrategy 
 } from '@dnd-kit/sortable';
-import { HighlightedTextField } from '../HighlightedTextField';
+import HighlightedTextField from '../HighlightedTextField';
 import { SortableItem } from './SortableItem';
-import type { AgentNodeData, AppNode } from '../../types/nodes.types';
+import type { AgentNodeData, TaskNodeData, AppNode } from '../../types/nodes.types';
 import type { ModelConfig, ToolConfig, CustomTool, MCPServer } from '../../types/config.types';
 
 interface AgentFormProps {
@@ -23,8 +25,8 @@ interface AgentFormProps {
   customTools: CustomTool[];
   loadingFields: Record<string, boolean>;
   onAiSuggest: (field: string) => void;
-  onFieldKeyDown: (e: React.KeyboardEvent) => void;
-  onFieldChange: (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>, field: string, updateFn: (val: string) => void) => void;
+  onFieldKeyDown: (e: React.KeyboardEvent<HTMLInputElement | HTMLTextAreaElement>) => void;
+  onFieldChange: (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement> | { target: { value: string } }, field: string, updateFn: (val: string) => void) => void;
   isMcpSelectorOpen: boolean;
   setIsMcpSelectorOpen: (open: boolean) => void;
   isGlobalToolSelectorOpen: boolean;
@@ -34,8 +36,8 @@ interface AgentFormProps {
   setToolToConfigure: (tool: ToolConfig | null) => void;
   setIsToolConfigModalOpen: (open: boolean) => void;
   renderableTasks: AppNode[];
-  handleTaskDragEnd: (event: any) => void;
-  sensors: any;
+  handleTaskDragEnd: (event: DragEndEvent) => void;
+  sensors: ReturnType<typeof useSensors>;
 }
 
 export const AgentForm: React.FC<AgentFormProps> = memo(({
@@ -172,7 +174,7 @@ export const AgentForm: React.FC<AgentFormProps> = memo(({
         ].map(tab => (
           <button
             key={tab.id}
-            onClick={() => setActiveTab(tab.id as any)}
+            onClick={() => setActiveTab(tab.id as 'llm' | 'tools' | 'execution' | 'templates')}
             className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all mb-1 ${
               activeTab === tab.id 
                 ? 'bg-indigo-500/10 text-indigo-500 shadow-sm border border-indigo-500/20' 
@@ -255,7 +257,7 @@ export const AgentForm: React.FC<AgentFormProps> = memo(({
                     <div className="absolute right-0 top-full mt-2 w-64 bg-brand-card border border-brand-border rounded-xl shadow-xl z-[60] py-2">
                        <div className="max-h-60 overflow-y-auto px-1 custom-scrollbar">
                         {['Search', 'Web', 'Files & Documents', 'RAG / DATABASE'].map(cat => {
-                          const catTools = globalTools.filter(t => t.category === cat && t.isEnabled && !(data.globalToolIds || []).some((e: any) => (typeof e === 'string' ? e : e.id) === t.id));
+                          const catTools = globalTools.filter(t => t.category === cat && t.isEnabled && !(data.globalToolIds || []).some((e: string | { id: string }) => (typeof e === 'string' ? e : e.id) === t.id));
                           if (catTools.length === 0) return null;
                           return (
                             <div key={cat} className="mb-2 last:mb-0">
@@ -290,7 +292,7 @@ export const AgentForm: React.FC<AgentFormProps> = memo(({
             </div>
             
             <div className="flex flex-col gap-2">
-              {(data.globalToolIds || []).map((entry: any) => {
+              {(data.globalToolIds || []).map((entry: string | { id: string }) => {
                 const toolId = typeof entry === 'string' ? entry : entry.id;
                 const tool = globalTools.find(t => t.id === toolId);
                 if (!tool) return null;
@@ -302,7 +304,7 @@ export const AgentForm: React.FC<AgentFormProps> = memo(({
                         {renderToggle(toolId)}
                         <span className="text-xs font-medium text-brand-text">{tool.name}</span>
                       </div>
-                      <button onClick={() => updateNodeData(nodeId, { globalToolIds: data.globalToolIds?.filter((e: any) => (typeof e === 'string' ? e : e.id) !== toolId) })} className="p-1 hover:bg-rose-500/10 text-brand-muted hover:text-rose-500 rounded"><X className="w-3 h-3" /></button>
+                      <button onClick={() => updateNodeData(nodeId, { globalToolIds: data.globalToolIds?.filter((e: string | { id: string }) => (typeof e === 'string' ? e : e.id) !== toolId) })} className="p-1 hover:bg-rose-500/10 text-brand-muted hover:text-rose-500 rounded"><X className="w-3 h-3" /></button>
                     </div>
                   </div>
                 );
@@ -442,7 +444,7 @@ export const AgentForm: React.FC<AgentFormProps> = memo(({
                 <SortableContext items={renderableTasks.map(a => a.id)} strategy={verticalListSortingStrategy}>
                   <div className="flex flex-col gap-1">
                     {renderableTasks.map((taskVal) => (
-                      <SortableItem key={taskVal.id} id={taskVal.id} name={(taskVal.data as any).name || 'Task'} />
+                      <SortableItem key={taskVal.id} id={taskVal.id} name={(taskVal.data as TaskNodeData).name || 'Task'} />
                     ))}
                   </div>
                 </SortableContext>

@@ -3,7 +3,7 @@ import { Handle, Position, type NodeProps, type Node } from '@xyflow/react';
 import { useShallow } from 'zustand/shallow';
 import { Users, Trash2, ChevronDown, ChevronUp, Loader2, CheckCircle2, Link, Settings } from 'lucide-react';
 import { useStore } from '../store/index';
-import type { CrewNodeData } from '../types/nodes.types';
+import type { CrewNodeData, AgentNodeData } from '../types/nodes.types';
 
 export const CrewNode = memo(({ id, data }: NodeProps<Node<CrewNodeData, 'crew'>>) => {
   const { deleteNode, toggleCollapse, nodes, onConnect, setActiveNode } = useStore(
@@ -114,7 +114,7 @@ export const CrewNode = memo(({ id, data }: NodeProps<Node<CrewNodeData, 'crew'>
                   className="w-full text-left px-2 py-1.5 text-[11px] font-medium text-slate-700 dark:text-slate-300 hover:bg-violet-50 dark:hover:bg-violet-900/30 rounded transition-colors truncate flex items-center gap-2"
                 >
                   <div className="w-1.5 h-1.5 rounded-full bg-blue-500" />
-                  {(targetNode.data as any).name || `${targetNode.type} #${targetNode.id.slice(-4)}`}
+                  {(targetNode.data as AgentNodeData).name || `${targetNode.type} #${targetNode.id.slice(-4)}`}
                 </button>
               ))}
               {nodes.filter(n => n.id !== id && n.type === 'agent').length === 0 && (

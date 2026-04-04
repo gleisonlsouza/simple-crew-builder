@@ -8,8 +8,15 @@ import {
   applyNodeChanges, 
   applyEdgeChanges 
 } from '@xyflow/react';
-import type { AppNode, AppEdge } from '../../types/nodes.types';
-import type { NodeStatus, AppState, GraphSlice } from '../../types/store.types';
+import type { 
+  AppNode, 
+  AppEdge, 
+  AgentNodeData, 
+  TaskNodeData, 
+  CrewNodeData, 
+  WebhookNodeData 
+} from '../../types/nodes.types';
+import type { NodeStatus, AppState, GraphSlice, ChatMessage } from '../../types/store.types';
 
 // Helper functions for collapsing logic
 function getDescendantsToHide(nodeId: string, edges: AppEdge[]): string[] {
@@ -54,7 +61,7 @@ function getDescendantsToShow(nodeId: string, nodes: AppNode[], edges: AppEdge[]
       if (!visited.has(childId)) {
         descendants.push(childId);
         const childNode = nodes.find(n => n.id === childId);
-        const isChildCollapsed = (childNode?.data as any)?.isCollapsed ?? false;
+        const isChildCollapsed = childNode?.data?.isCollapsed ?? false;
         if (!isChildCollapsed) {
           queue.push(childId);
         }
@@ -122,15 +129,16 @@ export const createGraphSlice: StateCreator<AppState, [], [], GraphSlice> = (set
     const nextNodes = applyNodeChanges(changes, nodes);
     
     const removedTaskIds = changes
-      .filter((c: NodeChange<AppNode>) => c.type === 'remove')
-      .map((c: any) => c.id);
+      .filter((c): c is { type: 'remove'; id: string } => c.type === 'remove')
+      .map((c) => c.id);
 
     if (removedTaskIds.length > 0) {
       set({
         nodes: nextNodes.map((node: AppNode) => {
           // Cleanup Agent.taskOrder
           if (node.type === 'agent') {
-            const taskOrder = (node.data as any).taskOrder || [];
+            const data = node.data as AgentNodeData;
+            const taskOrder = data.taskOrder || [];
             const newTaskOrder = taskOrder.filter((id: string) => !removedTaskIds.includes(id));
             if (newTaskOrder.length !== taskOrder.length) {
                 return { ...node, data: { ...node.data, taskOrder: newTaskOrder } } as AppNode;
@@ -138,8 +146,9 @@ export const createGraphSlice: StateCreator<AppState, [], [], GraphSlice> = (set
           }
           // Cleanup Crew.agentOrder and Crew.taskOrder
           if (node.type === 'crew') {
-            const agentOrder = (node.data as any).agentOrder || [];
-            const taskOrder = (node.data as any).taskOrder || [];
+            const data = node.data as CrewNodeData;
+            const agentOrder = data.agentOrder || [];
+            const taskOrder = data.taskOrder || [];
             const newAgentOrder = agentOrder.filter((id: string) => !removedTaskIds.includes(id));
             const newTaskOrder = taskOrder.filter((id: string) => !removedTaskIds.includes(id));
             if (newAgentOrder.length !== agentOrder.length || newTaskOrder.length !== taskOrder.length) {
@@ -170,13 +179,15 @@ export const createGraphSlice: StateCreator<AppState, [], [], GraphSlice> = (set
             
             if (sourceNode?.type === 'agent' && targetNode?.type === 'task') {
               updatedNodes = updatedNodes.map((node: AppNode) => {
-                if (node.id === sourceNode.id) {
-                  const taskOrder = (node.data as any).taskOrder || [];
+                if (node.id === sourceNode.id && node.type === 'agent') {
+                  const data = node.data as AgentNodeData;
+                  const taskOrder = data.taskOrder || [];
                   return { ...node, data: { ...node.data, taskOrder: taskOrder.filter((id: string) => id !== targetNode.id) } } as AppNode;
                 }
                 // Also remove from Crew if applicable
                 if (node.type === 'crew') {
-                  const taskOrder = (node.data as any).taskOrder || [];
+                  const data = node.data as CrewNodeData;
+                  const taskOrder = data.taskOrder || [];
                   if (taskOrder.includes(targetNode.id)) {
                     return { ...node, data: { ...node.data, taskOrder: taskOrder.filter((id: string) => id !== targetNode.id) } } as AppNode;
                   }
@@ -187,10 +198,11 @@ export const createGraphSlice: StateCreator<AppState, [], [], GraphSlice> = (set
 
             if (sourceNode?.type === 'crew' && targetNode?.type === 'agent') {
               updatedNodes = updatedNodes.map((node: AppNode) => {
-                if (node.id === sourceNode.id) {
-                  const agentOrder = (node.data as any).agentOrder || [];
+                if (node.id === sourceNode.id && node.type === 'crew') {
+                  const data = node.data as CrewNodeData;
+                  const agentOrder = data.agentOrder || [];
                   // When removing an agent, also remove all its tasks from the crew's taskOrder
-                  let crewTaskOrder = (node.data as any).taskOrder || [];
+                  let crewTaskOrder = data.taskOrder || [];
                   const agentTasks = edges
                     .filter(e => e.source === targetNode.id)
                     .map(e => e.target);
@@ -248,7 +260,7 @@ export const createGraphSlice: StateCreator<AppState, [], [], GraphSlice> = (set
         newEdges = newEdges.filter((edge) => edge.target !== connection.target);
       }
 
-      let newConnection: any = { ...connection, type: 'deletable' };
+      let newConnection: AppEdge = { ...connection, id: uuidv4(), type: 'deletable' } as AppEdge;
 
       if (isChatToCrew) {
         newConnection = {
@@ -272,12 +284,13 @@ export const createGraphSlice: StateCreator<AppState, [], [], GraphSlice> = (set
       if (isAgentToTask) {
         nextNodes = state.nodes.map((node: AppNode) => {
           // Update Agent
-          if (node.id === connection.source) {
-            const taskOrder = (node.data as any).taskOrder || [];
-            if (!taskOrder.includes(connection.target)) {
+          if (node.id === connection.source && node.type === 'agent') {
+            const data = node.data as AgentNodeData;
+            const taskOrder = data.taskOrder || [];
+            if (!taskOrder.includes(connection.target!)) {
                return { 
                  ...node, 
-                 data: { ...node.data, taskOrder: [...taskOrder, connection.target] } 
+                 data: { ...node.data, taskOrder: [...taskOrder, connection.target!] } 
                } as AppNode;
             }
           }
@@ -285,11 +298,12 @@ export const createGraphSlice: StateCreator<AppState, [], [], GraphSlice> = (set
           if (node.type === 'crew') {
             const isAgentInCrew = state.edges.some(e => e.source === node.id && e.target === connection.source);
             if (isAgentInCrew) {
-              const taskOrder = (node.data as any).taskOrder || [];
-              if (!taskOrder.includes(connection.target)) {
+              const data = node.data as CrewNodeData;
+              const taskOrder = data.taskOrder || [];
+              if (!taskOrder.includes(connection.target!)) {
                 return { 
                   ...node, 
-                  data: { ...node.data, taskOrder: [...taskOrder, connection.target] } 
+                  data: { ...node.data, taskOrder: [...taskOrder, connection.target!] } 
                 } as AppNode;
               }
             }
@@ -300,15 +314,16 @@ export const createGraphSlice: StateCreator<AppState, [], [], GraphSlice> = (set
 
       if (isCrewToAgent) {
         nextNodes = state.nodes.map((node: AppNode) => {
-          if (node.id === connection.source) {
-            const agentOrder = (node.data as any).agentOrder || [];
-            if (!agentOrder.includes(connection.target)) {
+          if (node.id === connection.source && node.type === 'crew') {
+            const data = node.data as CrewNodeData;
+            const agentOrder = data.agentOrder || [];
+            if (!agentOrder.includes(connection.target!)) {
               // When adding an agent to a crew, also add all its tasks to the crew's taskOrder
               const agentTasks = state.edges
                 .filter(e => e.source === connection.target)
                 .map(e => e.target);
               
-              const existingCrewTasks = (node.data as any).taskOrder || [];
+              const existingCrewTasks = data.taskOrder || [];
               const newCrewTasks = [...existingCrewTasks];
               agentTasks.forEach(tid => {
                 if (!newCrewTasks.includes(tid)) newCrewTasks.push(tid);
@@ -318,7 +333,7 @@ export const createGraphSlice: StateCreator<AppState, [], [], GraphSlice> = (set
                  ...node, 
                  data: { 
                    ...node.data, 
-                   agentOrder: [...agentOrder, connection.target],
+                   agentOrder: [...agentOrder, connection.target!],
                    taskOrder: newCrewTasks
                  } 
                } as AppNode;
@@ -345,8 +360,9 @@ export const createGraphSlice: StateCreator<AppState, [], [], GraphSlice> = (set
         const targetNode = state.nodes.find((n: AppNode) => n.id === edge.target);
         if (sourceNode?.type === 'agent' && targetNode?.type === 'task') {
           updatedNodes = state.nodes.map((node: AppNode) => {
-            if (node.id === sourceNode.id) {
-              const taskOrder = (node.data as any).taskOrder || [];
+            if (node.id === sourceNode.id && node.type === 'agent') {
+              const data = node.data as AgentNodeData;
+              const taskOrder = data.taskOrder || [];
               return { ...node, data: { ...node.data, taskOrder: taskOrder.filter((id: string) => id !== targetNode.id) } } as AppNode;
             }
             return node;
@@ -369,11 +385,13 @@ export const createGraphSlice: StateCreator<AppState, [], [], GraphSlice> = (set
       if (nodeToDelete?.type === 'task') {
         updatedNodes = updatedNodes.map((node: AppNode) => {
           if (node.type === 'agent') {
-            const taskOrder = (node.data as any).taskOrder || [];
+            const data = node.data as AgentNodeData;
+            const taskOrder = data.taskOrder || [];
             return { ...node, data: { ...node.data, taskOrder: taskOrder.filter((id: string) => id !== nodeId) } } as AppNode;
           }
           if (node.type === 'crew') {
-            const taskOrder = (node.data as any).taskOrder || [];
+            const data = node.data as CrewNodeData;
+            const taskOrder = data.taskOrder || [];
             return { ...node, data: { ...node.data, taskOrder: taskOrder.filter((id: string) => id !== nodeId) } } as AppNode;
           }
           return node;
@@ -383,7 +401,8 @@ export const createGraphSlice: StateCreator<AppState, [], [], GraphSlice> = (set
       if (nodeToDelete?.type === 'agent') {
         updatedNodes = updatedNodes.map((node: AppNode) => {
           if (node.type === 'crew') {
-            const agentOrder = (node.data as any).agentOrder || [];
+            const data = node.data as CrewNodeData;
+            const agentOrder = data.agentOrder || [];
             return { ...node, data: { ...node.data, agentOrder: agentOrder.filter((id: string) => id !== nodeId) } } as AppNode;
           }
           return node;
@@ -398,7 +417,7 @@ export const createGraphSlice: StateCreator<AppState, [], [], GraphSlice> = (set
     });
   },
 
-  updateNodeData: (nodeId: string, data: Partial<any>) => {
+  updateNodeData: (nodeId: string, data: Partial<AppNode['data']>) => {
     set({
       nodes: get().nodes.map((node: AppNode) => {
         if (node.id === nodeId) {
@@ -415,7 +434,7 @@ export const createGraphSlice: StateCreator<AppState, [], [], GraphSlice> = (set
     });
   },
 
-  addNodeWithAutoPosition: (type: 'agent' | 'task' | 'crew' | 'chat' | 'webhook', data: any) => {
+  addNodeWithAutoPosition: (type: 'agent' | 'task' | 'crew' | 'chat' | 'webhook', data: Partial<AppNode['data']>) => {
     const existingNodes = get().nodes;
     const startX = 600;
     const startY = 100;
@@ -436,7 +455,7 @@ export const createGraphSlice: StateCreator<AppState, [], [], GraphSlice> = (set
       id: `dndnode_${uuidv4()}`,
       type,
       position,
-      data,
+      data: data as AppNode['data'],
     } as AppNode;
 
     set({
@@ -491,7 +510,7 @@ export const createGraphSlice: StateCreator<AppState, [], [], GraphSlice> = (set
       const node = state.nodes.find((n: AppNode) => n.id === nodeId);
       if (!node) return {};
 
-      const currentlyCollapsed = (node.data as any).isCollapsed ?? false;
+      const currentlyCollapsed = node.data.isCollapsed ?? false;
       const willCollapse = !currentlyCollapsed;
 
       let descendantIds: string[] = [];
@@ -566,12 +585,12 @@ export const createGraphSlice: StateCreator<AppState, [], [], GraphSlice> = (set
 
     for (const node of state.nodes) {
       const currentErrors: string[] = [];
-      const data = node.data as any;
 
       if (node.type === 'crew') {
         const hasAgents = state.edges.some((e) => e.source === node.id);
         if (!hasAgents) currentErrors.push('Missing connected Agent');
       } else if (node.type === 'agent') {
+        const data = node.data as AgentNodeData;
         if (!data.name?.trim()) currentErrors.push('Missing Name');
         if (!data.role?.trim()) currentErrors.push('Missing Role');
         if (!data.goal?.trim()) currentErrors.push('Missing Goal');
@@ -579,10 +598,12 @@ export const createGraphSlice: StateCreator<AppState, [], [], GraphSlice> = (set
         const hasTasks = state.edges.some((e) => e.source === node.id);
         if (!hasTasks) currentErrors.push('Missing connected Task');
       } else if (node.type === 'task') {
+        const data = node.data as TaskNodeData;
         if (!data.name?.trim()) currentErrors.push('Missing Name');
         if (!data.description?.trim()) currentErrors.push('Missing Description');
         if (!data.expected_output?.trim()) currentErrors.push('Missing Expected Output');
       } else if (node.type === 'webhook') {
+        const data = node.data as WebhookNodeData;
         if (!data.name?.trim()) currentErrors.push('Missing Name');
       }
 
@@ -602,22 +623,16 @@ export const createGraphSlice: StateCreator<AppState, [], [], GraphSlice> = (set
     set({
       nodes: [],
       edges: [],
-      currentProjectId: null,
-      currentProjectName: null,
-      currentProjectDescription: null,
-      currentProjectWorkspaceId: null,
       nodeStatuses: {},
       nodeErrors: {},
       nodeWarnings: {},
       executionResult: null,
       messages: INITIAL_CHAT_MESSAGES,
-      isConsoleOpen: false,
-      isConsoleExpanded: false,
-      isChatVisible: false
+      activeNodeId: null
     });
   },
 
-  setMessages: (messagesOrFn) => {
+  setMessages: (messagesOrFn: ChatMessage[] | ((prev: ChatMessage[]) => ChatMessage[])) => {
     if (typeof messagesOrFn === 'function') {
       set((state) => ({ messages: messagesOrFn(state.messages) }));
     } else {

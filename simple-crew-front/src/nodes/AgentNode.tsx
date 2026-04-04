@@ -3,7 +3,8 @@ import { Handle, Position, type NodeProps, type Node } from '@xyflow/react';
 import { useShallow } from 'zustand/shallow';
 import { User, Trash2, ChevronDown, ChevronUp, CheckSquare, Loader2, CheckCircle2, AlertCircle, Clock, Cpu, Link, Settings, Package, Terminal, Plus, X } from 'lucide-react';
 import { useStore } from '../store/index';
-import type { AgentNodeData } from '../types/nodes.types';
+import type { AgentNodeData, TaskNodeData } from '../types/nodes.types';
+import type { ToolConfig } from '../types/config.types';
 import type { NodeStatus } from '../types/store.types';
 
 import { ToolConfigurationModal } from '../components/ToolConfigurationModal';
@@ -28,7 +29,7 @@ export const AgentNode = memo(({ id, data }: NodeProps<Node<AgentNodeData, 'agen
   const [isToolSelectorOpen, setIsToolSelectorOpen] = useState(false);
   const [isGlobalSelectorOpen, setIsGlobalSelectorOpen] = useState(false);
   const [isToolConfigModalOpen, setIsToolConfigModalOpen] = useState(false);
-  const [toolToConfigure, setToolToConfigure] = useState<any>(null);
+  const [toolToConfigure, setToolToConfigure] = useState<ToolConfig | null>(null);
   const [editingToolIndex, setEditingToolIndex] = useState<number | null>(null); // Adicionado para edição
   const models = useStore((state) => state.models);
   const status = useStore((state) => (state.nodeStatuses[id] as NodeStatus) || 'idle');
@@ -143,7 +144,7 @@ export const AgentNode = memo(({ id, data }: NodeProps<Node<AgentNodeData, 'agen
                     className="w-full text-left px-2 py-1.5 text-[11px] font-medium text-slate-700 dark:text-slate-300 hover:bg-indigo-50 dark:hover:bg-indigo-900/30 rounded transition-colors truncate flex items-center gap-2"
                   >
                     <div className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-                    {(targetNode.data as any).name || `${targetNode.type} #${targetNode.id.slice(-4)}`}
+                    {(targetNode.data as TaskNodeData).name || `${targetNode.type} #${targetNode.id.slice(-4)}`}
                   </button>
                 ))}
               {nodes.filter(n => n.id !== id && n.type === 'task').length === 0 && (
@@ -334,7 +335,7 @@ export const AgentNode = memo(({ id, data }: NodeProps<Node<AgentNodeData, 'agen
                     <div className="px-2 py-1 text-[9px] font-bold text-slate-400 uppercase border-b border-slate-100 dark:border-slate-700 mb-1">Add CrewAI Tool</div>
                     <div className="max-h-48 overflow-y-auto custom-scrollbar">
                       {['Search', 'Web', 'Files & Documents', 'RAG / DATABASE'].map(cat => {
-                        const catTools = globalTools.filter(t => t.category === cat && t.isEnabled && !((data as any).globalToolIds || []).some((e: any) => (typeof e === 'string' ? e : e.id) === t.id));
+                        const catTools = globalTools.filter(t => t.category === cat && t.isEnabled && !(data.globalToolIds || []).some((e) => (typeof e === 'string' ? e : e.id) === t.id));
                         if (catTools.length === 0) return null;
                         return (
                           <div key={cat} className="mb-2 last:mb-0">
@@ -363,7 +364,7 @@ export const AgentNode = memo(({ id, data }: NodeProps<Node<AgentNodeData, 'agen
                           </div>
                         );
                       })}
-                      {globalTools.filter(t => t.isEnabled && !((data as any).globalToolIds || []).some((e: any) => (typeof e === 'string' ? e : e.id) === t.id)).length === 0 && (
+                      {globalTools.filter(t => t.isEnabled && !(data.globalToolIds || []).some((e) => (typeof e === 'string' ? e : e.id) === t.id)).length === 0 && (
                         <div className="px-2 py-2 text-[9px] text-slate-400 italic text-center">No more tools enabled</div>
                       )}
                     </div>
@@ -374,7 +375,7 @@ export const AgentNode = memo(({ id, data }: NodeProps<Node<AgentNodeData, 'agen
             <div className="flex flex-wrap gap-1 min-h-[1.25rem]">
               {(data.globalToolIds || []).length > 0 ? (
                 (data.globalToolIds || []).map((gtid, index) => {
-                  const actualId = typeof gtid === 'string' ? gtid : (gtid as any).id;
+                  const actualId = typeof gtid === 'string' ? gtid : (gtid as { id: string }).id;
                   const tool = globalTools.find(t => t.id === actualId);
                   if (!tool) return null;
                   return (
@@ -441,7 +442,7 @@ export const AgentNode = memo(({ id, data }: NodeProps<Node<AgentNodeData, 'agen
         <ToolConfigurationModal
           tool={toolToConfigure}
           isOpen={isToolConfigModalOpen}
-          initialConfig={editingToolIndex !== null ? (data.globalToolIds![editingToolIndex] as any).config : undefined}
+          initialConfig={editingToolIndex !== null ? (data.globalToolIds![editingToolIndex] as { config: Record<string, unknown> }).config : undefined}
           onClose={() => {
             setIsToolConfigModalOpen(false);
             setToolToConfigure(null);

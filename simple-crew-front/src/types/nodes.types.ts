@@ -1,6 +1,6 @@
 import { type Node, type Edge } from '@xyflow/react';
 
-export type ProcessType = 'sequential' | 'hierarchical';
+export type ProcessType = 'sequential' | 'hierarchical' | 'consensual';
 
 export interface AgentNodeData extends Record<string, unknown> {
   name: string;
@@ -12,7 +12,7 @@ export interface AgentNodeData extends Record<string, unknown> {
   temperature?: number;
   mcpServerIds?: string[];
   customToolIds?: string[];
-  globalToolIds?: (string | { id: string; config: Record<string, any> })[];
+  globalToolIds?: (string | { id: string; config: Record<string, unknown> })[];
   function_calling_llm_id?: string;
   max_iter?: number;
   max_rpm?: number;
@@ -44,7 +44,7 @@ export interface TaskNodeData extends Record<string, unknown> {
   agentId?: string;
   context?: string[];
   customToolIds?: string[];
-  globalToolIds?: (string | { id: string; config: Record<string, any> })[];
+  globalToolIds?: (string | { id: string; config: Record<string, unknown> })[];
   async_execution?: boolean;
   human_input?: boolean;
   output_file?: string;

@@ -24,8 +24,8 @@ export const KnowledgeBaseSettings: React.FC = () => {
       if (!response.ok) throw new Error('Failed to fetch knowledge bases');
       const data = await response.json();
       setKnowledgeBases(data);
-    } catch (error: any) {
-      toast.error(error.message);
+    } catch (error: unknown) {
+      toast.error(error instanceof Error ? error.message : String(error));
     } finally {
       setIsLoading(false);
     }
@@ -56,8 +56,8 @@ export const KnowledgeBaseSettings: React.FC = () => {
       setNewKB({ name: '', description: '' });
       setShowCreateModal(false);
       fetchKnowledgeBases();
-    } catch (error: any) {
-      toast.error(error.message);
+    } catch (error: unknown) {
+      toast.error(error instanceof Error ? error.message : String(error));
     } finally {
       setIsCreating(false);
     }
@@ -77,8 +77,8 @@ export const KnowledgeBaseSettings: React.FC = () => {
       toast.success('Knowledge Base deleted successfully!');
       // Update local state instead of re-fetching
       setKnowledgeBases(prev => prev.filter(kb => kb.id !== kbToDelete.id));
-    } catch (error: any) {
-      toast.error(error.message);
+    } catch (error: unknown) {
+      toast.error(error instanceof Error ? error.message : String(error));
     } finally {
       setIsDeleting(false);
       setKbToDelete(null);
@@ -92,7 +92,7 @@ export const KnowledgeBaseSettings: React.FC = () => {
         month: 'short',
         year: 'numeric'
       }).format(new Date(dateString));
-    } catch (e) {
+    } catch {
       return dateString;
     }
   };

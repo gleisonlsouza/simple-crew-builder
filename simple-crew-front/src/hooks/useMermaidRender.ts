@@ -24,9 +24,9 @@ export const useMermaidRender = (chart: string) => {
         setError(null);
         const { svg: renderedSvg } = await mermaid.render(containerId, chart);
         setSvg(renderedSvg);
-      } catch (err: any) {
+      } catch (err: unknown) {
         console.error('Mermaid rendering failed:', err);
-        setError(err.message || String(err));
+        setError(err instanceof Error ? err.message : String(err));
       }
     };
 

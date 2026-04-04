@@ -6,6 +6,7 @@ import '@xyflow/react/dist/style.css';
 import { useShallow } from 'zustand/shallow';
 import { Play, Sparkles, Save, Loader2, ArrowLeft } from 'lucide-react';
 import { useParams, useNavigate } from 'react-router-dom';
+import type { AppNode } from '../types/nodes.types';
 
 import { useStore } from '../store/index';
 import logo from '../assets/logo.PNG';
@@ -81,7 +82,7 @@ const FlowCanvas = () => {
       if (!type) return;
 
       const position = screenToFlowPosition({ x: event.clientX, y: event.clientY });
-      let data = {};
+      let data: AppNode['data'];
       const timestamp = Date.now().toString().slice(-4);
       if (type === 'agent') data = { name: `New Agent ${timestamp}`, role: '', goal: '', backstory: '', isCollapsed: false };
       else if (type === 'task') data = { name: `New Task ${timestamp}`, description: '', expected_output: '' };
@@ -92,15 +93,19 @@ const FlowCanvas = () => {
         data = { 
           name: `Webhook ${timestamp}`, 
           method: 'POST', 
+          path: `webhook_${timestamp}`, 
+          url: '', 
           isActive: true, 
           waitForResult: false, 
           headers: {}, 
-          fieldMappings: {}, 
           isCollapsed: false 
-        };
+        } as unknown as AppNode['data'];
+      } else {
+        return;
       }
 
-      addNode({ id: getId(), type, position, data } as any);
+      const typeAsAppNode = type as AppNode['type'];
+      addNode({ id: getId(), type: typeAsAppNode, position, data } as AppNode);
       validateGraph();
       useStore.getState().setIsUsabilityDrawerOpen(false);
   }, [screenToFlowPosition, addNode, validateGraph]);
@@ -197,11 +202,6 @@ function FlowBuilder() {
   const [isEditingTitle, setIsEditingTitle] = React.useState(false);
   const [editedTitle, setEditedTitle] = React.useState('');
   
-  useEffect(() => {
-    if (currentProjectName) {
-      setEditedTitle(currentProjectName);
-    }
-  }, [currentProjectName]);
 
   const handleTitleSave = async () => {
     if (id && id !== 'new' && editedTitle !== currentProjectName) {
@@ -246,7 +246,12 @@ function FlowBuilder() {
                   />
                 ) : (
                   <h1
-                    onClick={() => id !== 'new' && setIsEditingTitle(true)}
+                    onClick={() => {
+                      if (id !== 'new') {
+                        setEditedTitle(currentProjectName || '');
+                        setIsEditingTitle(true);
+                      }
+                    }}
                     className={`text-xl font-bold text-brand-text tracking-tight ${id !== 'new' ? 'cursor-pointer hover:text-indigo-500 border-b border-transparent hover:border-indigo-500/30' : ''}`}
                   >
                     {currentProjectName || 'SimpleCrew'}

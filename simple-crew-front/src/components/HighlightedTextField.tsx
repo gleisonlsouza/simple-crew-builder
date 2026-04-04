@@ -1,19 +1,10 @@
 import React from 'react';
-// @ts-ignore
-import * as EditorModule from 'react-simple-code-editor';
-import Prism from 'prismjs';
+import EditorModule from 'react-simple-code-editor';
+import PrismModule from 'prismjs';
 
-// Robust way to get the Editor component from various module formats (CJS, ESM, etc.)
-let Editor: any = EditorModule;
-// Recursive unwrap if there's a .default property (common in Vite/ESM/CJS interop)
-while (Editor && Editor.default && Editor !== Editor.default) {
-  Editor = Editor.default;
-}
-
-// Special case for some builds where it's named 'Editor' specifically
-if (!Editor || (typeof Editor !== 'function' && typeof Editor !== 'string' && !(Editor && Editor.$$typeof))) {
-  if ((EditorModule as any).Editor) Editor = (EditorModule as any).Editor;
-}
+// Fix for Vite ESM/CommonJS interop
+const Editor = (EditorModule as unknown as { default: typeof EditorModule }).default || EditorModule;
+const Prism = (PrismModule as unknown as { default: typeof PrismModule }).default || PrismModule;
 
 // Import all required languages explicitly to avoid missing peer dependency issues in some environments
 import 'prismjs/components/prism-python';
@@ -24,8 +15,8 @@ import 'prismjs/components/prism-bash';
 interface HighlightedTextFieldProps {
   type: 'input' | 'textarea';
   value: string;
-  onChange: (e: any) => void;
-  onKeyDown?: (e: React.KeyboardEvent<HTMLTextAreaElement | HTMLInputElement | any>) => void;
+  onChange: (e: React.ChangeEvent<HTMLTextAreaElement | HTMLInputElement> | { target: { value: string } }) => void;
+  onKeyDown?: React.KeyboardEventHandler<HTMLTextAreaElement | HTMLInputElement | HTMLDivElement>;
   placeholder?: string;
   className?: string;
   highlightClassName?: string;
@@ -33,7 +24,7 @@ interface HighlightedTextFieldProps {
   rows?: number;
 }
 
-export const HighlightedTextField: React.FC<HighlightedTextFieldProps> = ({
+const HighlightedTextField: React.FC<HighlightedTextFieldProps> = ({
   type,
   value,
   onChange,
@@ -69,12 +60,10 @@ export const HighlightedTextField: React.FC<HighlightedTextFieldProps> = ({
     }
   };
 
-  if (!Editor || (typeof Editor !== 'function' && typeof Editor !== 'string' && !(Editor && Editor.$$typeof))) {
+  if (!Editor) {
     return (
       <div className="p-4 bg-red-500/10 border border-red-500 rounded-xl text-red-500 text-xs font-mono">
-        <div>Error: Editor is invalid type: {typeof Editor}</div>
-        <div>Keys: {JSON.stringify(Object.keys(EditorModule))}</div>
-        <div>Default Keys: {EditorModule.default ? JSON.stringify(Object.keys(EditorModule.default)) : 'null'}</div>
+        <div>Error: Editor could not be loaded</div>
       </div>
     );
   }
@@ -89,7 +78,7 @@ export const HighlightedTextField: React.FC<HighlightedTextFieldProps> = ({
         <Editor
           value={value}
           onValueChange={(code: string) => onChange({ target: { value: code } })}
-          highlight={(code: string) => highlightWithPrism(code) as any}
+          highlight={(code: string) => highlightWithPrism(code)}
           padding={16}
           onKeyDown={onKeyDown}
           onFocus={() => setIsFocused(true)}
@@ -108,8 +97,8 @@ export const HighlightedTextField: React.FC<HighlightedTextFieldProps> = ({
         <div className="relative">
              <input
                 value={value}
-                onChange={onChange}
-                onKeyDown={onKeyDown}
+                onChange={onChange as React.ChangeEventHandler<HTMLInputElement>}
+                onKeyDown={onKeyDown as React.KeyboardEventHandler<HTMLInputElement>}
                 onFocus={() => setIsFocused(true)}
                 onBlur={() => setIsFocused(false)}
                 placeholder={placeholder}
@@ -122,3 +111,5 @@ export const HighlightedTextField: React.FC<HighlightedTextFieldProps> = ({
     </div>
   );
 };
+
+export default HighlightedTextField;

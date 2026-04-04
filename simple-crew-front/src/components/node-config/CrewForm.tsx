@@ -12,14 +12,16 @@ import {
 } from 'lucide-react';
 import { 
   DndContext, 
-  closestCenter 
+  closestCenter,
+  useSensors
 } from '@dnd-kit/core';
+import type { DragEndEvent } from '@dnd-kit/core';
 import { 
   SortableContext, 
   verticalListSortingStrategy 
 } from '@dnd-kit/sortable';
 import { SortableItem } from './SortableItem';
-import type { CrewNodeData, AppNode } from '../../types/nodes.types';
+import type { CrewNodeData, AppNode, AgentNodeData, TaskNodeData } from '../../types/nodes.types';
 import type { ModelConfig } from '../../types/config.types';
 
 interface CrewFormProps {
@@ -31,9 +33,9 @@ interface CrewFormProps {
   nameError: boolean;
   renderableAgents: AppNode[];
   renderableTasks: AppNode[];
-  handleAgentDragEnd: (event: any) => void;
-  handleTaskDragEnd: (event: any) => void;
-  sensors: any;
+  handleAgentDragEnd: (event: DragEndEvent) => void;
+  handleTaskDragEnd: (event: DragEndEvent) => void;
+  sensors: ReturnType<typeof useSensors>;
   models: ModelConfig[];
 }
 
@@ -67,7 +69,7 @@ export const CrewForm: React.FC<CrewFormProps> = memo(({
         {tabs.map((tab) => (
           <button
             key={tab.id}
-            onClick={() => setActiveTab(tab.id as any)}
+            onClick={() => setActiveTab(tab.id as 'basic' | 'orch' | 'settings' | 'llm')}
             className={`flex items-center gap-2 py-2 px-3 text-[10px] font-bold uppercase tracking-wider transition-all rounded-lg mb-2 ${
               activeTab === tab.id 
                 ? 'text-blue-500 bg-blue-500/10 border border-blue-500/20' 
@@ -103,7 +105,7 @@ export const CrewForm: React.FC<CrewFormProps> = memo(({
               <select 
                 className="w-full bg-brand-bg border border-brand-border rounded-lg px-3 py-2 text-sm text-brand-text outline-none focus:ring-2 focus:ring-blue-500 transition-all cursor-pointer appearance-none" 
                 value={data.process || 'sequential'} 
-                onChange={(e) => updateNodeData(nodeId, { process: e.target.value as any })}
+                onChange={(e) => updateNodeData(nodeId, { process: e.target.value as 'sequential' | 'hierarchical' | 'consensual' })}
               >
                 <option value="sequential">Sequential (Step-by-step)</option>
                 <option value="hierarchical">Hierarchical (Manager led)</option>
@@ -136,9 +138,9 @@ export const CrewForm: React.FC<CrewFormProps> = memo(({
                     value={key.startsWith('input_') ? '' : key}
                     placeholder="Key"
                     onChange={(e) => {
-                      const newInputs: Record<string, any> = { ...data.inputs };
+                      const newInputs: Record<string, string> = { ...(data.inputs as Record<string, string>) };
                       delete newInputs[key];
-                      newInputs[e.target.value || `input_${idx}`] = value;
+                      newInputs[e.target.value || `input_${idx}`] = value as string;
                       updateNodeData(nodeId, { inputs: newInputs });
                     }}
                   />
@@ -147,14 +149,14 @@ export const CrewForm: React.FC<CrewFormProps> = memo(({
                     value={value as string}
                     placeholder="Default Value"
                     onChange={(e) => {
-                      const newInputs: Record<string, any> = { ...data.inputs };
+                      const newInputs: Record<string, string> = { ...(data.inputs as Record<string, string>) };
                       newInputs[key] = e.target.value;
                       updateNodeData(nodeId, { inputs: newInputs });
                     }}
                   />
                   <button
                     onClick={() => {
-                      const newInputs: Record<string, any> = { ...data.inputs };
+                      const newInputs: Record<string, string> = { ...(data.inputs as Record<string, string>) };
                       delete newInputs[key];
                       updateNodeData(nodeId, { inputs: newInputs });
                     }}
@@ -190,7 +192,7 @@ export const CrewForm: React.FC<CrewFormProps> = memo(({
                   <SortableContext items={renderableAgents.map(a => a.id)} strategy={verticalListSortingStrategy}>
                     <div className="flex flex-col gap-1">
                       {renderableAgents.map((agentVal) => (
-                        <SortableItem key={agentVal.id} id={agentVal.id} name={(agentVal.data as any).name || 'Unnamed Agent'} />
+                        <SortableItem key={agentVal.id} id={agentVal.id} name={(agentVal.data as AgentNodeData).name || 'Unnamed Agent'} />
                       ))}
                     </div>
                   </SortableContext>
@@ -212,7 +214,7 @@ export const CrewForm: React.FC<CrewFormProps> = memo(({
                   <SortableContext items={renderableTasks.map(t => t.id)} strategy={verticalListSortingStrategy}>
                     <div className="flex flex-col gap-1">
                       {renderableTasks.map((task) => (
-                        <SortableItem key={task.id} id={task.id} name={(task.data as any).name || 'Unnamed Task'} />
+                        <SortableItem key={task.id} id={task.id} name={(task.data as TaskNodeData).name || 'Unnamed Task'} />
                       ))}
                     </div>
                   </SortableContext>

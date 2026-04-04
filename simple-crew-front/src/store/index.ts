@@ -7,6 +7,7 @@ import { createWorkspaceSlice } from './slices/workspace.slice';
 import { createAISlice } from './slices/ai.slice';
 import { createExecutionSlice } from './slices/executions.slice';
 import type { AppState } from '../types/store.types';
+export type { AppState };
 
 export const useStore = create<AppState>()((...a) => ({
   ...createGraphSlice(...a),

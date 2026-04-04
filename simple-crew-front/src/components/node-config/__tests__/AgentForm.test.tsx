@@ -1,6 +1,9 @@
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, cleanup } from '@testing-library/react';
 import { AgentForm } from '../AgentForm';
-import { vi, describe, it, expect, beforeEach } from 'vitest';
+import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest';
+import type { AgentNodeData, AppNode } from '../../../types/nodes.types';
+import type { ModelConfig, ToolConfig, CustomTool, MCPServer } from '../../../types/config.types';
+import React from 'react';
 
 // Mock lucide-react
 vi.mock('lucide-react', () => ({
@@ -20,39 +23,65 @@ vi.mock('lucide-react', () => ({
 
 // Mock @dnd-kit
 vi.mock('@dnd-kit/core', () => ({
-  DndContext: ({ children }: any) => <div>{children}</div>,
+  DndContext: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
   closestCenter: vi.fn(),
   PointerSensor: vi.fn(),
   useSensor: vi.fn(),
   useSensors: vi.fn(),
 }));
 vi.mock('@dnd-kit/sortable', () => ({
-  SortableContext: ({ children }: any) => <div>{children}</div>,
+  SortableContext: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
   verticalListSortingStrategy: {},
 }));
 
 // Mock HighlightedTextField
 vi.mock('../../HighlightedTextField', () => ({
-  HighlightedTextField: ({ value, onChange, type, placeholder }: any) => (
+  default: ({ value, onChange, type, placeholder }: { value: string, onChange: (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement> | { target: { value: string } }) => void, type: 'input' | 'textarea', placeholder?: string }) => (
     type === 'input' 
-      ? <input data-testid="highlighted-input" value={value} onChange={onChange} placeholder={placeholder} />
-      : <textarea data-testid="highlighted-textarea" value={value} onChange={onChange} placeholder={placeholder} />
+      ? <input data-testid="highlighted-input" value={value} onChange={(e) => onChange(e as React.ChangeEvent<HTMLInputElement>)} placeholder={placeholder} />
+      : <textarea data-testid="highlighted-textarea" value={value} onChange={(e) => onChange(e as React.ChangeEvent<HTMLTextAreaElement>)} placeholder={placeholder} />
   )
 }));
 
 // Mock SortableItem
 vi.mock('../SortableItem', () => ({
-  SortableItem: ({ name }: any) => <div data-testid="sortable-item">{name}</div>
+  SortableItem: ({ name }: { name: string }) => <div data-testid="sortable-item">{name}</div>
 }));
 
 describe('AgentForm', () => {
-  let mockProps: any;
+  interface AgentFormTestProps {
+    data: AgentNodeData;
+    nodeId: string;
+    updateNodeData: ReturnType<typeof vi.fn>;
+    models: ModelConfig[];
+    mcpServers: MCPServer[];
+    globalTools: ToolConfig[];
+    customTools: CustomTool[];
+    loadingFields: Record<string, boolean>;
+    onAiSuggest: ReturnType<typeof vi.fn>;
+    onFieldKeyDown: (e: React.KeyboardEvent<HTMLInputElement | HTMLTextAreaElement>) => void;
+    onFieldChange: (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement> | { target: { value: string } }, field: string, updateFn: (val: string) => void) => void;
+    isMcpSelectorOpen: boolean;
+    setIsMcpSelectorOpen: ReturnType<typeof vi.fn>;
+    isGlobalToolSelectorOpen: boolean;
+    setIsGlobalToolSelectorOpen: ReturnType<typeof vi.fn>;
+    isCustomToolSelectorOpen: boolean;
+    setIsCustomToolSelectorOpen: ReturnType<typeof vi.fn>;
+    setToolToConfigure: ReturnType<typeof vi.fn>;
+    setIsToolConfigModalOpen: ReturnType<typeof vi.fn>;
+    renderableTasks: AppNode[];
+    handleTaskDragEnd: ReturnType<typeof vi.fn>;
+    sensors: unknown[];
+  }
+
+  let mockProps: AgentFormTestProps;
 
   beforeEach(() => {
     vi.clearAllMocks();
     
     mockProps = {
       data: {
+        name: 'Test Agent',
         role: 'Test Role',
         goal: 'Test Goal',
         backstory: 'Test Backstory',
@@ -63,17 +92,17 @@ describe('AgentForm', () => {
         globalToolIds: ['tool-1'],
         mcpServerIds: ['mcp-1'],
         customToolIds: ['ctoon-1']
-      },
+      } as unknown as AgentNodeData,
       nodeId: 'node-1',
       updateNodeData: vi.fn(),
-      models: [{ id: 'model-1', name: 'Model 1', isDefault: true }],
-      mcpServers: [{ id: 'mcp-1', name: 'MCP Server 1' }, { id: 'mcp-2', name: 'MCP Server 2' }],
-      globalTools: [{ id: 'tool-1', name: 'Global Tool 1', category: 'Search', isEnabled: true }],
-      customTools: [{ id: 'ctoon-1', name: 'Custom Tool 1' }, { id: 'ctoon-2', name: 'Custom Tool 2' }],
+      models: [{ id: 'model-1', name: 'Model 1', isDefault: true }] as unknown as ModelConfig[],
+      mcpServers: [{ id: 'mcp-1', name: 'MCP Server 1' }, { id: 'mcp-2', name: 'MCP Server 2' }] as unknown as MCPServer[],
+      globalTools: [{ id: 'tool-1', name: 'Global Tool 1', category: 'Search', isEnabled: true }] as unknown as ToolConfig[],
+      customTools: [{ id: 'ctoon-1', name: 'Custom Tool 1' }, { id: 'ctoon-2', name: 'Custom Tool 2' }] as unknown as CustomTool[],
       loadingFields: {},
       onAiSuggest: vi.fn(),
       onFieldKeyDown: vi.fn(),
-      onFieldChange: vi.fn((e, _field, updateFn) => updateFn(e.target.value)),
+      onFieldChange: vi.fn((e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement> | { target: { value: string } }, _field: string, updateFn: (val: string) => void) => updateFn(e.target.value)),
       isMcpSelectorOpen: false,
       setIsMcpSelectorOpen: vi.fn(),
       isGlobalToolSelectorOpen: false,
@@ -88,7 +117,12 @@ describe('AgentForm', () => {
     };
   });
 
+  afterEach(() => {
+    cleanup();
+  });
+
   it('renders initial values correctly', () => {
+    // @ts-expect-error - Sensors type is too complex for simple mock
     render(<AgentForm {...mockProps} />);
     
     const inputs = screen.getAllByTestId('highlighted-input');
@@ -100,6 +134,7 @@ describe('AgentForm', () => {
   });
 
   it('triggers updates on field change', () => {
+    // @ts-expect-error - Sensors
     render(<AgentForm {...mockProps} />);
     
     const roleInput = screen.getAllByTestId('highlighted-input')[0];
@@ -107,9 +142,17 @@ describe('AgentForm', () => {
     
     expect(mockProps.onFieldChange).toHaveBeenCalled();
     expect(mockProps.updateNodeData).toHaveBeenCalledWith('node-1', { role: 'New Role' });
+
+    const textareas = screen.getAllByTestId('highlighted-textarea');
+    fireEvent.change(textareas[0], { target: { value: 'New Goal' } });
+    expect(mockProps.updateNodeData).toHaveBeenCalledWith('node-1', { goal: 'New Goal' });
+
+    fireEvent.change(textareas[1], { target: { value: 'New Backstory' } });
+    expect(mockProps.updateNodeData).toHaveBeenCalledWith('node-1', { backstory: 'New Backstory' });
   });
 
   it('switches tabs and handles LLM settings', () => {
+    // @ts-expect-error - Sensors
     render(<AgentForm {...mockProps} />);
     
     fireEvent.click(screen.getByText('LLM'));
@@ -133,6 +176,7 @@ describe('AgentForm', () => {
   });
 
   it('handles Tools tab interactions (Add/Remove/Toggle)', () => {
+    // @ts-expect-error - Sensors
     render(<AgentForm {...mockProps} />);
     
     fireEvent.click(screen.getByText('Tools'));
@@ -159,6 +203,7 @@ describe('AgentForm', () => {
   });
 
   it('handles Execution tab interactions', () => {
+    // @ts-expect-error - Sensors
     render(<AgentForm {...mockProps} />);
     
     fireEvent.click(screen.getByText('Exec'));
@@ -180,6 +225,7 @@ describe('AgentForm', () => {
   });
 
   it('handles Templates tab interactions', () => {
+    // @ts-expect-error - Sensors
     render(<AgentForm {...mockProps} />);
     
     fireEvent.click(screen.getByText('Templates'));
@@ -200,6 +246,7 @@ describe('AgentForm', () => {
   });
 
   it('triggers AI suggest when goal and backstory sparkles are clicked', () => {
+    // @ts-expect-error - Sensors
     render(<AgentForm {...mockProps} />);
     
     const sparkles = screen.getAllByTestId('icon-sparkles');
@@ -213,6 +260,7 @@ describe('AgentForm', () => {
   it('renders global tool selector content when open', () => {
     mockProps.isGlobalToolSelectorOpen = true;
     mockProps.data.globalToolIds = [];
+    // @ts-expect-error - Sensors
     render(<AgentForm {...mockProps} />);
     
     // Switch to Tools tab
@@ -225,6 +273,7 @@ describe('AgentForm', () => {
   it('renders MCP selector content when open', () => {
     mockProps.isMcpSelectorOpen = true;
     mockProps.data.mcpServerIds = []; 
+    // @ts-expect-error - Sensors
     render(<AgentForm {...mockProps} />);
     
     fireEvent.click(screen.getByText(/Tools/i));
@@ -236,6 +285,7 @@ describe('AgentForm', () => {
   it('renders Custom Tool selector content when open', () => {
     mockProps.isCustomToolSelectorOpen = true;
     mockProps.data.customToolIds = [];
+    // @ts-expect-error - Sensors
     render(<AgentForm {...mockProps} />);
     
     fireEvent.click(screen.getByText(/Tools/i));
@@ -252,9 +302,10 @@ describe('AgentForm', () => {
       isEnabled: true, 
       user_config_schema: { type: 'object' } 
     };
-    mockProps.globalTools.push(toolWithSchema);
+    mockProps.globalTools.push(toolWithSchema as unknown as ToolConfig);
     mockProps.isGlobalToolSelectorOpen = true;
     
+    // @ts-expect-error - Sensors
     render(<AgentForm {...mockProps} />);
     fireEvent.click(screen.getByText(/Tools/i));
     
@@ -266,11 +317,31 @@ describe('AgentForm', () => {
     expect(mockProps.setIsGlobalToolSelectorOpen).toHaveBeenCalledWith(false);
   });
 
+  it('handles tool selection WITHOUT config schema', () => {
+    const simpleTool = { id: 'tool-3', name: 'Simple Tool', category: 'Search', isEnabled: true };
+    mockProps.globalTools.push(simpleTool as unknown as ToolConfig);
+    mockProps.isGlobalToolSelectorOpen = true;
+    mockProps.data.globalToolIds = ['tool-1'];
+    
+    // @ts-expect-error - Sensors
+    render(<AgentForm {...mockProps} />);
+    fireEvent.click(screen.getByText(/Tools/i));
+    
+    const simpleToolBtn = screen.getByText(/Simple Tool/i);
+    fireEvent.click(simpleToolBtn);
+    
+    expect(mockProps.updateNodeData).toHaveBeenCalledWith('node-1', expect.objectContaining({
+      globalToolIds: ['tool-1', 'tool-3']
+    }));
+    expect(mockProps.setIsGlobalToolSelectorOpen).toHaveBeenCalledWith(false);
+  });
+
   it('handles task reordering via DnD', () => {
     mockProps.renderableTasks = [
-      { id: 't1', type: 'task', data: { name: 'Task 1' } },
-      { id: 't2', type: 'task', data: { name: 'Task 2' } }
-    ];
+      { id: 't1', type: 'task', data: { name: 'Task 1' } as unknown as AppNode['data'] },
+      { id: 't2', type: 'task', data: { name: 'Task 2' } as unknown as AppNode['data'] }
+    ] as unknown as AppNode[];
+    // @ts-expect-error - Sensors
     render(<AgentForm {...mockProps} />);
     fireEvent.click(screen.getByText('Exec'));
     
@@ -282,6 +353,7 @@ describe('AgentForm', () => {
   it('handles MCP server selection', () => {
     mockProps.isMcpSelectorOpen = true;
     mockProps.data.mcpServerIds = ['mcp-1'];
+    // @ts-expect-error - Sensors
     render(<AgentForm {...mockProps} />);
     
     fireEvent.click(screen.getByText('Tools'));
@@ -296,6 +368,7 @@ describe('AgentForm', () => {
   it('handles custom tool selection', () => {
     mockProps.isCustomToolSelectorOpen = true;
     mockProps.data.customToolIds = ['ctoon-1'];
+    // @ts-expect-error - Sensors
     render(<AgentForm {...mockProps} />);
     
     fireEvent.click(screen.getByText('Tools'));
@@ -308,6 +381,7 @@ describe('AgentForm', () => {
   });
 
   it('toggles tool expansion in templates tab', () => {
+    // @ts-expect-error - Sensors
     render(<AgentForm {...mockProps} />);
     fireEvent.click(screen.getByText('Templates'));
     
@@ -319,5 +393,70 @@ describe('AgentForm', () => {
     
     fireEvent.click(promptTplBtn); // Collapse
     expect(textarea).not.toBeInTheDocument();
+  });
+
+  it('handles Tool disabling and enabling toggle backwards', () => {
+    mockProps.data.disabledToolIds = ['tool-1'];
+    // @ts-expect-error - Sensors
+    render(<AgentForm {...mockProps} />);
+    fireEvent.click(screen.getByText('Tools'));
+    
+    // Toggle Tool that is ALREADY disabled to enable it
+    const toggleBtn = screen.getAllByTestId('icon-toggle-left')[0];
+    fireEvent.click(toggleBtn);
+    expect(mockProps.updateNodeData).toHaveBeenCalledWith('node-1', { disabledToolIds: [] });
+  });
+
+  it('triggers AI suggest for role sparkle', () => {
+    // @ts-expect-error - Sensors
+    render(<AgentForm {...mockProps} />);
+    const sparkles = screen.getAllByTestId('icon-sparkles');
+    fireEvent.click(sparkles[0]); // Role sparkle
+    expect(mockProps.onAiSuggest).toHaveBeenCalledWith('role');
+  });
+
+  it('handles overlay clicks for selectors', () => {
+    mockProps.isGlobalToolSelectorOpen = true;
+    mockProps.isMcpSelectorOpen = true;
+    mockProps.isCustomToolSelectorOpen = true;
+    
+    // @ts-expect-error - Sensors
+    const { container } = render(<AgentForm {...mockProps} />);
+    fireEvent.click(screen.getByText('Tools'));
+    
+    const overlays = container.querySelectorAll('.fixed.inset-0');
+    expect(overlays.length).toBeGreaterThan(0);
+    
+    overlays.forEach(overlay => fireEvent.click(overlay));
+    
+    expect(mockProps.setIsGlobalToolSelectorOpen).toHaveBeenCalledWith(false);
+    expect(mockProps.setIsMcpSelectorOpen).toHaveBeenCalledWith(false);
+    expect(mockProps.setIsCustomToolSelectorOpen).toHaveBeenCalledWith(false);
+  });
+
+  it('handles the plus buttons to open selectors', () => {
+    // @ts-expect-error - Sensors
+    render(<AgentForm {...mockProps} />);
+    fireEvent.click(screen.getByText('Tools'));
+    
+    const addBtns = screen.getAllByTestId('icon-plus');
+    fireEvent.click(addBtns[1]); // MCP Plus
+    expect(mockProps.setIsMcpSelectorOpen).toHaveBeenCalledWith(true);
+    
+    fireEvent.click(addBtns[2]); // Custom Plus
+    expect(mockProps.setIsCustomToolSelectorOpen).toHaveBeenCalledWith(true);
+  });
+
+  it('handles removal of MCP servers and Custom Tools', () => {
+    // @ts-expect-error - Sensors
+    render(<AgentForm {...mockProps} />);
+    fireEvent.click(screen.getByText('Tools'));
+    
+    const removeBtns = screen.getAllByTestId('icon-x');
+    fireEvent.click(removeBtns[1]); // Remove MCP Server 1
+    expect(mockProps.updateNodeData).toHaveBeenCalledWith('node-1', { mcpServerIds: [] });
+    
+    fireEvent.click(removeBtns[2]); // Remove Custom Tool 1
+    expect(mockProps.updateNodeData).toHaveBeenCalledWith('node-1', { customToolIds: [] });
   });
 });

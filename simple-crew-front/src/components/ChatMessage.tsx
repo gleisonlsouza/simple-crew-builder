@@ -1,5 +1,5 @@
 import React, { useMemo, useState, useEffect } from 'react';
-import ReactMarkdown from 'react-markdown';
+import ReactMarkdown, { type Components } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { FileText, Copy, Check } from 'lucide-react';
 import Prism from 'prismjs';
@@ -57,11 +57,11 @@ const MarkdownCodeBlock = ({ children, className }: { children: string; classNam
 };
 
 export const ChatMessage = React.memo(({ msg }: { msg: ChatMessageType }) => {
-  const markdownComponents = useMemo(() => ({
-    p: ({ children }: any) => <p className="mb-3 last:mb-0 leading-relaxed text-[13px]">{children}</p>,
-    strong: ({ children }: any) => <strong className="font-bold text-brand-text">{children}</strong>,
-    em: ({ children }: any) => <em className="italic opacity-90">{children}</em>,
-    code: ({ children, className }: any) => {
+  const markdownComponents: Components = useMemo(() => ({
+    p: ({ children }: { children?: React.ReactNode }) => <p className="mb-3 last:mb-0 leading-relaxed text-[13px]">{children}</p>,
+    strong: ({ children }: { children?: React.ReactNode }) => <strong className="font-bold text-brand-text">{children}</strong>,
+    em: ({ children }: { children?: React.ReactNode }) => <em className="italic opacity-90">{children}</em>,
+    code: ({ children, className }: { children?: React.ReactNode; className?: string }) => {
       const isBlock = className?.includes('language-') || (children && String(children).includes('\n'));
       if (isBlock) {
         if (className?.includes('language-mermaid')) {
@@ -75,19 +75,19 @@ export const ChatMessage = React.memo(({ msg }: { msg: ChatMessageType }) => {
         </code>
       );
     },
-    pre: ({ children }: any) => <>{children}</>,
-    ul: ({ children }: any) => <ul className="list-disc list-outside mb-3 ml-4 space-y-1.5 text-[13px]">{children}</ul>,
-    ol: ({ children }: any) => <ol className="list-decimal list-outside mb-3 ml-4 space-y-1.5 text-[13px]">{children}</ol>,
-    li: ({ children }: any) => <li className="pl-1 marker:text-brand-accent">{children}</li>,
-    h1: ({ children }: any) => <h1 className="text-lg font-black mb-3 mt-4 text-brand-text transition-colors">{children}</h1>,
-    h2: ({ children }: any) => <h2 className="text-base font-black mb-2 mt-3 text-brand-text/90 italic">{children}</h2>,
-    h3: ({ children }: any) => <h3 className="text-sm font-bold mb-2 mt-2 text-brand-text/80">{children}</h3>,
-    blockquote: ({ children }: any) => (
+    pre: ({ children }: { children?: React.ReactNode }) => <>{children}</>,
+    ul: ({ children }: { children?: React.ReactNode }) => <ul className="list-disc list-outside mb-3 ml-4 space-y-1.5 text-[13px]">{children}</ul>,
+    ol: ({ children }: { children?: React.ReactNode }) => <ol className="list-decimal list-outside mb-3 ml-4 space-y-1.5 text-[13px]">{children}</ol>,
+    li: ({ children }: { children?: React.ReactNode }) => <li className="pl-1 marker:text-brand-accent">{children}</li>,
+    h1: ({ children }: { children?: React.ReactNode }) => <h1 className="text-lg font-black mb-3 mt-4 text-brand-text transition-colors">{children}</h1>,
+    h2: ({ children }: { children?: React.ReactNode }) => <h2 className="text-base font-black mb-2 mt-3 text-brand-text/90 italic">{children}</h2>,
+    h3: ({ children }: { children?: React.ReactNode }) => <h3 className="text-sm font-bold mb-2 mt-2 text-brand-text/80">{children}</h3>,
+    blockquote: ({ children }: { children?: React.ReactNode }) => (
       <blockquote className="border-l-4 border-brand-accent/30 bg-brand-accent/5 pl-4 py-2 my-4 italic rounded-r-lg text-brand-muted">
         {children}
       </blockquote>
     ),
-    a: ({ href, children }: any) => (
+    a: ({ href, children }: { href?: string; children?: React.ReactNode }) => (
       <a 
         href={href} 
         target="_blank" 
@@ -98,16 +98,16 @@ export const ChatMessage = React.memo(({ msg }: { msg: ChatMessageType }) => {
       </a>
     ),
     hr: () => <hr className="border-brand-border my-6" />,
-    table: ({ children }: any) => (
+    table: ({ children }: { children?: React.ReactNode }) => (
       <div className="overflow-x-auto my-4 rounded-xl border border-brand-border shadow-inner bg-brand-bg/50">
         <table className="w-full text-left text-xs border-collapse">
           {children}
         </table>
       </div>
     ),
-    thead: ({ children }: any) => <thead className="bg-brand-bg text-brand-muted font-bold">{children}</thead>,
-    th: ({ children }: any) => <th className="px-4 py-2 border-b border-brand-border">{children}</th>,
-    td: ({ children }: any) => <td className="px-4 py-2 border-b border-brand-border text-brand-text/80">{children}</td>,
+    thead: ({ children }: { children?: React.ReactNode }) => <thead className="bg-brand-bg text-brand-muted font-bold">{children}</thead>,
+    th: ({ children }: { children?: React.ReactNode }) => <th className="px-4 py-2 border-b border-brand-border">{children}</th>,
+    td: ({ children }: { children?: React.ReactNode }) => <td className="px-4 py-2 border-b border-brand-border text-brand-text/80">{children}</td>,
   }), []);
 
   return (

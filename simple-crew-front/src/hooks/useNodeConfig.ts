@@ -65,7 +65,8 @@ export const useNodeConfig = () => {
     if (activeNodeId) {
       const node = nodes.find((n) => n.id === activeNodeId);
       if (node) {
-        setLocalName((node.data as any).name || '');
+        const data = node.data;
+        setLocalName((data as { name?: string }).name || '');
         setNameError(false);
         setIsContextSelectorOpen(false);
         setIsMcpSelectorOpen(false);
@@ -98,9 +99,10 @@ export const useNodeConfig = () => {
     }
     return [];
   }, [activeNodeId, isAgent, isCrew, edges, nodes, connectedAgents]);
+
   const renderableAgents = useMemo(() => {
-    let list = [...connectedAgents];
-    const order = (activeNode?.data as any)?.agentOrder as string[] | undefined;
+    const list = [...connectedAgents];
+    const order = (activeNode?.data as { agentOrder?: string[] })?.agentOrder;
     if (isCrew && order && order.length > 0) {
       list.sort((a, b) => {
         const idxA = order.indexOf(a.id);
@@ -115,8 +117,8 @@ export const useNodeConfig = () => {
   }, [connectedAgents, activeNode?.data, isCrew]);
 
   const renderableTasks = useMemo(() => {
-    let list = [...connectedTasks];
-    const order = (activeNode?.data as any)?.taskOrder as string[] | undefined;
+    const list = [...connectedTasks];
+    const order = (activeNode?.data as { taskOrder?: string[] })?.taskOrder;
     if ((isAgent || isCrew) && order && order.length > 0) {
       list.sort((a, b) => {
         const idxA = order.indexOf(a.id);
@@ -132,26 +134,24 @@ export const useNodeConfig = () => {
 
   useEffect(() => {
     if (isCrew && activeNodeId) {
-      const order = (activeNode?.data as any)?.agentOrder as string[] | undefined;
+      const order = (activeNode?.data as { agentOrder?: string[] })?.agentOrder;
       const currentIds = connectedAgents.map(a => a.id);
       
-      // Check if order is missing any current IDs or has IDs that no longer exist
       const isMissing = currentIds.some(id => !order?.includes(id));
       const hasExtra = order?.some(id => !currentIds.includes(id));
       
       if (!order || isMissing || hasExtra) {
-        // Only update if the content actually changes to avoid loops
         const orderedIds = renderableAgents.map(a => a.id);
         if (JSON.stringify(order) !== JSON.stringify(orderedIds)) {
           updateCrewAgentOrder(activeNodeId, orderedIds);
         }
       }
     }
-  }, [connectedAgents.length, isCrew, activeNodeId, renderableAgents, updateCrewAgentOrder]);
+  }, [connectedAgents, isCrew, activeNodeId, renderableAgents, updateCrewAgentOrder, activeNode?.data]);
 
   useEffect(() => {
     if ((isAgent || isCrew) && activeNodeId) {
-      const order = (activeNode?.data as any)?.taskOrder as string[] | undefined;
+      const order = (activeNode?.data as { taskOrder?: string[] })?.taskOrder;
       const currentIds = connectedTasks.map(a => a.id);
       
       const isMissing = currentIds.some(id => !order?.includes(id));
@@ -165,7 +165,7 @@ export const useNodeConfig = () => {
         }
       }
     }
-  }, [connectedTasks.length, isAgent, isCrew, activeNodeId, renderableTasks, updateAgentTaskOrder, updateCrewTaskOrder]);
+  }, [connectedTasks, isAgent, isCrew, activeNodeId, renderableTasks, updateAgentTaskOrder, updateCrewTaskOrder, activeNode?.data]);
 
   const handleAgentDragEnd = useCallback((event: DragEndEvent) => {
     const { active, over } = event;
@@ -195,7 +195,7 @@ export const useNodeConfig = () => {
     setLocalName(value);
     if (!activeNode) return;
     const isDuplicate = nodes.some(
-      (n) => n.id !== activeNode.id && n.type === activeNode.type && (n.data as any).name === value
+      (n) => n.id !== activeNode.id && n.type === activeNode.type && (n.data as { name?: string }).name === value
     );
     setNameError(isDuplicate);
     if (!isDuplicate && activeNodeId) {
@@ -207,7 +207,7 @@ export const useNodeConfig = () => {
     if (!activeNodeId) return;
     setLoadingFields(prev => ({ ...prev, [field]: true }));
     try {
-      await suggestAiContent(activeNodeId, field as any);
+      await suggestAiContent(activeNodeId, field as 'role' | 'goal' | 'backstory' | 'description' | 'expected_output');
     } finally {
       setLoadingFields(prev => ({ ...prev, [field]: false }));
     }
@@ -217,7 +217,7 @@ export const useNodeConfig = () => {
     if (!activeNodeId || !activeNode?.data) return;
     const { type, data } = activeNode;
     if (type === 'agent') {
-      const agentName = (data as any).name;
+      const agentName = (data as { name?: string }).name;
       if (!agentName || agentName.trim() === '') {
         toast.error('Please define a name for the Agent first.');
         return;
@@ -229,7 +229,7 @@ export const useNodeConfig = () => {
         setLoadingFields(prev => ({ ...prev, role: false, goal: false, backstory: false }));
       }
     } else if (type === 'task') {
-      const taskName = (data as any).name;
+      const taskName = (data as { name?: string }).name;
       if (!taskName || taskName.trim() === '') {
         toast.error('Please define a name for the Task first.');
         return;
@@ -246,7 +246,7 @@ export const useNodeConfig = () => {
   const handleSelectSuggestion = useCallback((suggestion: string) => {
     if (!activeNodeId || !activeNode) return;
     const { field, cursorPos } = suggestionState;
-    const currentData = activeNode.data as any;
+    const currentData = activeNode.data as Record<string, string>;
     const currentValue = currentData[field] || '';
     const textBeforeCursor = currentValue.slice(0, cursorPos);
     const lastBraceIndex = textBeforeCursor.lastIndexOf('{');
@@ -260,10 +260,10 @@ export const useNodeConfig = () => {
     setSuggestionState(prev => ({ ...prev, isOpen: false }));
   }, [activeNodeId, activeNode, suggestionState, updateNodeData]);
 
-  const handleFieldKeyDown = useCallback((e: React.KeyboardEvent<HTMLTextAreaElement | HTMLInputElement | any>) => {
+  const handleFieldKeyDown = useCallback((e: React.KeyboardEvent<HTMLTextAreaElement | HTMLInputElement>) => {
     if (suggestionState.isOpen) {
       const crewNode = nodes.find(n => n.type === 'crew');
-      const inputs = Object.keys((crewNode?.data as any)?.inputs || {}).filter(k => !k.startsWith('input_'));
+      const inputs = Object.keys((crewNode?.data as { inputs?: Record<string, string> })?.inputs || {}).filter(k => !k.startsWith('input_'));
       const filtered = inputs.filter(k => k.toLowerCase().includes(suggestionState.filter.toLowerCase()));
 
       if (e.key === 'ArrowDown') {
@@ -288,12 +288,12 @@ export const useNodeConfig = () => {
   }, [suggestionState, nodes, handleSelectSuggestion]);
 
   const handleFieldChange = useCallback((
-    e: React.ChangeEvent<HTMLTextAreaElement | HTMLInputElement | any>, 
+    e: React.ChangeEvent<HTMLTextAreaElement | HTMLInputElement> | { target: { value: string } }, 
     field: string,
     updateFn: (val: string) => void
   ) => {
     const value = e.target.value;
-    const targetElement = (e.target.getBoundingClientRect ? e.target : document.activeElement) as HTMLTextAreaElement | HTMLInputElement;
+    const targetElement = (e as React.ChangeEvent<HTMLTextAreaElement | HTMLInputElement>).target as HTMLTextAreaElement | HTMLInputElement | undefined;
     const cursorPos = (targetElement && typeof targetElement.selectionStart === 'number') 
       ? targetElement.selectionStart 
       : value.length;
@@ -326,7 +326,7 @@ export const useNodeConfig = () => {
     // 1. Inputs from Crew Node
     const crewNode = nodes.find(n => n.type === 'crew');
     if (crewNode) {
-      const inputs = (crewNode.data as any)?.inputs || {};
+      const inputs = (crewNode.data as { inputs?: Record<string, string> })?.inputs || {};
       Object.keys(inputs).forEach(k => {
         if (!k.startsWith('input_')) vars.add(k);
       });
@@ -335,7 +335,7 @@ export const useNodeConfig = () => {
     // 2. Scan all nodes for {variable} patterns
     const variableRegex = /\{([a-zA-Z0-9_-]+)\}/g;
     nodes.forEach(node => {
-      const data = node.data as any;
+      const data = node.data as Record<string, string>;
       const fieldsToScan = [
         data.role, data.goal, data.backstory,
         data.description, data.expected_output,
@@ -363,7 +363,7 @@ export const useNodeConfig = () => {
       const targetNode = nodes.find(n => n.id === edgeToSource.target);
       if (targetNode && targetNode.type === 'crew') {
         isChatConnected = true;
-        connectedCrewInputs = Object.keys((targetNode.data as any)?.inputs || {}).filter(k => !k.startsWith('input_'));
+        connectedCrewInputs = Object.keys((targetNode.data as { inputs?: Record<string, string> })?.inputs || {}).filter(k => !k.startsWith('input_'));
       }
     }
   }

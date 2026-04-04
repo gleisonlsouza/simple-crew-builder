@@ -153,7 +153,7 @@ export function NodeConfigDrawer() {
             <span className="text-[10px] font-bold text-brand-muted uppercase tracking-wider">Crew Input Variables</span>
           </div>
           <div className="overflow-y-auto max-h-[160px] custom-scrollbar">
-            {Object.keys((nodes.find(n => n.type === 'crew')?.data as any)?.inputs || {})
+            {Object.keys((nodes.find(n => n.type === 'crew')?.data as CrewNodeData | undefined)?.inputs || {})
               .filter(k => !k.startsWith('input_') && k.toLowerCase().includes(suggestionState.filter.toLowerCase()))
               .map((key, idx) => (
                 <button
@@ -173,7 +173,7 @@ export function NodeConfigDrawer() {
                   <Plus className={`w-3 h-3 ${idx === suggestionState.selectedIndex ? 'opacity-100' : 'opacity-0'}`} />
                 </button>
               ))}
-            {Object.keys((nodes.find(n => n.type === 'crew')?.data as any)?.inputs || {})
+            {Object.keys((nodes.find(n => n.type === 'crew')?.data as CrewNodeData | undefined)?.inputs || {})
               .filter(k => !k.startsWith('input_') && k.toLowerCase().includes(suggestionState.filter.toLowerCase())).length === 0 && (
               <div className="px-3 py-3 text-center">
                 <p className="text-[10px] text-brand-muted italic">No matching inputs.</p>
@@ -300,7 +300,7 @@ export function NodeConfigDrawer() {
           tool={toolToConfigure}
           isOpen={isToolConfigModalOpen}
           onClose={() => { setIsToolConfigModalOpen(false); setToolToConfigure(null); }}
-          onSave={(config) => { const currentIds = (data as any).globalToolIds || []; updateNodeData(activeNode.id, { globalToolIds: [...currentIds, { id: toolToConfigure.id, config }] }); }}
+          onSave={(config) => { const currentIds = (data as AgentNodeData | TaskNodeData).globalToolIds || []; updateNodeData(activeNode.id, { globalToolIds: [...currentIds, { id: toolToConfigure.id, config }] }); }}
         />
       )}
     </div>

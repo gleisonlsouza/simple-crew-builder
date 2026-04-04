@@ -1,8 +1,8 @@
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState, useRef, useCallback } from 'react';
 import toast from 'react-hot-toast';
 import Prism from 'prismjs';
 import { useStore } from '../store/index';
-import type { WorkspaceFile } from '../types/store.types';
+import type { WorkspaceFile, Workspace } from '../types/store.types';
 
 export const useWorkspace = () => {
   const isExplorerOpen = useStore((state) => state.isExplorerOpen);
@@ -32,21 +32,21 @@ export const useWorkspace = () => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const folderInputRef = useRef<HTMLInputElement>(null);
 
-  const workspace = workspaces.find((w: any) => w.id === currentWsId);
+  const workspace = workspaces.find((w: Workspace) => w.id === currentWsId);
 
-  const loadFiles = async () => {
+  const loadFiles = useCallback(async () => {
     if (!currentWsId) return;
     setIsLoading(true);
     const data = await fetchFiles(currentWsId);
     setFiles(data);
     setIsLoading(false);
-  };
+  }, [currentWsId, fetchFiles]);
 
   useEffect(() => {
     if (currentWsId) {
       loadFiles();
     }
-  }, [currentWsId]);
+  }, [currentWsId, loadFiles]);
 
   useEffect(() => {
     if (isExplorerOpen && currentWsId) {
@@ -54,13 +54,13 @@ export const useWorkspace = () => {
       setSelectedPath(null);
       setContent(null);
     }
-  }, [isExplorerOpen, currentWsId]);
+  }, [isExplorerOpen, currentWsId, loadFiles]);
 
   useEffect(() => {
     if (content) {
       Prism.highlightAll();
     }
-  }, [content]);
+  }, [content, loadFiles]);
 
   const handleFileSelect = async (path: string) => {
     if (!currentWsId) return;

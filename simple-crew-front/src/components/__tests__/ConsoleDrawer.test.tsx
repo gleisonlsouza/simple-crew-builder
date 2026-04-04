@@ -2,6 +2,8 @@ import { render, screen, fireEvent } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { ConsoleDrawer } from '../ConsoleDrawer';
 import { useStore } from '../../store/index';
+import type { AppState } from '../../types/store.types';
+import type { Mock } from 'vitest';
 
 // Mock the store
 vi.mock('../../store/index', () => ({
@@ -15,7 +17,7 @@ describe('ConsoleDrawer Component', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     // Default state: Console Open but not Expanded
-    (useStore as any).mockImplementation((selector: any) => {
+    (useStore as unknown as Mock).mockImplementation((selector: (state: Partial<AppState>) => unknown) => {
       const state = {
         isExecuting: false,
         isConsoleOpen: true,
@@ -49,7 +51,7 @@ describe('ConsoleDrawer Component', () => {
 
   it('renders logs and expands correctly', () => {
     // Override mock to be expanded and have logs
-    (useStore as any).mockImplementation((selector: any) => {
+    (useStore as unknown as Mock).mockImplementation((selector: (state: Partial<AppState>) => unknown) => {
       const state = {
         isExecuting: false,
         isConsoleOpen: true,
@@ -72,7 +74,7 @@ describe('ConsoleDrawer Component', () => {
   });
 
   it('shows loader while executing', () => {
-    (useStore as any).mockImplementation((selector: any) => {
+    (useStore as unknown as Mock).mockImplementation((selector: (state: Partial<AppState>) => unknown) => {
       const state = {
         isExecuting: true,
         isConsoleOpen: true,
@@ -89,7 +91,7 @@ describe('ConsoleDrawer Component', () => {
   });
 
   it('closes console when X is clicked', () => {
-    (useStore as any).mockImplementation((selector: any) => {
+    (useStore as unknown as Mock).mockImplementation((selector: (state: Partial<AppState>) => unknown) => {
       const state = {
         isExecuting: false,
         isConsoleOpen: true,
@@ -109,7 +111,7 @@ describe('ConsoleDrawer Component', () => {
   });
 
   it('auto-scrolls when output updates', () => {
-    (useStore as any).mockImplementation((selector: any) => {
+    (useStore as unknown as Mock).mockImplementation((selector: (state: Partial<AppState>) => unknown) => {
       const state = {
         isExecuting: true,
         isConsoleOpen: true,
@@ -124,7 +126,7 @@ describe('ConsoleDrawer Component', () => {
     const { rerender } = render(<ConsoleDrawer />);
     
     // Update logs
-    (useStore as any).mockImplementation((selector: any) => {
+    (useStore as unknown as Mock).mockImplementation((selector: (state: Partial<AppState>) => unknown) => {
       const state = {
         isExecuting: true,
         isConsoleOpen: true,
@@ -138,5 +140,59 @@ describe('ConsoleDrawer Component', () => {
 
     rerender(<ConsoleDrawer />);
     expect(screen.getByText(/New Log Line/i)).toBeInTheDocument();
+  });
+
+  it('does not re-expand when clicked if already expanded', () => {
+    (useStore as unknown as Mock).mockImplementation((selector: (state: Partial<AppState>) => unknown) => {
+      const state = {
+        isConsoleOpen: true,
+        isConsoleExpanded: true,
+        setIsConsoleExpanded: mockSetIsConsoleExpanded,
+      };
+      return selector(state);
+    });
+
+    render(<ConsoleDrawer />);
+    const drawer = screen.getByText(/Live Console/i).closest('div');
+    fireEvent.click(drawer!);
+    
+    expect(mockSetIsConsoleExpanded).not.toHaveBeenCalled();
+  });
+
+  it('toggles expansion when minimize/expand button is clicked', () => {
+    // Test Minimize -> Expand
+    render(<ConsoleDrawer />);
+    const expandBtn = screen.getByTitle(/Expand/i);
+    fireEvent.click(expandBtn);
+    expect(mockSetIsConsoleExpanded).toHaveBeenCalledWith(true);
+
+    // Test Expand -> Minimize
+    (useStore as unknown as Mock).mockImplementation((selector: (state: Partial<AppState>) => unknown) => {
+      const state = {
+        isExecuting: false,
+        isConsoleOpen: true,
+        isConsoleExpanded: true,
+        executionResult: null,
+        setIsConsoleOpen: mockSetIsConsoleOpen,
+        setIsConsoleExpanded: mockSetIsConsoleExpanded,
+      };
+      return selector(state);
+    });
+    render(<ConsoleDrawer />);
+    const minimizeBtn = screen.getByTitle(/Minimize/i);
+    fireEvent.click(minimizeBtn);
+    expect(mockSetIsConsoleExpanded).toHaveBeenCalledWith(false);
+  });
+
+  it('renders nothing when isConsoleOpen is false', () => {
+    (useStore as unknown as Mock).mockImplementation((selector: (state: Partial<AppState>) => unknown) => {
+      const state = {
+        isConsoleOpen: false,
+      };
+      return selector(state);
+    });
+
+    const { container } = render(<ConsoleDrawer />);
+    expect(container.firstChild).toBeNull();
   });
 });

@@ -21,6 +21,7 @@ import { SettingsDrawer } from '../components/SettingsDrawer';
 import { ConfirmationModal } from '../components/ConfirmationModal';
 import { AboutModal } from '../components/AboutModal';
 import logo from '../assets/logo.PNG';
+import type { Project } from '../types/store.types';
 
 const Dashboard = () => {
   const navigate = useNavigate();
@@ -92,7 +93,7 @@ const Dashboard = () => {
         if (imported) {
           navigate(`/workflow/${imported.id}`);
         }
-      } catch (err) {
+      } catch {
         useStore.getState().showNotification("Failed to parse JSON file.", "error");
       }
     };
@@ -105,7 +106,7 @@ const Dashboard = () => {
     navigate(`/workflow/${id}`);
   };
 
-  const handleOpenRename = (project: any) => {
+  const handleOpenRename = (project: Project) => {
     setEditingProject({
       id: project.id,
       name: project.name,
@@ -264,7 +265,7 @@ const Dashboard = () => {
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-              {savedProjects.map((project: any) => (
+              {savedProjects.map((project: Project) => (
                 <div 
                   key={project.id}
                   onClick={() => handleEditWorkflow(project.id)}

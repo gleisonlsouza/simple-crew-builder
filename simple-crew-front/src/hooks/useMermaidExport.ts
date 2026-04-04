@@ -7,10 +7,10 @@ export const generateMermaidString = (nodes: AppNode[], edges: AppEdge[], direct
   let mermaid = `flowchart ${direction}\n`;
   
   // 1. Define Nodes with specific shapes
-  nodes.forEach((node: any) => {
-    const data = node.data as any;
-    const name = (data.name || node.type || node.id).replace(/"/g, "'");
-    const id = node.id.replace(/-/g, '_');
+  nodes.forEach((node: AppNode) => {
+    const data = node.data as Record<string, unknown>;
+    const name = String(data.name || node.type || (node as { id: string }).id).replace(/"/g, "'");
+    const id = (node as { id: string }).id.replace(/-/g, '_');
     
     let shape = `["${name}"]`; // Default
     if (node.type === 'agent') shape = `[["${name}"]]`;
@@ -144,9 +144,10 @@ export const useMermaidExport = () => {
       document.body.removeChild(link);
       
       toast.success('Download do PNG iniciado!', { id: loadingToast });
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('Failed to export PNG:', err);
-      toast.error(`Falha ao exportar PNG: ${err.message || 'Erro desconhecido'}`, { id: loadingToast });
+      const errorMessage = err instanceof Error ? err.message : 'Erro desconhecido';
+      toast.error(`Falha ao exportar PNG: ${errorMessage}`, { id: loadingToast });
     }
   };
 
@@ -188,9 +189,10 @@ export const useMermaidExport = () => {
       pdf.save(`mermaid-diagram-${Date.now()}.pdf`);
       
       toast.success('Download do PDF iniciado!', { id: loadingToast });
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('Failed to export PDF:', err);
-      toast.error(`Falha ao exportar PDF: ${err.message || 'Erro desconhecido'}`, { id: loadingToast });
+      const errorMessage = err instanceof Error ? err.message : 'Erro desconhecido';
+      toast.error(`Falha ao exportar PDF: ${errorMessage}`, { id: loadingToast });
     }
   };
 

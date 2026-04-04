@@ -1,6 +1,6 @@
 import React, { memo } from 'react';
 import { MessageCircle } from 'lucide-react';
-import { HighlightedTextField } from '../HighlightedTextField';
+import HighlightedTextField from '../HighlightedTextField';
 import type { ChatNodeData } from '../../types/nodes.types';
 
 interface ChatFormProps {
@@ -11,8 +11,8 @@ interface ChatFormProps {
   connectedCrewInputs: string[];
   isChatMappingSelectorOpen: boolean;
   setIsChatMappingSelectorOpen: (open: boolean) => void;
-  onFieldKeyDown: (e: React.KeyboardEvent) => void;
-  onFieldChange: (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>, field: string, updateFn: (val: string) => void) => void;
+  onFieldKeyDown: (e: React.KeyboardEvent<HTMLInputElement | HTMLTextAreaElement>) => void;
+  onFieldChange: (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement> | { target: { value: string } }, field: string, updateFn: (val: string) => void) => void;
 }
 
 export const ChatForm: React.FC<ChatFormProps> = memo(({

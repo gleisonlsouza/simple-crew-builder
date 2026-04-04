@@ -1,7 +1,8 @@
 import type { StateCreator } from 'zustand';
 import toast from 'react-hot-toast';
-import type { NodeStatus, AppState, ProjectSlice } from '../../types/store.types';
+import type { NodeStatus, AppState, ProjectSlice, ExportedProject } from '../../types/store.types';
 import type { AppNode } from '../../types/nodes.types';
+import type { MCPServer, CustomTool } from '../../types/config.types';
 import { migrateEdges, migrateNodes, validateDependencies } from '../helpers';
 import { INITIAL_CHAT_MESSAGES } from './graph.slice';
 
@@ -19,12 +20,15 @@ export const createProjectSlice: StateCreator<AppState, [], [], ProjectSlice> = 
   isDirty: false,
   abortController: null,
 
-  setDirty: (dirty) => set({ isDirty: dirty }),
+  setDirty: (dirty: boolean) => set({ isDirty: dirty }),
 
-  hydrateFromSnapshot: (projectId, snapshot) => {
+  hydrateFromSnapshot: (projectId: string, snapshot: ExportedProject) => {
     // Determine the active workspace locally if it exists
-    const localWorkspace = snapshot.workspaceId 
-      ? get().workspaces?.find(w => w.id === snapshot.workspaceId) 
+    // Note: Project['canvas_data'] doesn't usually have workspaceId, 
+    // but some snapshots from execution might.
+    const snapshotWithWs = snapshot as { workspaceId?: string };
+    const localWorkspace = snapshotWithWs.workspaceId 
+      ? get().workspaces?.find(w => w.id === snapshotWithWs.workspaceId) 
       : null;
     const activeWorkspaceId = localWorkspace ? localWorkspace.id : null;
 
@@ -55,12 +59,12 @@ export const createProjectSlice: StateCreator<AppState, [], [], ProjectSlice> = 
       if (!response.ok) throw new Error('Failed to fetch projects');
       const projects = await response.json();
       set({ savedProjects: projects });
-    } catch (error: any) {
+    } catch (error) {
       console.error(error);
     }
   },
 
-  saveProject: async (nameByArg, description) => {
+  saveProject: async (nameByArg: string, description?: string) => {
     const state = get();
     if (!state.validateGraph()) {
       toast.error("Please fix the errors before saving.");
@@ -110,14 +114,14 @@ export const createProjectSlice: StateCreator<AppState, [], [], ProjectSlice> = 
       });
       await state.fetchProjects();
       toast.success(isUpdate ? "Project updated!" : "Project created successfully!");
-    } catch (error: any) {
-      toast.error(error.message);
+    } catch (error) {
+      toast.error((error as Error).message);
     } finally {
       set({ isSaving: false });
     }
   },
 
-  updateProjectMetadata: async (id, name, description) => {
+  updateProjectMetadata: async (id: string, name: string, description: string) => {
     try {
       const response = await fetch(`${API_URL}/api/v1/projects/${id}`, {
         method: 'PUT',
@@ -130,13 +134,13 @@ export const createProjectSlice: StateCreator<AppState, [], [], ProjectSlice> = 
       toast.success("Project updated successfully");
       set({ currentProjectName: name, currentProjectDescription: description });
       await get().fetchProjects();
-    } catch (error: any) {
+    } catch (error) {
       console.error("Update project metadata error:", error);
       toast.error("Error updating project");
     }
   },
 
-  loadProject: async (projectId) => {
+  loadProject: async (projectId: string) => {
     if (projectId === get().currentProjectId) return;
     try {
       await Promise.all([
@@ -155,16 +159,16 @@ export const createProjectSlice: StateCreator<AppState, [], [], ProjectSlice> = 
       const canvas_data = project.canvas_data;
 
       const globalMcp = get().mcpServers;
-      const projectMcp = canvas_data.mcpServers || [];
+      const projectMcp: MCPServer[] = canvas_data.mcpServers || [];
       const mergedMcp = [...globalMcp];
-      projectMcp.forEach((p: any) => {
-        if (!mergedMcp.some((m: any) => m.id === p.id)) mergedMcp.push(p);
+      projectMcp.forEach((p) => {
+        if (!mergedMcp.some((m) => m.id === p.id)) mergedMcp.push(p);
       });
 
       const globalTools = get().customTools;
-      const projectTools = canvas_data.customTools || [];
+      const projectTools: CustomTool[] = canvas_data.customTools || [];
       const mergedTools = [...globalTools];
-      projectTools.forEach((p: any) => {
+      projectTools.forEach((p) => {
         if (!mergedTools.some(m => m.id === p.id)) mergedTools.push(p);
       });
 
@@ -200,12 +204,12 @@ export const createProjectSlice: StateCreator<AppState, [], [], ProjectSlice> = 
         isChatVisible: false
       });
       toast.success(`Project "${project.name}" loaded!`);
-    } catch (error: any) {
-      toast.error(error.message);
+    } catch (error) {
+      toast.error((error as Error).message);
     }
   },
 
-  deleteProject: async (projectId) => {
+  deleteProject: async (projectId: string) => {
     try {
       const response = await fetch(`${API_URL}/api/v1/projects/${projectId}`, {
         method: 'DELETE'
@@ -218,12 +222,12 @@ export const createProjectSlice: StateCreator<AppState, [], [], ProjectSlice> = 
 
       await get().fetchProjects();
       toast.success("Projeto removido.");
-    } catch (error: any) {
-      toast.error(error.message);
+    } catch (error) {
+      toast.error((error as Error).message);
     }
   },
 
-  createNewProject: async (name, description) => {
+  createNewProject: async (name: string, description: string) => {
     const payload = {
       name,
       description,
@@ -255,8 +259,8 @@ export const createProjectSlice: StateCreator<AppState, [], [], ProjectSlice> = 
       }));
 
       return saved;
-    } catch (error: any) {
-      toast.error(error.message);
+    } catch (error) {
+      toast.error((error as Error).message);
       return null;
     }
   },
@@ -279,7 +283,7 @@ export const createProjectSlice: StateCreator<AppState, [], [], ProjectSlice> = 
       if (!saveResponse.ok) throw new Error('Failed to save duplicated project');
       toast.success("Project duplicated successfully");
       await get().fetchProjects();
-    } catch (error: any) {
+    } catch (error) {
       console.error("Duplicate project error:", error);
       toast.error("Error duplicating project");
     }
@@ -298,20 +302,20 @@ export const createProjectSlice: StateCreator<AppState, [], [], ProjectSlice> = 
     const usedCustomToolIds = new Set<string>();
     const usedMcpServerIds = new Set<string>();
 
-    nodes.forEach((node: any) => {
-      const data = node.data;
+    nodes.forEach((node: AppNode) => {
+      const data = node.data as Record<string, unknown>;
       if (data.globalToolIds) {
-        data.globalToolIds.forEach((gt: any) => usedGlobalToolIds.add(typeof gt === 'string' ? gt : gt.id));
+        (data.globalToolIds as (string | { id: string })[]).forEach((gt) => usedGlobalToolIds.add(typeof gt === 'string' ? gt : gt.id));
       }
       if (data.customToolIds) {
-        data.customToolIds.forEach((id: string) => usedCustomToolIds.add(id));
+        (data.customToolIds as string[]).forEach((id) => usedCustomToolIds.add(id));
       }
       if (data.mcpServerIds) {
-        data.mcpServerIds.forEach((id: string) => usedMcpServerIds.add(id));
+        (data.mcpServerIds as string[]).forEach((id) => usedMcpServerIds.add(id));
       }
     });
 
-    const payload = {
+    const payload: ExportedProject = {
       version: "1.0",
       nodes: state.nodes,
       edges: state.edges,
@@ -323,8 +327,8 @@ export const createProjectSlice: StateCreator<AppState, [], [], ProjectSlice> = 
         headers: Object.fromEntries(Object.keys(ms.headers || {}).map(k => [k, ''])),
         envVars: Object.fromEntries(Object.keys(ms.envVars || {}).map(k => [k, ''])),
       })),
-      name: state.currentProjectName,
-      description: state.currentProjectDescription,
+      name: state.currentProjectName || undefined,
+      description: state.currentProjectDescription || undefined,
       workspaceId: state.currentProjectWorkspaceId,
       workspaceName: state.currentProjectWorkspaceName
     };
@@ -362,12 +366,13 @@ export const createProjectSlice: StateCreator<AppState, [], [], ProjectSlice> = 
         try {
           const errorData = await response.json();
           errorMsg = errorData.detail || errorMsg;
-        } catch (e) {
-          // If response is not JSON, try text
+        } catch {
           try {
-            const textData = await response.text();
-            if (textData) errorMsg = textData;
-          } catch (e2) {}
+            const errorText = await response.text();
+            if (errorText) errorMsg = errorText;
+          } catch {
+            // Fallback
+          }
         }
         throw new Error(errorMsg);
       }
@@ -384,31 +389,33 @@ export const createProjectSlice: StateCreator<AppState, [], [], ProjectSlice> = 
       window.URL.revokeObjectURL(url);
       document.body.removeChild(a);
       state.showNotification("Python project downloaded! 🚀", "success");
-    } catch (error: any) {
+    } catch (error) {
       console.error("Export Error:", error);
-      state.showNotification(`Export failed: ${error.message}`, "error");
+      state.showNotification(`Export failed: ${(error as Error).message}`, "error");
     }
   },
 
-  loadProjectJson: (data) => {
+  loadProjectJson: (data: unknown) => {
     try {
-      if (!data || !Array.isArray(data.nodes) || !Array.isArray(data.edges)) throw new Error("Invalid format");
+      const project = data as ExportedProject;
+      if (!project || !Array.isArray(project.nodes) || !Array.isArray(project.edges)) throw new Error("Invalid format");
+      
       const globalMcp = get().mcpServers;
-      const projectMcp = data.mcpServers || [];
+      const projectMcp: MCPServer[] = project.mcpServers || [];
       const mergedMcp = [...globalMcp];
-      projectMcp.forEach((p: any) => {
+      projectMcp.forEach((p) => {
         if (!mergedMcp.some(m => m.id === p.id)) mergedMcp.push(p);
       });
       const globalTools = get().customTools;
-      const projectTools = data.customTools || [];
+      const projectTools: CustomTool[] = project.customTools || [];
       const mergedTools = [...globalTools];
-      projectTools.forEach((p: any) => {
+      projectTools.forEach((p) => {
         if (!mergedTools.some(m => m.id === p.id)) mergedTools.push(p);
       });
-      const migratedNodes = migrateNodes(data.nodes || []);
+      const migratedNodes = migrateNodes(project.nodes || []);
       
       // Try to find if workspace exists locally
-      const localWorkspace = get().workspaces?.find(w => w.id === data.workspaceId);
+      const localWorkspace = get().workspaces?.find(w => w.id === project.workspaceId);
       const activeWorkspaceId = localWorkspace ? localWorkspace.id : null;
 
       const { warnings } = validateDependencies(
@@ -418,20 +425,20 @@ export const createProjectSlice: StateCreator<AppState, [], [], ProjectSlice> = 
         get().customTools, 
         get().mcpServers,
         activeWorkspaceId,
-        data.workspaceName
+        project.workspaceName || undefined
       );
 
-      if (data.workspaceId && !localWorkspace) {
-        toast.error(`Workspace '${data.workspaceName || data.workspaceId}' not found locally. Please select one.`, { duration: 5000 });
+      if (project.workspaceId && !localWorkspace) {
+        toast.error(`Workspace '${project.workspaceName || project.workspaceId}' not found locally. Please select one.`, { duration: 5000 });
       }
 
       set({
         nodes: migratedNodes,
-        edges: migrateEdges(data.edges || []),
+        edges: migrateEdges(project.edges || []),
         customTools: mergedTools,
         mcpServers: mergedMcp,
-        currentProjectName: data.name || null,
-        currentProjectDescription: data.description || null,
+        currentProjectName: project.name || null,
+        currentProjectDescription: project.description || null,
         currentProjectWorkspaceId: activeWorkspaceId,
         currentProjectWorkspaceName: localWorkspace?.name || null,
         activeWorkspaceId: activeWorkspaceId,
@@ -444,25 +451,26 @@ export const createProjectSlice: StateCreator<AppState, [], [], ProjectSlice> = 
       });
       get().showNotification("Project uploaded successfully!", "success");
       return true;
-    } catch (err) {
+    } catch {
       get().showNotification("Failed to import: Invalid file.", "error");
       return false;
     }
   },
 
-  importProjectJsonAndSave: async (data) => {
+  importProjectJsonAndSave: async (data: unknown) => {
     try {
-      if (!data || !Array.isArray(data.nodes) || !Array.isArray(data.edges)) throw new Error("Invalid format");
+      const project = data as ExportedProject;
+      if (!project || !Array.isArray(project.nodes) || !Array.isArray(project.edges)) throw new Error("Invalid format");
       const payload = {
-        name: data.name || "Imported Workflow",
-        description: data.description || "",
-        workspace_id: data.workspaceId || null,
+        name: project.name || "Imported Workflow",
+        description: project.description || "",
+        workspace_id: project.workspaceId || null,
         canvas_data: {
-          nodes: migrateNodes(data.nodes || []),
-          edges: migrateEdges(data.edges || []),
-          customTools: data.customTools || [],
-          mcpServers: data.mcpServers || [],
-          version: data.version || "1.0"
+          nodes: migrateNodes(project.nodes || []),
+          edges: migrateEdges(project.edges || []),
+          customTools: project.customTools || [],
+          mcpServers: project.mcpServers || [],
+          version: project.version || "1.0"
         }
       };
       const response = await fetch(`${API_URL}/api/v1/projects`, {
@@ -473,7 +481,7 @@ export const createProjectSlice: StateCreator<AppState, [], [], ProjectSlice> = 
       if (!response.ok) throw new Error('Failed to create project from JSON');
       const saved = await response.json();
       
-      const localWorkspace = get().workspaces?.find(w => w.id === data.workspaceId);
+      const localWorkspace = get().workspaces?.find(w => w.id === project.workspaceId);
       const activeWorkspaceId = localWorkspace ? localWorkspace.id : null;
 
       set((state) => ({ 
@@ -484,8 +492,8 @@ export const createProjectSlice: StateCreator<AppState, [], [], ProjectSlice> = 
       }));
       toast.success("Workflow imported successfully!");
       return saved;
-    } catch (error: any) {
-      toast.error(error.message);
+    } catch (error) {
+      toast.error((error as Error).message);
       return null;
     }
   },
@@ -531,7 +539,9 @@ export const createProjectSlice: StateCreator<AppState, [], [], ProjectSlice> = 
         try {
           const errorData = await response.json();
           errorMsg = errorData.detail || errorMsg;
-        } catch (e) { }
+        } catch {
+          // ignore parsing errors
+        }
         throw new Error(errorMsg);
       }
       const reader = response.body?.getReader();
@@ -539,8 +549,8 @@ export const createProjectSlice: StateCreator<AppState, [], [], ProjectSlice> = 
       const decoder = new TextDecoder("utf-8");
       let hasError = false;
       while (true) {
-        const { value, done } = await reader.read();
-        if (done) {
+        const result = await reader.read();
+        if (result.done) {
           if (get().isExecuting && !hasError) {
             const newStatuses: Record<string, NodeStatus> = { ...get().nodeStatuses };
             state.nodes.forEach(n => { if (newStatuses[n.id] === 'running') newStatuses[n.id] = 'success'; });
@@ -550,7 +560,7 @@ export const createProjectSlice: StateCreator<AppState, [], [], ProjectSlice> = 
           }
           break;
         }
-        const chunkText = decoder.decode(value, { stream: true });
+        const chunkText = decoder.decode(result.value, { stream: true });
         const lines = chunkText.split("\n").filter(line => line.trim().length > 0);
         for (const line of lines) {
           try {
@@ -559,7 +569,8 @@ export const createProjectSlice: StateCreator<AppState, [], [], ProjectSlice> = 
             else if (event.type === 'status') get().setNodeStatus(event.nodeId, event.status);
             else if (event.type === 'task_completed') get().setNodeStatus(event.task_id, 'success');
             else if (event.type === 'log') {
-              const stripAnsi = (str: string) => str.replace(/\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])/g, '');
+              // eslint-disable-next-line no-control-regex
+              const stripAnsi = (str: string) => str.replace(/[\u001b\u009b][[()#;?]*(?:[0-9]{1,4}(?:;[0-9]{0,4})*)?[0-9A-ORZcf-nqry=><]/g, '');
               const cleanLog = stripAnsi(event.data);
               const currentLog = get().executionResult || "";
               set({ executionResult: currentLog + cleanLog });
@@ -568,16 +579,16 @@ export const createProjectSlice: StateCreator<AppState, [], [], ProjectSlice> = 
                 // Extract result from multiple possible fields
                 const rawResult = event.result || event.final_output || event.output;
                 // Always serialize to string — result may be a JSON object (e.g. {id, state, comments})
-                const result = rawResult === null || rawResult === undefined
+                const resultStr = rawResult === null || rawResult === undefined
                   ? ''
                   : typeof rawResult === 'string'
                     ? rawResult
                     : JSON.stringify(rawResult, null, 2);
-                capturedResult = result;
+                capturedResult = resultStr;
                 
                 const newStatuses: Record<string, NodeStatus> = { ...get().nodeStatuses };
                 state.nodes.forEach(n => { if (newStatuses[n.id] === 'running') newStatuses[n.id] = 'success'; });
-                set({ nodeStatuses: newStatuses, isConsoleExpanded: true, executionResult: result });
+                set({ nodeStatuses: newStatuses, isConsoleExpanded: true, executionResult: resultStr });
                 get().showNotification("Pipeline de Agentes concluído!", "success");
 
               }
@@ -586,8 +597,6 @@ export const createProjectSlice: StateCreator<AppState, [], [], ProjectSlice> = 
                 const newStatuses: Record<string, NodeStatus> = { ...get().nodeStatuses };
                 state.nodes.forEach(n => { if (newStatuses[n.id] === 'running') newStatuses[n.id] = 'success'; });
                 set({ nodeStatuses: newStatuses, isExecuting: false });
-              } else {
-                set({ isExecuting: false });
               }
             } else if (event.type === 'error') {
               hasError = true;
@@ -596,21 +605,22 @@ export const createProjectSlice: StateCreator<AppState, [], [], ProjectSlice> = 
               set({ nodeStatuses: newStatuses, isExecuting: false });
               throw new Error(event.error);
             }
-          } catch (e: any) {
-            if (e.message && hasError) throw e;
-            // Case where it is not valid JSON or unknown format, log it for troubleshooting
-            console.warn("Payload capture failed or invalid JSON:", line);
-            console.dir(line);
+          } catch (e) {
+            // Rethrow explicit errors (like error events) to be caught by the outer block
+            if (hasError) throw e;
+            // Otherwise log parsing errors for individual lines (malformed stream chunks)
+            console.warn("Malfomed stream event line:", line, e);
           }
         }
       }
       return capturedResult;
-    } catch (err: any) {
-      if (err.name === 'AbortError') {
+    } catch (err) {
+      const error = err as Error;
+      if (error.name === 'AbortError') {
         get().showNotification("Pipeline de Agentes interrompido pelo usuário.", "warning");
       } else {
-        console.error(err);
-        state.showNotification(`Falha na API Inteligente: ${err.message}`, "error");
+        console.error(error);
+        state.showNotification(`Falha na API Inteligente: ${error.message}`, "error");
       }
       return null;
     } finally {

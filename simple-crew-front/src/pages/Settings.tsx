@@ -30,12 +30,13 @@ import {
   Type
 } from 'lucide-react';
 import { useStore } from '../store/index';
-import { HighlightedTextField } from '../components/HighlightedTextField';
+import HighlightedTextField from '../components/HighlightedTextField';
 import { CustomSelect } from '../components/CustomSelect';
-import { type ModelConfig, type MCPServer, type CustomTool } from '../types/config.types';
+import { type ModelConfig, type MCPServer, type CustomTool, type Credential } from '../types/config.types';
 import { ConfirmationModal } from '../components/ConfirmationModal';
 import { KnowledgeBaseSettings } from '../components/KnowledgeBaseSettings';
 import { Database } from 'lucide-react';
+import { type Workspace } from '../types/store.types';
 
 
 const INITIAL_CREDENTIAL = { name: '', description: '', key: '', provider: '' };
@@ -137,7 +138,7 @@ const SettingsPage = () => {
     if (newCred.name && (newCred.key || editingCredentialId)) {
       if (editingCredentialId) {
         // If key is empty, it won't be updated on the backend if we use PATCH correctly
-        const updateData: any = { ...newCred };
+        const updateData: Partial<Omit<Credential, 'id' | 'created_at'>> = { ...newCred };
         if (!newCred.key) delete updateData.key;
         updateCredential(editingCredentialId, updateData);
       } else {
@@ -149,7 +150,7 @@ const SettingsPage = () => {
     }
   };
 
-  const handleEditCredential = (cred: any) => {
+  const handleEditCredential = (cred: Credential) => {
     setNewCred({
       name: cred.name,
       description: cred.description || '',
@@ -281,7 +282,7 @@ const SettingsPage = () => {
     }
   };
 
-  const handleEditWorkspace = (ws: any) => {
+  const handleEditWorkspace = (ws: Workspace) => {
     setNewWorkspace({
       name: ws.name,
       path: ws.path
