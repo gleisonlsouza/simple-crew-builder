@@ -1,4 +1,5 @@
 import { render, screen, fireEvent, cleanup } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { AgentForm } from '../AgentForm';
 import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest';
 import type { AgentNodeData, AppNode } from '../../../types/nodes.types';
@@ -458,5 +459,97 @@ describe('AgentForm', () => {
     
     fireEvent.click(removeBtns[2]); // Remove Custom Tool 1
     expect(mockProps.updateNodeData).toHaveBeenCalledWith('node-1', { customToolIds: [] });
+  });
+
+  it('applies shimmer animation when AI suggest is loading', () => {
+    mockProps.loadingFields = { role: true, goal: true, backstory: true };
+    // @ts-expect-error - Sensors
+    render(<AgentForm {...mockProps} />);
+    
+    const sparkleButtons = screen.getAllByTitle('Generate with AI');
+    expect(sparkleButtons[0]).toHaveClass('animate-sparkle-shimmer');
+    expect(sparkleButtons[1]).toHaveClass('animate-sparkle-shimmer');
+    expect(sparkleButtons[2]).toHaveClass('animate-sparkle-shimmer');
+  });
+
+  it('handles undefined or partial data safely', () => {
+    // @ts-ignore - Testing partial data
+    mockProps.data = { name: 'Partial Agent' }; 
+    // @ts-expect-error - Sensors
+    render(<AgentForm {...mockProps} />);
+    
+    // Inputs should show empty strings instead of undefined
+    const roleInput = screen.getAllByTestId('highlighted-input')[0];
+    expect(roleInput).toHaveValue('');
+    
+    fireEvent.click(screen.getByText('LLM'));
+    expect(screen.getAllByDisplayValue(/Default/)[0]).toBeInTheDocument();
+  });
+
+  it('handles scenario with no default model', () => {
+    mockProps.models = [{ id: 'm1', name: 'Model 1', isDefault: false } as unknown as ModelConfig];
+    mockProps.data.modelId = undefined;
+    // @ts-expect-error - Sensors
+    render(<AgentForm {...mockProps} />);
+    fireEvent.click(screen.getByText('LLM'));
+    
+    expect(screen.getByText('Default (Not set)')).toBeInTheDocument();
+  });
+
+  it('handles temperature clearing (empty string -> undefined)', () => {
+    // @ts-expect-error - Sensors
+    render(<AgentForm {...mockProps} />);
+    fireEvent.click(screen.getByText('LLM'));
+    
+    const tempInput = screen.getByPlaceholderText('0.7');
+    fireEvent.change(tempInput, { target: { value: '' } });
+    expect(mockProps.updateNodeData).toHaveBeenCalledWith('node-1', { temperature: undefined });
+  });
+
+  it('handles tool IDs as objects for legacy support', () => {
+    // @ts-ignore - Testing legacy object format
+    mockProps.data.globalToolIds = [{ id: 'tool-1' }];
+    // @ts-expect-error - Sensors
+    render(<AgentForm {...mockProps} />);
+    fireEvent.click(screen.getByText('Tools'));
+    
+    expect(screen.getByText('Global Tool 1')).toBeInTheDocument();
+  });
+
+  it('skips rendering for non-existent tool/server/custom IDs (ghost IDs)', () => {
+    mockProps.data.globalToolIds = ['ghost-tool'];
+    mockProps.data.mcpServerIds = ['ghost-mcp'];
+    mockProps.data.customToolIds = ['ghost-custom'];
+    
+    // @ts-expect-error - Sensors
+    render(<AgentForm {...mockProps} />);
+    fireEvent.click(screen.getByText('Tools'));
+    
+    // Should not crash and should not render items that don't exist in props lists
+    expect(screen.queryByText('ghost-tool')).not.toBeInTheDocument();
+  });
+
+  it('handles clearing of other numeric fields like max_iter', async () => {
+    const dataWithMaxIter = { ...mockProps.data, max_iter: 10 };
+    // @ts-expect-error - Sensors
+    render(<AgentForm {...mockProps} data={dataWithMaxIter} />);
+    fireEvent.click(screen.getByText('Exec'));
+    
+    // Selection by label is now possible due to htmlFor/id
+    const input = screen.getByLabelText(/MAX ITER/i);
+    
+    fireEvent.change(input, { target: { value: '' } });
+    expect(mockProps.updateNodeData).toHaveBeenCalledWith('node-1', { max_iter: undefined });
+  });
+
+  it('uses fallback "Task" name in reordering list', () => {
+    mockProps.renderableTasks = [
+      { id: 't1', type: 'task', data: { name: '' } as any }
+    ] as any;
+    // @ts-expect-error - Sensors
+    render(<AgentForm {...mockProps} />);
+    fireEvent.click(screen.getByText('Exec'));
+    
+    expect(screen.getByText('Task')).toBeInTheDocument();
   });
 });

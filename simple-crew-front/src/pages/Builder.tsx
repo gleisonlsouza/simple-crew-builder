@@ -17,6 +17,7 @@ import { CrewNode } from '../nodes/CrewNode';
 import { ChatNode } from '../nodes/ChatNode';
 import { WebhookNode } from '../nodes/WebhookNode';
 import { Sidebar } from '../components/Sidebar';
+import { MainSidebar } from '../components/MainSidebar';
 
 import { NodeConfigDrawer } from '../components/NodeConfigDrawer';
 import { DeletableEdge } from '../nodes/DeletableEdge';
@@ -86,7 +87,7 @@ const FlowCanvas = () => {
       const timestamp = Date.now().toString().slice(-4);
       if (type === 'agent') data = { name: `New Agent ${timestamp}`, role: '', goal: '', backstory: '', isCollapsed: false };
       else if (type === 'task') data = { name: `New Task ${timestamp}`, description: '', expected_output: '' };
-      else if (type === 'crew') data = { process: 'sequential', memory: false, cache: false, isCollapsed: false };
+      else if (type === 'crew') data = { name: 'New Crew', process: 'sequential', memory: false, cache: false, isCollapsed: false } as any;
       else if (type === 'chat') {
         data = { name: 'Chat Trigger', description: 'Start the Crew from a user\'s text message.', isCollapsed: false, inputMapping: 'chat_input' };
       } else if (type === 'webhook') {
@@ -347,6 +348,7 @@ function FlowBuilder() {
       </header>
 
       <div className="flex-1 w-full h-full flex flex-row relative overflow-hidden">
+        <MainSidebar />
         <Sidebar />
         
         {/* Editor View - Preserved in DOM via 'hidden' */}

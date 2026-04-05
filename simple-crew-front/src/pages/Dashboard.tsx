@@ -3,30 +3,28 @@ import { useNavigate } from 'react-router-dom';
 import { 
   Plus, 
   Workflow, 
-  Settings, 
-  Key, 
-  MoreVertical, 
   Clock, 
   Layers,
   Search,
   Trash2,
   Edit2,
   X,
-  Moon,
   Upload,
-  HelpCircle
+  MoreVertical
 } from 'lucide-react';
 import { useStore } from '../store/index';
 import { SettingsDrawer } from '../components/SettingsDrawer';
 import { ConfirmationModal } from '../components/ConfirmationModal';
 import { AboutModal } from '../components/AboutModal';
-import logo from '../assets/logo.PNG';
+import { MainSidebar } from '../components/MainSidebar';
 import type { Project } from '../types/store.types';
 
 const Dashboard = () => {
   const navigate = useNavigate();
   const savedProjects = useStore((state) => state.savedProjects);
-  const setIsSettingsOpen = useStore((state) => state.setIsSettingsOpen);
+  const setIsAboutModalOpen = useStore((state) => state.setIsAboutModalOpen);
+  const isAboutModalOpen = useStore((state) => state.isAboutModalOpen);
+  
   const fetchProjects = useStore((state) => state.fetchProjects);
   const fetchCredentials = useStore((state) => state.fetchCredentials);
   const fetchWorkspaces = useStore((state) => state.fetchWorkspaces);
@@ -34,13 +32,11 @@ const Dashboard = () => {
   const updateProjectMetadata = useStore((state) => state.updateProjectMetadata);
 
   const [openMenuId, setOpenMenuId] = React.useState<string | null>(null);
-  const [isSettingsMenuOpen, setIsSettingsMenuOpen] = React.useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = React.useState(false);
   const [isCreateModalOpen, setIsCreateModalOpen] = React.useState(false);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = React.useState(false);
   const [projectToDelete, setProjectToDelete] = React.useState<{id: string, name: string} | null>(null);
   const [editingProject, setEditingProject] = React.useState<{id: string, name: string, description: string} | null>(null);
-  const [isAboutModalOpen, setIsAboutModalOpen] = React.useState(false);
   const [newProject, setNewProject] = React.useState({ name: '', description: '' });
 
   const createNewProject = useStore((state) => state.createNewProject);
@@ -135,78 +131,7 @@ const Dashboard = () => {
 
   return (
     <div className="flex h-screen bg-brand-bg font-sans transition-colors duration-300">
-      {/* Global Sidebar (n8n Style) */}
-      <aside className="w-16 flex flex-col items-center py-6 bg-brand-card border-r border-brand-border z-10 transition-colors duration-300">
-        <div className="w-12 h-12 mb-10 overflow-hidden cursor-pointer group hover:scale-105 transition-transform duration-300" onClick={() => navigate('/')}>
-          <img src={logo} alt="Simple Crew Builder Logo" className="w-full h-full object-contain" />
-        </div>
-        
-        <nav className="flex flex-col gap-6">
-          <button className="p-3 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 rounded-xl transition-all shadow-sm">
-            <Workflow className="w-6 h-6" />
-          </button>
-          <button className="p-3 text-brand-muted hover:text-brand-text rounded-xl transition-all">
-            <Key className="w-6 h-6" />
-          </button>
-          <div className="relative">
-            <button 
-              onClick={(e) => {
-                e.stopPropagation();
-                setIsSettingsMenuOpen(!isSettingsMenuOpen);
-              }}
-              className={`p-3 rounded-xl transition-all ${isSettingsMenuOpen ? 'bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600' : 'text-brand-muted hover:text-brand-text'}`}
-            >
-              <Settings className="w-6 h-6" />
-            </button>
-            
-            {isSettingsMenuOpen && (
-              <div className="absolute left-full ml-2 bottom-0 w-48 bg-brand-card border border-brand-border rounded-xl shadow-xl z-20 py-1 overflow-hidden animate-in slide-in-from-left-2 duration-150">
-                <button 
-                  onClick={() => {
-                    navigate('/settings');
-                    setIsSettingsMenuOpen(false);
-                  }}
-                  className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-brand-muted hover:text-brand-text hover:bg-brand-bg transition-colors text-left"
-                >
-                  <Settings className="w-4 h-4" />
-                  Settings
-                </button>
-                <button 
-                  onClick={() => {
-                    setIsSettingsOpen(true);
-                    setIsSettingsMenuOpen(false);
-                  }}
-                  className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-brand-muted hover:text-brand-text hover:bg-brand-bg transition-colors text-left"
-                >
-                  <Moon className="w-4 h-4" />
-                  Theme
-                </button>
-                <div className="h-px bg-brand-border my-1 mx-2 opacity-50" />
-                <button 
-                  onClick={() => {
-                    setIsAboutModalOpen(true);
-                    setIsSettingsMenuOpen(false);
-                  }}
-                  className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-brand-muted hover:text-brand-text hover:bg-brand-bg transition-colors text-left"
-                >
-                  <HelpCircle className="w-4 h-4" />
-                  About
-                </button>
-              </div>
-            )}
-          </div>
-        </nav>
-
-        <div className="mt-auto">
-          <button 
-            onClick={() => setIsAboutModalOpen(true)}
-            className="p-3 text-brand-muted hover:text-brand-text hover:bg-brand-bg rounded-xl transition-all"
-            title="About Simple Crew"
-          >
-            <HelpCircle className="w-6 h-6" />
-          </button>
-        </div>
-      </aside>
+      <MainSidebar />
 
       {/* Main Content Area */}
       <main className="flex-1 flex flex-col overflow-hidden">

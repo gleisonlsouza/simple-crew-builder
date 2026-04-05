@@ -413,11 +413,17 @@ export const AgentForm: React.FC<AgentFormProps> = memo(({
           <div className="grid grid-cols-2 gap-4 border-t border-brand-border/50 pt-4">
             {(['max_iter', 'max_retry_limit', 'max_rpm', 'max_execution_time', 'max_reasoning_attempts'] as (keyof AgentNodeData)[]).map(field => (
               <div key={field} className="flex flex-col gap-1.5">
-                <label className="text-[10px] font-bold text-brand-muted uppercase tracking-wider">{(field as string).replace(/_/g, ' ')}</label>
+                <label 
+                  htmlFor={`agent-${field}`}
+                  className="text-[10px] font-bold text-brand-muted uppercase tracking-wider"
+                >
+                  {(field as string).replace(/_/g, ' ')}
+                </label>
                 <input 
+                  id={`agent-${field}`}
                   type="number" 
                   value={(data[field] as number) || ''}
-                  onChange={(e) => updateNodeData(nodeId, { [field]: e.target.value ? parseInt(e.target.value) : undefined })}
+                  onChange={(e) => updateNodeData(nodeId, { [field]: e.target.value !== '' ? parseInt(e.target.value) : undefined })}
                   className="w-full bg-brand-bg border border-brand-border rounded-lg px-3 py-1.5 text-sm text-brand-text"
                 />
               </div>

@@ -69,6 +69,7 @@ export const CrewForm: React.FC<CrewFormProps> = memo(({
         {tabs.map((tab) => (
           <button
             key={tab.id}
+            data-testid={`tab-${tab.id}`}
             onClick={() => setActiveTab(tab.id as 'basic' | 'orch' | 'settings' | 'llm')}
             className={`flex items-center gap-2 py-2 px-3 text-[10px] font-bold uppercase tracking-wider transition-all rounded-lg mb-2 ${
               activeTab === tab.id 
@@ -314,6 +315,7 @@ export const CrewForm: React.FC<CrewFormProps> = memo(({
               <div className="flex flex-col gap-2">
                 <label className="text-xs font-bold text-blue-500 uppercase tracking-wider">Manager LLM</label>
                 <select 
+                  data-testid="select-manager-llm"
                   className="w-full bg-brand-bg border border-blue-500/30 rounded-lg px-3 py-2 text-sm text-brand-text outline-none focus:ring-2 focus:ring-blue-500 transition-all cursor-pointer" 
                   value={data.manager_llm_id || ''} 
                   onChange={(e) => updateNodeData(nodeId, { manager_llm_id: e.target.value })}
@@ -334,6 +336,7 @@ export const CrewForm: React.FC<CrewFormProps> = memo(({
                   <p className="text-[10px] text-brand-muted leading-relaxed max-w-[200px]">Enables pre-analysis before execution for better results.</p>
                 </div>
                 <div 
+                  data-testid="toggle-planning"
                   className={`w-10 h-5 rounded-full relative transition-colors cursor-pointer ${data.planning ? 'bg-emerald-500' : 'bg-brand-border'}`}
                   onClick={() => updateNodeData(nodeId, { planning: !data.planning })}
                 >
@@ -345,6 +348,7 @@ export const CrewForm: React.FC<CrewFormProps> = memo(({
                 <div className="flex flex-col gap-2 pl-4 border-l-2 border-emerald-500/20 animate-in slide-in-from-left-2 duration-300">
                   <label className="text-[10px] font-bold text-brand-muted uppercase tracking-wider">Planning LLM</label>
                   <select 
+                    data-testid="select-planning-llm"
                     className="w-full bg-brand-bg border border-brand-border rounded-lg px-3 py-1.5 text-xs text-brand-text outline-none focus:ring-2 focus:ring-emerald-500 transition-all cursor-pointer" 
                     value={data.planning_llm_id || ''} 
                     onChange={(e) => updateNodeData(nodeId, { planning_llm_id: e.target.value })}

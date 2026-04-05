@@ -3,8 +3,8 @@ import EditorModule from 'react-simple-code-editor';
 import PrismModule from 'prismjs';
 
 // Fix for Vite ESM/CommonJS interop
-const Editor = (EditorModule as unknown as { default: typeof EditorModule }).default || EditorModule;
-const Prism = (PrismModule as unknown as { default: typeof PrismModule }).default || PrismModule;
+const Editor = EditorModule ? ((EditorModule as any).default || EditorModule) : null;
+const Prism = PrismModule ? ((PrismModule as any).default || PrismModule) : null;
 
 // Import all required languages explicitly to avoid missing peer dependency issues in some environments
 import 'prismjs/components/prism-python';

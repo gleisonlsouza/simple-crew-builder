@@ -123,6 +123,7 @@ export interface UISlice {
   isConsoleExpanded: boolean;
   isUsabilityDrawerOpen: boolean;
   isChatVisible: boolean;
+  isAboutModalOpen: boolean;
   notification: AppNotification | null;
   toggleTheme: () => void;
   setIsSettingsOpen: (open: boolean) => void;
@@ -130,6 +131,7 @@ export interface UISlice {
   setIsConsoleExpanded: (expanded: boolean) => void;
   setIsUsabilityDrawerOpen: (open: boolean) => void;
   setIsChatVisible: (visible: boolean) => void;
+  setIsAboutModalOpen: (open: boolean) => void;
   resetUIState: () => void;
   showNotification: (message: string, type: 'success' | 'error' | 'warning' | 'info') => void;
   clearNotification: () => void;

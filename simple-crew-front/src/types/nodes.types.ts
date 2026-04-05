@@ -55,6 +55,7 @@ export interface TaskNodeData extends Record<string, unknown> {
 }
 
 export interface CrewNodeData extends Record<string, unknown> {
+  name: string;
   process: ProcessType;
   isCollapsed?: boolean;
   agentOrder?: string[];

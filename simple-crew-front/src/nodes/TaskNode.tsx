@@ -1,16 +1,17 @@
 import { memo, useState, useEffect } from 'react';
 import { Handle, Position, type NodeProps, type Node } from '@xyflow/react';
 import { useShallow } from 'zustand/shallow';
-import { CheckSquare, Trash2, Loader2, CheckCircle2, AlertCircle, Clock, Settings, Plus, X, Terminal } from 'lucide-react';
+import { CheckSquare, Trash2, Loader2, CheckCircle2, AlertCircle, Clock, Settings, Plus, X, Terminal, ChevronDown, ChevronUp } from 'lucide-react';
 import { useStore } from '../store/index';
 import type { TaskNodeData } from '../types/nodes.types';
 import type { ToolConfig } from '../types/config.types';
 import { ToolConfigurationModal } from '../components/ToolConfigurationModal';
 
 export const TaskNode = memo(({ id, data }: NodeProps<Node<TaskNodeData, 'task'>>) => {
-  const { deleteNode, setActiveNode, updateNodeData, customTools, globalTools } = useStore(
+  const { deleteNode, toggleCollapse, setActiveNode, updateNodeData, customTools, globalTools } = useStore(
     useShallow((state) => ({
       deleteNode: state.deleteNode,
+      toggleCollapse: state.toggleCollapse,
       setActiveNode: state.setActiveNode,
       updateNodeData: state.updateNodeData,
       customTools: state.customTools,
@@ -120,13 +121,16 @@ export const TaskNode = memo(({ id, data }: NodeProps<Node<TaskNodeData, 'task'>
         </div>
       </div>
 
-      <div className="p-3 border-b border-slate-100 dark:border-slate-800/50">
-        <p className="text-xs text-slate-600 dark:text-slate-400 line-clamp-2" title={data.description}>
-          {data.description || 'No description defined'}
-        </p>
-      </div>
+      {!data.isCollapsed && (
+        <div className="p-3 border-b border-slate-100 dark:border-slate-800/50">
+          <p className="text-xs text-slate-600 dark:text-slate-400 line-clamp-2" title={data.description}>
+            {data.description || 'No description defined'}
+          </p>
+        </div>
+      )}
 
-      <div className="px-3 pb-3 pt-2">
+      {!data.isCollapsed && (
+        <div className="px-3 pb-3 pt-2">
         <div className="space-y-2">
 
           {/* Default CrewAI Tools Section */}
@@ -297,11 +301,23 @@ export const TaskNode = memo(({ id, data }: NodeProps<Node<TaskNodeData, 'task'>
           </div>
         </div>
       </div>
+    )}
+
+      <button
+        onClick={(e) => { e.stopPropagation(); toggleCollapse(id); }}
+        className="absolute -bottom-3 right-4 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-full p-0.5 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-700 shadow-sm z-10 transition-colors text-slate-400 dark:text-slate-500 hover:text-emerald-500 dark:hover:text-emerald-400"
+      >
+        {data.isCollapsed ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronUp className="w-3.5 h-3.5" />}
+      </button>
 
       <Handle type="target" position={Position.Top} id="top-target" className="w-2 h-2 bg-gray-400 border-none hover:bg-emerald-500 transition-colors" />
+      <Handle type="source" position={Position.Top} id="top-source" className="w-2 h-2 bg-gray-400 border-none hover:bg-emerald-500 transition-colors" />
       <Handle type="target" position={Position.Right} id="right-target" className="w-2 h-2 bg-gray-400 border-none hover:bg-emerald-500 transition-colors" />
+      <Handle type="source" position={Position.Right} id="right-source" className="w-2 h-2 bg-gray-400 border-none hover:bg-emerald-500 transition-colors" />
       <Handle type="target" position={Position.Bottom} id="bottom-target" className="w-2 h-2 bg-gray-400 border-none hover:bg-emerald-500 transition-colors" />
+      <Handle type="source" position={Position.Bottom} id="bottom-source" className="w-2 h-2 bg-gray-400 border-none hover:bg-emerald-500 transition-colors" />
       <Handle type="target" position={Position.Left} id="left-target" className="w-2 h-2 bg-gray-400 border-none hover:bg-emerald-500 transition-colors" />
+      <Handle type="source" position={Position.Left} id="left-source" className="w-2 h-2 bg-gray-400 border-none hover:bg-emerald-500 transition-colors" />
 
       {toolToConfigure && (
         <ToolConfigurationModal
