@@ -1,7 +1,6 @@
 import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import React from 'react';
 import { KnowledgeBaseSettings } from '../KnowledgeBaseSettings';
 
 // Mock lucide-react icons as spans
@@ -68,7 +67,7 @@ describe('KnowledgeBaseSettings', () => {
   });
 
   const setupFetch = (items: any) => {
-    vi.stubGlobal('fetch', vi.fn().mockImplementation((url: string, init?: any) => {
+    vi.stubGlobal('fetch', vi.fn().mockImplementation((_url: string, init?: any) => {
       if (init?.method === 'POST') {
         return Promise.resolve({ ok: true, json: () => Promise.resolve({ id: 'kb-new', name: 'New Base' }) });
       }
@@ -121,7 +120,7 @@ describe('KnowledgeBaseSettings', () => {
     await user.click(createBtn);
 
     await waitFor(() => {
-      expect(global.fetch).toHaveBeenCalledWith(expect.stringContaining('/api/knowledge-bases'), expect.objectContaining({
+      expect(globalThis.fetch).toHaveBeenCalledWith(expect.stringContaining('/api/knowledge-bases'), expect.objectContaining({
         method: 'POST',
         body: JSON.stringify({ name: 'New Base', description: 'New Desc' })
       }));
@@ -145,7 +144,7 @@ describe('KnowledgeBaseSettings', () => {
     await user.click(screen.getByText(/Confirm Delete/i));
     
     await waitFor(() => {
-      expect(global.fetch).toHaveBeenCalledWith(expect.stringContaining('/api/knowledge-bases/kb-1'), expect.objectContaining({
+      expect(globalThis.fetch).toHaveBeenCalledWith(expect.stringContaining('/api/knowledge-bases/kb-1'), expect.objectContaining({
         method: 'DELETE'
       }));
     });

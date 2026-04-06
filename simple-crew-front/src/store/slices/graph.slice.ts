@@ -76,7 +76,7 @@ const initialNodes: AppNode[] = [
     id: 'crew-1',
     type: 'crew',
     position: { x: 50, y: 50 },
-    data: { process: 'sequential', isCollapsed: false },
+    data: { name: 'New Crew', process: 'sequential', isCollapsed: false } as CrewNodeData,
   },
   {
     id: 'agent-1',

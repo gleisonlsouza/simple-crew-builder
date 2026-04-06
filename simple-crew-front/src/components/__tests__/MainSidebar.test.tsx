@@ -3,9 +3,7 @@ import { MainSidebar } from '../MainSidebar';
 import { vi, describe, it, expect, beforeEach } from 'vitest';
 import { useStore } from '../../store/index';
 import { MemoryRouter, useLocation, useNavigate } from 'react-router-dom';
-import type { AppState } from '../../store/index';
 import type { Mock } from 'vitest';
-import React from 'react';
 
 // Mock react-router-dom
 vi.mock('react-router-dom', async (importOriginal) => {

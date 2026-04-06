@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { useShallow } from 'zustand/react/shallow';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
   Coffee, 
@@ -59,6 +60,7 @@ const REST_STATIONS: StationType[] = [
 const WAITING_THOUGHTS = ["Coffee?", "Ping 1ms", "Calculating...", "Zzz...", "My turn?", "010101...", "Searching for updates", "Idle..."];
 const RESTING_THOUGHTS = ["Task done!", "GG WP", "Recharging...", "Livin' the life", "Leisure time", "Afk", "Economy mode"];
 const WORKING_THOUGHTS = ["Full focus!", "Processing...", "AI > Human", "Almost there...", "Debugging...", "Compiling..."];
+const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#f43f5e', '#06b6d4'];
 
 
 const CONFETTI_PARTICLES = [...Array(15)].map((_, i) => ({
@@ -82,10 +84,20 @@ const generateConfettiConfig = () => CONFETTI_PARTICLES.map((p, i) => ({
 
 export default function AnimationView() {
   const { 
-    nodes, currentProjectName, isExecuting, 
+    nodes, edges, currentProjectName, isExecuting, 
     startRealExecution, validateGraph, showNotification,
     executionResult, nodeStatuses
-  } = useStore();
+  } = useStore(useShallow(state => ({
+    nodes: state.nodes,
+    edges: state.edges,
+    currentProjectName: state.currentProjectName,
+    isExecuting: state.isExecuting,
+    startRealExecution: state.startRealExecution,
+    validateGraph: state.validateGraph,
+    showNotification: state.showNotification,
+    executionResult: state.executionResult,
+    nodeStatuses: state.nodeStatuses
+  })));
   
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [isRunning, setIsRunning] = useState<boolean>(false);
@@ -103,7 +115,6 @@ export default function AnimationView() {
   const [isDragging, setIsDragging] = useState(false);
   const dragStart = useRef({ x: 0, y: 0 });
   const containerRef = useRef<HTMLDivElement>(null);
-
   // Initialize Random Configs
   const [restStations] = useState<StationType[]>(REST_STATIONS);
 
@@ -145,22 +156,29 @@ export default function AnimationView() {
   const initialRobots = useMemo(() => {
     return crewGraph.agents.map((node, i) => {
       const data = node.data as AgentNodeData;
-      const angle = (i / Math.max(1, crewGraph.agents.length)) * Math.PI * 2;
-      const initialX = 50 + Math.cos(angle + 0.5) * 15;
-      const initialY = 50 + Math.sin(angle + 0.5) * 15;
+      
+      const assignedTaskIds = edges
+        .filter(e => e.source === node.id)
+        .map(e => e.target)
+        .filter(targetId => crewGraph.tasks.some(t => t.id === targetId));
+
+      const totalWidth = 110; // Extra wide spread (beyond edges)
+      const spacing = totalWidth / Math.max(1, crewGraph.agents.length - 1 || 1);
+      const startX = -5 + (i * spacing);
+
       return {
         id: node.id,
-        name: data.name || 'Agent',
+        name: data.name || 'AI Agent',
         role: data.role || 'Assistant',
-        x: initialX,
-        y: initialY,
-        targetX: initialX,
-        targetY: initialY,
+        x: startX,
+        y: 105,
+        targetX: startX,
+        targetY: 105,
         state: 'idle' as RobotState,
         currentTask: null,
         progress: 0,
-        color: node.id.includes('agent') ? '#4f46e5' : '#8b5cf6',
-        assignedTasks: [],
+        color: COLORS[i % COLORS.length],
+        assignedTasks: assignedTaskIds.length > 0 ? assignedTaskIds : (data.taskOrder || []),
         thought: null,
         energy: 100,
         efficiency: 90,
@@ -169,24 +187,116 @@ export default function AnimationView() {
         trail: []
       };
     });
-  }, [crewGraph.agents]);
+  }, [crewGraph.agents, crewGraph.tasks, edges]);
 
   const [stations, setStations] = useState<StationType[]>(initialStations);
   const [robots, setRobots] = useState<Robot[]>(initialRobots);
+  
+  const robotsRef = useRef<Robot[]>(robots);
+  useEffect(() => {
+    robotsRef.current = robots;
+  }, [robots]);
 
   const completedTasks = useMemo(() => stations.filter((s: StationType) => s.status === 'done').length, [stations]);
   const progressPercent = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
 
-  // Sync with Store Node Statuses
+  // Sync with Store Node Statuses & Robot Movement
   useEffect(() => {
-    Promise.resolve().then(() => {
-      setStations(prev => prev.map(s => {
+    // 1. Update Stations (tasks) UI mapping status
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setStations(prev => {
+      let hasChanged = false;
+      const next = prev.map(s => {
         const status = nodeStatuses[s.id];
-        if (status) return { ...s, status: status as StationType['status'] };
+        let nextStatus: StationType['status'] = s.status;
+        if (status === 'running') nextStatus = 'active';
+        else if (status === 'success') nextStatus = 'done';
+        
+        if (nextStatus !== s.status) {
+          hasChanged = true;
+          return { ...s, status: nextStatus };
+        }
         return s;
-      }));
+      });
+      return hasChanged ? next : prev;
     });
-  }, [nodeStatuses]);
+
+    // 2. Update Robots assignments and movement with offsets
+    setRobots(prevRobots => {
+      let hasChanged = false;
+      const next = prevRobots.map((robot, i) => {
+        const nodeStatus = nodeStatuses[robot.id];
+        
+        // Target calculation logic
+        let targetX = robot.targetX;
+        let targetY = robot.targetY;
+        let nextState = robot.state;
+        let nextMood = robot.mood;
+        let nextCurrentTask = robot.currentTask;
+
+        // If agent is running, find which task it's working on
+        if (nodeStatus === 'running') {
+          const activeTaskId = robot.assignedTasks.find(tid => 
+            nodeStatuses[tid] === 'running' || nodeStatuses[tid] === 'waiting'
+          );
+
+          if (activeTaskId) {
+            const station = initialStations.find(s => s.id === activeTaskId);
+            if (station) {
+              const angle = (i / prevRobots.length) * Math.PI * 2;
+              const radius = 4;
+              const offsetX = Math.cos(angle) * radius;
+              const offsetY = Math.sin(angle) * radius;
+              
+              targetX = station.x + offsetX;
+              targetY = station.y + offsetY;
+              nextState = nodeStatuses[activeTaskId] === 'running' ? 'working' : 'moving';
+              nextCurrentTask = station.name;
+              nextMood = nextState === 'working' ? 'Full Focus!' : 'On my way...';
+            }
+          }
+        }
+
+        // Case B: Task was completed or robot is idle
+        const isFinishing = robot.state === 'working' && nodeStatus !== 'running';
+        if (isFinishing || nodeStatus === 'success' || robot.state === 'completed') {
+          const initialPos = initialRobots.find(ir => ir.id === robot.id);
+          const restIndex = (robot.id.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0)) % restStations.length;
+          const restStation = restStations[restIndex];
+          
+          const baseTarget = restStation || initialPos || { x: robot.x, y: robot.y };
+          const angle = (i / prevRobots.length) * Math.PI * 2;
+          const radius = 3;
+          const offsetX = Math.cos(angle) * radius;
+          const offsetY = Math.sin(angle) * radius;
+          
+          targetX = baseTarget.x + offsetX;
+          targetY = baseTarget.y + offsetY;
+          nextState = nodeStatus === 'success' ? 'completed' : 'idle';
+          nextCurrentTask = null;
+          nextMood = nodeStatus === 'success' ? 'Mission Accomplished!' : 'Standing By';
+        }
+
+        // Deep equality check for robot update
+        if (targetX !== robot.targetX || targetY !== robot.targetY || nextState !== robot.state || nextMood !== robot.mood) {
+          hasChanged = true;
+          return {
+            ...robot,
+            x: targetX,
+            y: targetY,
+            targetX,
+            targetY,
+            state: nextState,
+            currentTask: nextCurrentTask,
+            mood: nextMood,
+            tasksCompleted: isFinishing ? robot.tasksCompleted + 1 : robot.tasksCompleted
+          };
+        }
+        return robot;
+      });
+      return hasChanged ? next : prevRobots;
+    });
+  }, [nodeStatuses, initialStations, initialRobots, restStations]);
 
   const addLog = useCallback((message: string, type: LogEntry['type'] = 'info', agentName?: string) => {
     const newLog: LogEntry = {
@@ -253,17 +363,34 @@ export default function AnimationView() {
       Promise.resolve().then(() => {
         setIsRunning(false);
         addLog("✅ Crew execution finished.", "success");
+        
+        // Restore winner selection logic
+        const winner = [...robots].sort((a, b) => (b.tasksCompleted * b.efficiency) - (a.tasksCompleted * a.efficiency))[0];
+        setEmployeeOfMonth(winner || null);
         setShowSuccessModal(true);
       });
     }
-  }, [isExecuting, isRunning, addLog]);
+  }, [isExecuting, isRunning, addLog, robots]);
 
-  const handleWheel = (e: React.WheelEvent) => {
+  const handleWheel = useCallback((e: WheelEvent) => {
     e.preventDefault();
     const zoomSpeed = 0.001;
-    const newScale = Math.min(Math.max(viewState.scale - e.deltaY * zoomSpeed, 0.4), 4);
-    setViewState((prev) => ({ ...prev, scale: newScale }));
-  };
+    setViewState((prev) => {
+      const newScale = Math.min(Math.max(prev.scale - e.deltaY * zoomSpeed, 0.4), 4);
+      return { ...prev, scale: newScale };
+    });
+  }, []);
+
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+
+    // Attach wheel event manually to allow e.preventDefault() (non-passive)
+    container.addEventListener('wheel', handleWheel, { passive: false });
+    return () => {
+      container.removeEventListener('wheel', handleWheel);
+    };
+  }, [handleWheel]);
 
   const handleMouseDown = (e: React.MouseEvent) => {
     if (e.button !== 0 && e.button !== 1) return;
@@ -302,7 +429,7 @@ export default function AnimationView() {
   // Thought Generator
   useEffect(() => {
     const logInterval = setInterval(() => {
-      const activeRobot = robots.find((r: Robot) => r.state === 'working');
+      const activeRobot = robotsRef.current.find((r: Robot) => r.state === 'working');
       if (activeRobot) {
         const agentName = activeRobot.name;
         setLogs((prev: LogEntry[]) => {
@@ -324,7 +451,7 @@ export default function AnimationView() {
         } else if (Math.random() > 0.95) {
           let pool = WAITING_THOUGHTS;
           if (robot.state === 'working') pool = WORKING_THOUGHTS;
-          if (robot.state === 'resting') pool = RESTING_THOUGHTS;
+          if (robot.state === 'resting' || robot.state === 'completed') pool = RESTING_THOUGHTS;
           return { ...robot, thought: pool[Math.floor(Math.random() * pool.length)] };
         }
         return robot;
@@ -334,7 +461,7 @@ export default function AnimationView() {
       clearInterval(logInterval);
       clearInterval(thoughtInterval);
     };
-  }, [robots]);
+  }, []); // Empty dependency array - intervals are stable
 
   return (
     <div className="flex-1 relative bg-[#0a0a0f] text-white font-sans overflow-hidden flex flex-col animate-in fade-in duration-500">
@@ -345,7 +472,6 @@ export default function AnimationView() {
         {/* Simulation Area (Canvas) - Flexible */}
         <div 
           ref={containerRef}
-          onWheel={handleWheel}
           onMouseDown={handleMouseDown}
           className="flex-grow h-full relative overflow-hidden bg-black/20 transition-all duration-300 ease-in-out cursor-grab active:cursor-grabbing"
           style={{

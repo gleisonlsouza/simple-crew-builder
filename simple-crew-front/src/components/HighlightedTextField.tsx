@@ -3,19 +3,24 @@ import EditorModule from 'react-simple-code-editor';
 import PrismModule from 'prismjs';
 
 // Fix for Vite ESM/CommonJS interop
-const Editor = EditorModule ? ((EditorModule as any).default || EditorModule) : null;
-const Prism = PrismModule ? ((PrismModule as any).default || PrismModule) : null;
+const Editor = (EditorModule as unknown as { default: React.ElementType })?.default || (EditorModule as unknown as React.ElementType);
+const Prism = (PrismModule as unknown as { default: typeof import('prismjs') })?.default || (PrismModule as unknown as typeof import('prismjs'));
+
+
+
+
 
 // Import all required languages explicitly to avoid missing peer dependency issues in some environments
 import 'prismjs/components/prism-python';
 import 'prismjs/components/prism-javascript';
 import 'prismjs/components/prism-markup'; // HTML
 import 'prismjs/components/prism-bash';
+import { getCursorCoordinates } from '../utils/getCursorCoordinates';
 
 interface HighlightedTextFieldProps {
   type: 'input' | 'textarea';
   value: string;
-  onChange: (e: React.ChangeEvent<HTMLTextAreaElement | HTMLInputElement> | { target: { value: string } }) => void;
+  onChange: (e: React.ChangeEvent<HTMLTextAreaElement | HTMLInputElement> | { target: { value: string, selectionStart?: number, cursorRect?: { top: number, left: number, height: number } } }) => void;
   onKeyDown?: React.KeyboardEventHandler<HTMLTextAreaElement | HTMLInputElement | HTMLDivElement>;
   placeholder?: string;
   className?: string;
@@ -35,6 +40,32 @@ const HighlightedTextField: React.FC<HighlightedTextFieldProps> = ({
   rows = 3
 }) => {
   const [isFocused, setIsFocused] = React.useState(false);
+  const containerRef = React.useRef<HTMLDivElement>(null);
+  const inputRef = React.useRef<HTMLInputElement>(null);
+
+  const handleValueChange = (code: string) => {
+    let textarea: HTMLTextAreaElement | HTMLInputElement | null = null;
+    
+    if (type === 'textarea' && containerRef.current) {
+      textarea = containerRef.current.querySelector('textarea');
+    } else if (type === 'input' && inputRef.current) {
+      textarea = inputRef.current;
+    }
+
+    if (textarea) {
+      const cursorPos = textarea.selectionStart || code.length;
+      const coords = getCursorCoordinates(textarea, cursorPos);
+      onChange({ 
+        target: { 
+          value: code, 
+          selectionStart: cursorPos,
+          cursorRect: coords
+        } 
+      });
+    } else {
+      onChange({ target: { value: code } });
+    }
+  };
 
   const highlightWithPrism = (code: string) => {
     if (!code && !isFocused) return ''; // Let placeholder show
@@ -75,10 +106,11 @@ const HighlightedTextField: React.FC<HighlightedTextFieldProps> = ({
       ${className}
     `}>
       {type === 'textarea' ? (
-        <Editor
-          value={value}
-          onValueChange={(code: string) => onChange({ target: { value: code } })}
-          highlight={(code: string) => highlightWithPrism(code)}
+        <div ref={containerRef} className="min-h-full">
+          <Editor
+            value={value}
+            onValueChange={handleValueChange}
+            highlight={(code: string) => highlightWithPrism(code)}
           padding={16}
           onKeyDown={onKeyDown}
           onFocus={() => setIsFocused(true)}
@@ -92,12 +124,14 @@ const HighlightedTextField: React.FC<HighlightedTextFieldProps> = ({
             minHeight: rows ? `${rows * 1.5}rem` : 'inherit',
           }}
         />
+        </div>
       ) : (
         /* For simple input, we still use the manual way but simpler, or just a regular input if highlighting isn't critical */
         <div className="relative">
              <input
+                ref={inputRef}
                 value={value}
-                onChange={onChange as React.ChangeEventHandler<HTMLInputElement>}
+                onChange={(e) => handleValueChange(e.target.value)}
                 onKeyDown={onKeyDown as React.KeyboardEventHandler<HTMLInputElement>}
                 onFocus={() => setIsFocused(true)}
                 onBlur={() => setIsFocused(false)}

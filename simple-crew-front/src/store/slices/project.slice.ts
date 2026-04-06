@@ -64,8 +64,11 @@ export const createProjectSlice: StateCreator<AppState, [], [], ProjectSlice> = 
     }
   },
 
-  saveProject: async (nameByArg: string, description?: string) => {
+  saveProject: async (nameByArg?: string, description?: string) => {
     const state = get();
+    // Fallback de segurança: se o argumento vier vazio, usa o estado global ou um default
+    const finalName = nameByArg?.trim() || state.currentProjectName || 'Untitled Project';
+    const finalDescription = description || state.currentProjectDescription || "";
     if (!state.validateGraph()) {
       toast.error("Please fix the errors before saving.");
       return;
@@ -75,8 +78,8 @@ export const createProjectSlice: StateCreator<AppState, [], [], ProjectSlice> = 
     set({ isSaving: true });
     try {
       const payload = {
-        name: nameByArg,
-        description: description || "",
+        name: finalName,
+        description: finalDescription,
         workspace_id: state.currentProjectWorkspaceId,
         canvas_data: {
           nodes: state.nodes,
@@ -122,17 +125,18 @@ export const createProjectSlice: StateCreator<AppState, [], [], ProjectSlice> = 
   },
 
   updateProjectMetadata: async (id: string, name: string, description: string) => {
+    const finalName = name?.trim() || get().currentProjectName || 'Untitled Project';
     try {
       const response = await fetch(`${API_URL}/api/v1/projects/${id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name, description }),
+        body: JSON.stringify({ name: finalName, description }),
       });
 
       if (!response.ok) throw new Error('Failed to update project metadata');
 
       toast.success("Project updated successfully");
-      set({ currentProjectName: name, currentProjectDescription: description });
+      set({ currentProjectName: finalName, currentProjectDescription: description });
       await get().fetchProjects();
     } catch (error) {
       console.error("Update project metadata error:", error);

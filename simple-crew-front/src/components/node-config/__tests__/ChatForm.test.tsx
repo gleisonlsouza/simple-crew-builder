@@ -1,5 +1,4 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import React from 'react';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { ChatForm } from '../ChatForm';
 import type { ChatNodeData } from '../../../types/nodes.types';
@@ -31,6 +30,7 @@ describe('ChatForm', () => {
   const mockSetIsChatMappingSelectorOpen = vi.fn();
 
   const mockData: ChatNodeData = {
+    name: 'Chat',
     description: 'Test Chat',
     inputMapping: 'initial_input',
     includeHistory: false,

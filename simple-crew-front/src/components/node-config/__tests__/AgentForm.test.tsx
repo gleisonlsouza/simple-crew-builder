@@ -1,10 +1,8 @@
 import { render, screen, fireEvent, cleanup } from '@testing-library/react';
-import userEvent from '@testing-library/user-event';
 import { AgentForm } from '../AgentForm';
 import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest';
 import type { AgentNodeData, AppNode } from '../../../types/nodes.types';
 import type { ModelConfig, ToolConfig, CustomTool, MCPServer } from '../../../types/config.types';
-import React from 'react';
 
 // Mock lucide-react
 vi.mock('lucide-react', () => ({
@@ -473,7 +471,7 @@ describe('AgentForm', () => {
   });
 
   it('handles undefined or partial data safely', () => {
-    // @ts-ignore - Testing partial data
+    // @ts-expect-error - Testing partial data
     mockProps.data = { name: 'Partial Agent' }; 
     // @ts-expect-error - Sensors
     render(<AgentForm {...mockProps} />);
@@ -507,7 +505,7 @@ describe('AgentForm', () => {
   });
 
   it('handles tool IDs as objects for legacy support', () => {
-    // @ts-ignore - Testing legacy object format
+    // @ts-expect-error - Testing legacy object format
     mockProps.data.globalToolIds = [{ id: 'tool-1' }];
     // @ts-expect-error - Sensors
     render(<AgentForm {...mockProps} />);

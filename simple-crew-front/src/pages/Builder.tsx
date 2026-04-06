@@ -87,7 +87,8 @@ const FlowCanvas = () => {
       const timestamp = Date.now().toString().slice(-4);
       if (type === 'agent') data = { name: `New Agent ${timestamp}`, role: '', goal: '', backstory: '', isCollapsed: false };
       else if (type === 'task') data = { name: `New Task ${timestamp}`, description: '', expected_output: '' };
-      else if (type === 'crew') data = { name: 'New Crew', process: 'sequential', memory: false, cache: false, isCollapsed: false } as any;
+      else if (type === 'crew') data = { name: 'New Crew', process: 'sequential', memory: false, cache: false, isCollapsed: false } as AppNode['data'];
+
       else if (type === 'chat') {
         data = { name: 'Chat Trigger', description: 'Start the Crew from a user\'s text message.', isCollapsed: false, inputMapping: 'chat_input' };
       } else if (type === 'webhook') {
@@ -202,6 +203,15 @@ function FlowBuilder() {
   const [activeView, setActiveView] = React.useState<'editor' | 'animation' | 'executions'>('editor');
   const [isEditingTitle, setIsEditingTitle] = React.useState(false);
   const [editedTitle, setEditedTitle] = React.useState('');
+
+  // Sincroniza o título local com o global sempre que um novo projeto é carregado
+  useEffect(() => {
+    if (currentProjectName && !isEditingTitle) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setEditedTitle(currentProjectName);
+    }
+  }, [currentProjectName, isEditingTitle]);
+
   
 
   const handleTitleSave = async () => {
@@ -331,7 +341,9 @@ function FlowBuilder() {
 
           <button
             onClick={() => {
-              saveProject(editedTitle, currentProjectDescription || '');
+              // Garante que enviamos o nome da UI ou o da Store, nunca uma string vazia acidentalmente
+              const finalName = editedTitle.trim() || currentProjectName || 'Untitled Project';
+              saveProject(finalName, currentProjectDescription || '');
             }}
             disabled={isSaving}
             className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all shadow-sm ${isSaving

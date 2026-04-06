@@ -1,5 +1,4 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import React from 'react';
 import { render, screen, fireEvent, cleanup } from '@testing-library/react';
 import { CrewForm } from '../CrewForm';
 import type { CrewNodeData, ProcessType } from '../../../types/nodes.types';

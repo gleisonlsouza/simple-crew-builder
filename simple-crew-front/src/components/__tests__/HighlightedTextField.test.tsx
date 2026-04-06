@@ -110,9 +110,9 @@ describe('HighlightedTextField', () => {
       const textarea = screen.getByRole('textbox');
       await user.type(textarea, 'h');
       
-      // onValueChange in react-simple-code-editor calls onChange with { target: { value } }
+      // onValueChange in react-simple-code-editor calls onChange with expanded target info
       expect(onChange).toHaveBeenCalledWith(expect.objectContaining({
-        target: { value: 'h' }
+        target: expect.objectContaining({ value: 'h' })
       }));
     });
 

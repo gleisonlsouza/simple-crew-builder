@@ -98,6 +98,7 @@ describe('useNodeConfig', () => {
           filter: '',
           cursorPos: 6,
           anchorRect: null,
+          cursorRect: null,
           selectedIndex: 0
         });
       });
@@ -199,7 +200,8 @@ describe('useNodeConfig', () => {
           field: 'message',
           filter: '',
           cursorPos: 6,
-          anchorRect: null
+          anchorRect: null,
+          cursorRect: null
         });
       });
 

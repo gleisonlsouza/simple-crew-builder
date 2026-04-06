@@ -3,11 +3,10 @@ import userEvent from '@testing-library/user-event';
 import { ChatNode } from '../ChatNode';
 import { vi, describe, it, expect, beforeEach } from 'vitest';
 import { useStore } from '../../store/index';
-import { ReactFlowProvider, type NodeProps, type Node, Position } from '@xyflow/react';
+import { ReactFlowProvider, type NodeProps, type Node } from '@xyflow/react';
 import type { AppState } from '../../store/index';
 import type { Mock } from 'vitest';
 import type { ChatNodeData } from '../../types/nodes.types';
-import React from 'react';
 
 // Mock Handle component
 vi.mock('@xyflow/react', async (importOriginal) => {

@@ -141,6 +141,19 @@ export function NodeConfigDrawer() {
           className="fixed z-[100] bg-brand-card border border-brand-border rounded-xl shadow-2xl py-1.5 w-64 overflow-hidden animate-in fade-in zoom-in duration-150"
           style={(() => {
             const rect = suggestionState.anchorRect;
+            const cursorRect = suggestionState.cursorRect;
+            
+            // Priority 1: Use specific cursor coordinates from mirror div
+            if (cursorRect) {
+              const spaceBelow = window.innerHeight - cursorRect.top - cursorRect.height;
+              const dropdownHeight = 220;
+              if (spaceBelow < dropdownHeight) {
+                return { bottom: window.innerHeight - cursorRect.top + 4, left: Math.max(8, cursorRect.left), maxHeight: '200px' };
+              }
+              return { top: cursorRect.top + cursorRect.height + 4, left: Math.max(8, cursorRect.left), maxHeight: '200px' };
+            }
+
+            // Priority 2: Fallback to anchor element rect
             const spaceBelow = rect ? window.innerHeight - rect.bottom : 0;
             const dropdownHeight = 220;
             if (rect && spaceBelow < dropdownHeight) {

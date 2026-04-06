@@ -44,6 +44,7 @@ export const useNodeConfig = () => {
     filter: string;
     cursorPos: number;
     anchorRect: DOMRect | null;
+    cursorRect: { top: number; left: number; height: number } | null;
     selectedIndex: number;
   }>({
     isOpen: false,
@@ -51,6 +52,7 @@ export const useNodeConfig = () => {
     filter: '',
     cursorPos: 0,
     anchorRect: null,
+    cursorRect: null,
     selectedIndex: 0
   });
 
@@ -288,15 +290,14 @@ export const useNodeConfig = () => {
   }, [suggestionState, nodes, handleSelectSuggestion]);
 
   const handleFieldChange = useCallback((
-    e: React.ChangeEvent<HTMLTextAreaElement | HTMLInputElement> | { target: { value: string } }, 
+    e: React.ChangeEvent<HTMLTextAreaElement | HTMLInputElement> | { target: { value: string, selectionStart?: number, cursorRect?: { top: number, left: number, height: number } } }, 
     field: string,
     updateFn: (val: string) => void
   ) => {
     const value = e.target.value;
-    const targetElement = (e as React.ChangeEvent<HTMLTextAreaElement | HTMLInputElement>).target as HTMLTextAreaElement | HTMLInputElement | undefined;
-    const cursorPos = (targetElement && typeof targetElement.selectionStart === 'number') 
-      ? targetElement.selectionStart 
-      : value.length;
+    const target = e.target as (HTMLTextAreaElement | HTMLInputElement) & { cursorRect?: { top: number; left: number; height: number } };
+    const cursorPos = typeof target.selectionStart === 'number' ? target.selectionStart : value.length;
+    const cursorRect = target.cursorRect || null;
 
     updateFn(value);
 
@@ -306,13 +307,14 @@ export const useNodeConfig = () => {
 
     if (lastBraceIndex > lastCloseBraceIndex) {
       const filter = textBeforeCursor.slice(lastBraceIndex + 1);
-      const rect = targetElement?.getBoundingClientRect ? targetElement.getBoundingClientRect() : null;
+      const rect = target.getBoundingClientRect ? target.getBoundingClientRect() : null;
       setSuggestionState({
         isOpen: true,
         field,
         filter,
         cursorPos,
         anchorRect: rect,
+        cursorRect,
         selectedIndex: 0
       });
     } else {

@@ -37,6 +37,7 @@ export const migrateNodes = (nodes: AppNode[]): AppNode[] => {
 
     if (type === 'crew') {
       const crewData: CrewNodeData = {
+        name: typeof data.name === 'string' ? data.name : 'Crew',
         process: (data.process === 'sequential' || data.process === 'hierarchical') ? data.process : 'sequential',
         verbose: typeof data.verbose === 'boolean' ? data.verbose : true,
         memory: typeof data.memory === 'boolean' ? data.memory : false,

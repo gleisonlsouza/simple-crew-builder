@@ -3,14 +3,13 @@ import userEvent from '@testing-library/user-event';
 import { DeletableEdge } from '../DeletableEdge';
 import { vi, describe, it, expect, beforeEach } from 'vitest';
 import { useStore } from '../../store/index';
-import { BaseEdge, EdgeLabelRenderer, getBezierPath, type EdgeProps, Position } from '@xyflow/react';
+import { type EdgeProps, Position } from '@xyflow/react';
 import type { AppState } from '../../store/index';
 import type { Mock } from 'vitest';
-import React from 'react';
 
 // Mock react-flow components and functions
 vi.mock('@xyflow/react', () => ({
-  BaseEdge: ({ path, style, markerEnd }: any) => (
+  BaseEdge: ({ path, style }: any) => (
     <svg>
       <path d={path} style={style} data-testid="base-edge" />
     </svg>

@@ -27,4 +27,18 @@ export default defineConfig([
       globals: globals.browser,
     },
   },
+  {
+    files: [
+      '**/*.test.tsx', 
+      '**/*.test.ts', 
+      '**/*.spec.ts', 
+      '**/__tests__/**',
+      'e2e/**'
+    ],
+    rules: {
+      '@typescript-eslint/no-explicit-any': 'off',
+    },
+  },
+
 ])
+

@@ -3,7 +3,6 @@ import SettingsPage from '../Settings';
 import { vi, describe, it, expect, beforeEach } from 'vitest';
 import { useStore } from '../../store/index';
 import { MemoryRouter, useNavigate } from 'react-router-dom';
-import React from 'react';
 
 // Mock react-router-dom
 vi.mock('react-router-dom', async (importOriginal) => {
