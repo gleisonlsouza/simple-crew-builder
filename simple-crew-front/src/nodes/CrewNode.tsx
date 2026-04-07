@@ -1,9 +1,9 @@
-import { memo, useState } from 'react';
+import { memo, useState, useEffect } from 'react';
 import { Handle, Position, type NodeProps, type Node } from '@xyflow/react';
 import { useShallow } from 'zustand/shallow';
-import { Users, Trash2, ChevronDown, ChevronUp, Loader2, CheckCircle2, Link, Settings } from 'lucide-react';
+import { Users, Trash2, ChevronDown, ChevronUp, Loader2, CheckCircle2, Link, Settings, Clock, AlertCircle } from 'lucide-react';
 import { useStore } from '../store/index';
-import type { CrewNodeData } from '../types/nodes.types';
+import type { CrewNodeData, AgentNodeData } from '../types/nodes.types';
 
 export const CrewNode = memo(({ id, data }: NodeProps<Node<CrewNodeData, 'crew'>>) => {
   const { deleteNode, toggleCollapse, nodes, onConnect, setActiveNode } = useStore(
@@ -21,17 +21,31 @@ export const CrewNode = memo(({ id, data }: NodeProps<Node<CrewNodeData, 'crew'>
   const errors = useStore((state) => state.nodeErrors[id]);
   const childCount = useStore((state) => state.edges.filter((edge) => edge.source === id).length);
 
+  // Close menus when clicking outside
+  useEffect(() => {
+    if (!isConnectMenuOpen) return;
+    const handleClick = () => setIsConnectMenuOpen(false);
+    window.addEventListener('click', handleClick);
+    return () => window.removeEventListener('click', handleClick);
+  }, [isConnectMenuOpen]);
+
   const statusClasses = errors?.length
     ? 'ring-2 ring-red-400 ring-offset-2'
-    : status === 'running'
-      ? 'ring-2 ring-blue-500 ring-offset-2 animate-pulse'
-      : status === 'success'
-        ? 'ring-2 ring-green-500 ring-offset-2'
-        : 'hover:ring-2 hover:ring-violet-400';
+    : status === 'waiting'
+      ? 'ring-2 ring-amber-400/50 ring-offset-1'
+      : status === 'running'
+        ? 'ring-2 ring-blue-500 ring-offset-2 animate-pulse'
+        : status === 'success'
+          ? 'ring-2 ring-green-500 ring-offset-2'
+          : status === 'error'
+            ? 'ring-2 ring-red-500 ring-offset-2'
+            : 'hover:ring-2 hover:ring-violet-400';
 
   return (
     <div 
-      className={`group relative bg-white dark:bg-slate-900 rounded-xl shadow-sm hover:shadow-md dark:shadow-none border border-slate-200 dark:border-slate-700 w-48 overflow-visible transition-colors transition-shadow duration-300 cursor-pointer ${statusClasses} ${status === 'running' ? 'running' : ''}`}
+      data-testid="node-crew"
+      onClick={(e) => { e.stopPropagation(); setActiveNode(id); }}
+      className={`group relative bg-white dark:bg-slate-900 rounded-xl shadow-sm hover:shadow-md dark:shadow-none border border-slate-200 dark:border-slate-700 w-56 overflow-visible transition-colors transition-shadow duration-300 cursor-pointer ${statusClasses} ${status === 'running' ? 'running' : ''}`}
       style={{ 
         '--node-color': '#8b5cf6',
         backfaceVisibility: 'hidden',
@@ -42,6 +56,11 @@ export const CrewNode = memo(({ id, data }: NodeProps<Node<CrewNodeData, 'crew'>
       } as React.CSSProperties}
     >
 
+      {status === 'waiting' && (
+        <div className="absolute -top-2 -right-2 bg-white dark:bg-slate-900 rounded-full p-0.5 shadow-md z-20 border border-slate-100 dark:border-slate-800 animate-in zoom-in duration-200">
+          <Clock className="w-5 h-5 text-amber-500" />
+        </div>
+      )}
       {status === 'running' && (
         <div className="absolute -top-2 -right-2 bg-white dark:bg-slate-900 rounded-full p-0.5 shadow-md z-20 border border-slate-100 dark:border-slate-800">
           <Loader2 className="w-5 h-5 text-blue-500 animate-spin" />
@@ -52,6 +71,11 @@ export const CrewNode = memo(({ id, data }: NodeProps<Node<CrewNodeData, 'crew'>
           <CheckCircle2 className="w-5 h-5 text-green-500" />
         </div>
       )}
+      {(status === 'error' || errors?.length > 0) && (
+        <div className="absolute -top-2 -right-2 bg-white dark:bg-slate-900 rounded-full p-0.5 shadow-md z-20 border border-slate-100 dark:border-slate-800 animate-in zoom-in duration-200">
+          <AlertCircle className="w-5 h-5 text-red-500" />
+        </div>
+      )}
 
       <div className="bg-gradient-to-r from-violet-500 to-purple-600 px-3 py-2 flex items-center gap-2 rounded-t-xl relative">
         <Users className="w-4 h-4 text-white" />
@@ -59,8 +83,14 @@ export const CrewNode = memo(({ id, data }: NodeProps<Node<CrewNodeData, 'crew'>
           className="text-white text-sm font-medium truncate flex-1 cursor-text"
           onDoubleClick={(e) => { e.stopPropagation(); setActiveNode(id); }}
         >
-          Crew
+          {data.name || 'New Crew'}
         </h3>
+
+        {errors?.length > 0 && (
+          <div title={errors.join('\n')} className="text-red-200 hover:text-white cursor-help transition-colors">
+            <AlertCircle className="w-4 h-4" />
+          </div>
+        )}
 
         <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
           <button
@@ -77,6 +107,7 @@ export const CrewNode = memo(({ id, data }: NodeProps<Node<CrewNodeData, 'crew'>
             onClick={(e) => { e.stopPropagation(); deleteNode(id); }}
             className="p-1 rounded hover:bg-white/20 transition-colors text-white/70 hover:text-white nodrag"
             title="Delete node"
+            aria-label="Delete Crew"
           >
             <Trash2 className="w-4 h-4" />
           </button>
@@ -114,7 +145,7 @@ export const CrewNode = memo(({ id, data }: NodeProps<Node<CrewNodeData, 'crew'>
                   className="w-full text-left px-2 py-1.5 text-[11px] font-medium text-slate-700 dark:text-slate-300 hover:bg-violet-50 dark:hover:bg-violet-900/30 rounded transition-colors truncate flex items-center gap-2"
                 >
                   <div className="w-1.5 h-1.5 rounded-full bg-blue-500" />
-                  {(targetNode.data as any).name || `${targetNode.type} #${targetNode.id.slice(-4)}`}
+                  {(targetNode.data as AgentNodeData).name || `${targetNode.type} #${targetNode.id.slice(-4)}`}
                 </button>
               ))}
               {nodes.filter(n => n.id !== id && n.type === 'agent').length === 0 && (
@@ -125,39 +156,43 @@ export const CrewNode = memo(({ id, data }: NodeProps<Node<CrewNodeData, 'crew'>
         )}
       </div>
 
-      <div className="p-3">
-        <div className="flex justify-between items-center bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 px-2 py-1.5 rounded-md shadow-sm">
-          <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-tight">Process:</span>
-          <span className="text-xs text-slate-800 dark:text-slate-200 capitalize font-bold">
-            {data.process}
-          </span>
-        </div>
-
-        {childCount > 0 && (
-          <div className="mt-3 flex flex-col gap-1.5">
-            <div className="flex items-center gap-1.5 text-xs text-slate-600 dark:text-slate-300 bg-slate-50 dark:bg-slate-800/50 w-fit px-2 py-1 rounded-md border border-slate-200 dark:border-slate-700 shadow-sm">
-              <Users className="w-3.5 h-3.5 text-purple-500" />
-              <span className="font-medium">{childCount} {childCount === 1 ? 'Agent' : 'Agents'}</span>
-            </div>
+      {!data.isCollapsed && (
+        <div className="p-3">
+          <div className="flex justify-between items-center bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 px-2 py-1.5 rounded-md shadow-sm">
+            <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-tight">Process:</span>
+            <span className="text-xs text-slate-800 dark:text-slate-200 capitalize font-bold" data-testid="crew-process">
+              {data.process || 'sequential'}
+            </span>
           </div>
-        )}
-      </div>
+
+          {childCount > 0 && (
+            <div className="mt-3 flex flex-col gap-1.5">
+              <div className="flex items-center gap-1.5 text-xs text-slate-600 dark:text-slate-300 bg-slate-50 dark:bg-slate-800/50 w-fit px-2 py-1 rounded-md border border-slate-200 dark:border-slate-700 shadow-sm">
+                <Users className="w-3.5 h-3.5 text-purple-500" />
+                <span className="font-medium" data-testid="agent-count">{childCount} {childCount === 1 ? 'Agent' : 'Agents'}</span>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       <button
         onClick={(e) => { e.stopPropagation(); toggleCollapse(id); }}
         className="absolute -bottom-3 right-4 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-full p-0.5 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-700 shadow-sm z-10 transition-colors text-slate-400 dark:text-slate-500 hover:text-purple-500 dark:hover:text-purple-400"
+        aria-label={data.isCollapsed ? 'Expand Crew' : 'Collapse Crew'}
       >
         {data.isCollapsed ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronUp className="w-3.5 h-3.5" />}
       </button>
 
-      {/* Inputs (Targets) */}
-      <Handle type="target" position={Position.Left} id="left-target" className="w-2 h-2 bg-gray-400 border-none hover:bg-violet-500 transition-colors" />
-
-      {/* Outputs (Sources) */}
+      {/* Connection Handles */}
+      <Handle type="target" position={Position.Top} id="top-target" className="w-2 h-2 bg-gray-400 border-none hover:bg-violet-500 transition-colors" />
       <Handle type="source" position={Position.Top} id="top-source" className="w-2 h-2 bg-gray-400 border-none hover:bg-violet-500 transition-colors" />
+      <Handle type="target" position={Position.Right} id="right-target" className="w-2 h-2 bg-gray-400 border-none hover:bg-violet-500 transition-colors" />
       <Handle type="source" position={Position.Right} id="right-source" className="w-2 h-2 bg-gray-400 border-none hover:bg-violet-500 transition-colors" />
+      <Handle type="target" position={Position.Bottom} id="bottom-target" className="w-2 h-2 bg-gray-400 border-none hover:bg-violet-500 transition-colors" />
       <Handle type="source" position={Position.Bottom} id="bottom-source" className="w-2 h-2 bg-gray-400 border-none hover:bg-violet-500 transition-colors" />
-      <Handle type="source" position={Position.Left} id="left-source" className="w-2 h-2 bg-gray-400 border-none hover:bg-violet-500 transition-colors ml-3" />
+      <Handle type="target" position={Position.Left} id="left-target" className="w-2 h-2 bg-gray-400 border-none hover:bg-violet-500 transition-colors" />
+      <Handle type="source" position={Position.Left} id="left-source" className="w-2 h-2 bg-gray-400 border-none hover:bg-violet-500 transition-colors" />
     </div>
   );
 });

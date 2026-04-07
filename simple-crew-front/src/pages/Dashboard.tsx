@@ -3,29 +3,28 @@ import { useNavigate } from 'react-router-dom';
 import { 
   Plus, 
   Workflow, 
-  Settings, 
-  Key, 
-  MoreVertical, 
   Clock, 
   Layers,
   Search,
   Trash2,
   Edit2,
   X,
-  Moon,
   Upload,
-  HelpCircle
+  MoreVertical
 } from 'lucide-react';
 import { useStore } from '../store/index';
 import { SettingsDrawer } from '../components/SettingsDrawer';
 import { ConfirmationModal } from '../components/ConfirmationModal';
 import { AboutModal } from '../components/AboutModal';
-import logo from '../assets/logo.PNG';
+import { MainSidebar } from '../components/MainSidebar';
+import type { Project } from '../types/store.types';
 
 const Dashboard = () => {
   const navigate = useNavigate();
   const savedProjects = useStore((state) => state.savedProjects);
-  const setIsSettingsOpen = useStore((state) => state.setIsSettingsOpen);
+  const setIsAboutModalOpen = useStore((state) => state.setIsAboutModalOpen);
+  const isAboutModalOpen = useStore((state) => state.isAboutModalOpen);
+  
   const fetchProjects = useStore((state) => state.fetchProjects);
   const fetchCredentials = useStore((state) => state.fetchCredentials);
   const fetchWorkspaces = useStore((state) => state.fetchWorkspaces);
@@ -33,13 +32,11 @@ const Dashboard = () => {
   const updateProjectMetadata = useStore((state) => state.updateProjectMetadata);
 
   const [openMenuId, setOpenMenuId] = React.useState<string | null>(null);
-  const [isSettingsMenuOpen, setIsSettingsMenuOpen] = React.useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = React.useState(false);
   const [isCreateModalOpen, setIsCreateModalOpen] = React.useState(false);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = React.useState(false);
   const [projectToDelete, setProjectToDelete] = React.useState<{id: string, name: string} | null>(null);
   const [editingProject, setEditingProject] = React.useState<{id: string, name: string, description: string} | null>(null);
-  const [isAboutModalOpen, setIsAboutModalOpen] = React.useState(false);
   const [newProject, setNewProject] = React.useState({ name: '', description: '' });
 
   const createNewProject = useStore((state) => state.createNewProject);
@@ -92,7 +89,7 @@ const Dashboard = () => {
         if (imported) {
           navigate(`/workflow/${imported.id}`);
         }
-      } catch (err) {
+      } catch {
         useStore.getState().showNotification("Failed to parse JSON file.", "error");
       }
     };
@@ -105,7 +102,7 @@ const Dashboard = () => {
     navigate(`/workflow/${id}`);
   };
 
-  const handleOpenRename = (project: any) => {
+  const handleOpenRename = (project: Project) => {
     setEditingProject({
       id: project.id,
       name: project.name,
@@ -134,78 +131,7 @@ const Dashboard = () => {
 
   return (
     <div className="flex h-screen bg-brand-bg font-sans transition-colors duration-300">
-      {/* Global Sidebar (n8n Style) */}
-      <aside className="w-16 flex flex-col items-center py-6 bg-brand-card border-r border-brand-border z-10 transition-colors duration-300">
-        <div className="w-12 h-12 mb-10 overflow-hidden cursor-pointer group hover:scale-105 transition-transform duration-300" onClick={() => navigate('/')}>
-          <img src={logo} alt="Simple Crew Builder Logo" className="w-full h-full object-contain" />
-        </div>
-        
-        <nav className="flex flex-col gap-6">
-          <button className="p-3 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 rounded-xl transition-all shadow-sm">
-            <Workflow className="w-6 h-6" />
-          </button>
-          <button className="p-3 text-brand-muted hover:text-brand-text rounded-xl transition-all">
-            <Key className="w-6 h-6" />
-          </button>
-          <div className="relative">
-            <button 
-              onClick={(e) => {
-                e.stopPropagation();
-                setIsSettingsMenuOpen(!isSettingsMenuOpen);
-              }}
-              className={`p-3 rounded-xl transition-all ${isSettingsMenuOpen ? 'bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600' : 'text-brand-muted hover:text-brand-text'}`}
-            >
-              <Settings className="w-6 h-6" />
-            </button>
-            
-            {isSettingsMenuOpen && (
-              <div className="absolute left-full ml-2 bottom-0 w-48 bg-brand-card border border-brand-border rounded-xl shadow-xl z-20 py-1 overflow-hidden animate-in slide-in-from-left-2 duration-150">
-                <button 
-                  onClick={() => {
-                    navigate('/settings');
-                    setIsSettingsMenuOpen(false);
-                  }}
-                  className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-brand-muted hover:text-brand-text hover:bg-brand-bg transition-colors text-left"
-                >
-                  <Settings className="w-4 h-4" />
-                  Settings
-                </button>
-                <button 
-                  onClick={() => {
-                    setIsSettingsOpen(true);
-                    setIsSettingsMenuOpen(false);
-                  }}
-                  className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-brand-muted hover:text-brand-text hover:bg-brand-bg transition-colors text-left"
-                >
-                  <Moon className="w-4 h-4" />
-                  Theme
-                </button>
-                <div className="h-px bg-brand-border my-1 mx-2 opacity-50" />
-                <button 
-                  onClick={() => {
-                    setIsAboutModalOpen(true);
-                    setIsSettingsMenuOpen(false);
-                  }}
-                  className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-brand-muted hover:text-brand-text hover:bg-brand-bg transition-colors text-left"
-                >
-                  <HelpCircle className="w-4 h-4" />
-                  About
-                </button>
-              </div>
-            )}
-          </div>
-        </nav>
-
-        <div className="mt-auto">
-          <button 
-            onClick={() => setIsAboutModalOpen(true)}
-            className="p-3 text-brand-muted hover:text-brand-text hover:bg-brand-bg rounded-xl transition-all"
-            title="About Simple Crew"
-          >
-            <HelpCircle className="w-6 h-6" />
-          </button>
-        </div>
-      </aside>
+      <MainSidebar />
 
       {/* Main Content Area */}
       <main className="flex-1 flex flex-col overflow-hidden">
@@ -264,10 +190,11 @@ const Dashboard = () => {
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-              {savedProjects.map((project: any) => (
+              {savedProjects.map((project: Project) => (
                 <div 
                   key={project.id}
                   onClick={() => handleEditWorkflow(project.id)}
+                  data-testid="project-card"
                   className="group bg-brand-card border border-brand-border p-6 rounded-2xl hover:shadow-xl hover:shadow-indigo-500/10 hover:border-indigo-500 dark:hover:border-indigo-500/50 transition-all cursor-pointer relative overflow-hidden flex flex-col"
                 >
                   <div className="flex items-start justify-between mb-4">
@@ -419,18 +346,28 @@ const Dashboard = () => {
       {isCreateModalOpen && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-slate-950/40 backdrop-blur-sm transition-opacity" onClick={() => setIsCreateModalOpen(false)} />
-          <div className="bg-brand-card w-full max-w-md rounded-2xl border border-brand-border shadow-2xl relative z-10 animate-in fade-in zoom-in duration-200">
+          <div 
+            role="dialog" 
+            aria-modal="true" 
+            aria-labelledby="modal-title"
+            className="bg-brand-card w-full max-w-md rounded-2xl border border-brand-border shadow-2xl relative z-10 animate-in fade-in zoom-in duration-200"
+          >
             <div className="px-6 py-4 border-b border-brand-border flex items-center justify-between">
-              <h2 className="text-lg font-bold text-brand-text">Create New Workflow</h2>
-              <button onClick={() => setIsCreateModalOpen(false)} className="p-2 hover:bg-brand-bg rounded-lg text-brand-muted transition-colors">
+              <h2 id="modal-title" className="text-lg font-bold text-brand-text">Create New Workflow</h2>
+              <button 
+                onClick={() => setIsCreateModalOpen(false)} 
+                aria-label="Close modal"
+                className="p-2 hover:bg-brand-bg rounded-lg text-brand-muted transition-colors"
+              >
                 <X className="w-5 h-5" />
               </button>
             </div>
             
             <div className="p-6 space-y-4">
               <div>
-                <label className="block text-sm font-semibold text-brand-text mb-1.5">Name</label>
+                <label htmlFor="workflowName" className="block text-sm font-semibold text-brand-text mb-1.5">Name</label>
                 <input 
+                  id="workflowName"
                   type="text"
                   autoFocus
                   value={newProject.name}
@@ -440,8 +377,9 @@ const Dashboard = () => {
                 />
               </div>
               <div>
-                <label className="block text-sm font-semibold text-brand-text mb-1.5">Description (Optional)</label>
+                <label htmlFor="workflowDescription" className="block text-sm font-semibold text-brand-text mb-1.5">Description (Optional)</label>
                 <textarea 
+                  id="workflowDescription"
                   value={newProject.description}
                   onChange={(e) => setNewProject({...newProject, description: e.target.value})}
                   className="w-full px-4 py-2.5 bg-brand-bg border border-brand-border rounded-xl focus:border-indigo-500 outline-none text-brand-text transition-all min-h-[100px] resize-none"

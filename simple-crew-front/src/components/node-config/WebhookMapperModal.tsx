@@ -89,7 +89,7 @@ const TargetDropZone: React.FC<DropZoneProps> = ({ id, label, value, onClear }) 
 };
 
 interface JsonTreeProps {
-  data: any;
+  data: unknown;
   path?: string;
   label: string;
 }
@@ -171,7 +171,7 @@ export const WebhookMapperModal: React.FC<WebhookMapperModalProps> = ({
     if (!sampleJson.trim()) return null;
     try {
       return JSON.parse(sampleJson);
-    } catch (e: any) {
+    } catch {
       return null;
     }
   }, [sampleJson]);
@@ -185,8 +185,8 @@ export const WebhookMapperModal: React.FC<WebhookMapperModalProps> = ({
     try {
       JSON.parse(sampleJson);
       setJsonError(null);
-    } catch (e: any) {
-      setJsonError(e.message);
+    } catch (e: unknown) {
+      setJsonError(e instanceof Error ? e.message : String(e));
     }
   }, [sampleJson]);
 

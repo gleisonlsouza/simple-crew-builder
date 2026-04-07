@@ -28,8 +28,8 @@ export function useFetchLatestRelease() {
       } else {
         throw new Error('No releases found');
       }
-    } catch (err: any) {
-      setError(err.message || 'An unknown error occurred');
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'An unknown error occurred');
     } finally {
       setLoading(false);
     }

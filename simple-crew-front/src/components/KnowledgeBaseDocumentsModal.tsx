@@ -118,23 +118,23 @@ export const KnowledgeBaseDocumentsModal: React.FC<Props> = ({ kb, onClose }) =>
     embeddingModelId !== 'null' && 
     models.some(m => m.id === embeddingModelId && m.model_type === 'EMBEDDING');
 
-  const fetchDocuments = async () => {
+  const fetchDocuments = React.useCallback(async () => {
     setIsLoading(true);
     try {
       const response = await fetch(`${API_URL}/api/knowledge-bases/${kb.id}/documents`);
       if (!response.ok) throw new Error('Failed to fetch documents');
       const data = await response.json();
       setDocuments(data);
-    } catch (error: any) {
-      toast.error(error.message);
+    } catch (error: unknown) {
+      toast.error(error instanceof Error ? error.message : String(error));
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [kb.id]);
 
   useEffect(() => {
     fetchDocuments();
-  }, [kb.id]);
+  }, [fetchDocuments]);
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
@@ -167,8 +167,8 @@ export const KnowledgeBaseDocumentsModal: React.FC<Props> = ({ kb, onClose }) =>
       // Reset input
       if (fileInputRef.current) fileInputRef.current.value = '';
       fetchDocuments();
-    } catch (error: any) {
-      toast.error(error.message);
+    } catch (error: unknown) {
+      toast.error(error instanceof Error ? error.message : String(error));
     } finally {
       setIsUploading(false);
     }
@@ -191,8 +191,8 @@ export const KnowledgeBaseDocumentsModal: React.FC<Props> = ({ kb, onClose }) =>
       
       toast.success('Document deleted successfully');
       fetchDocuments();
-    } catch (error: any) {
-      toast.error(error.message);
+    } catch (error: unknown) {
+      toast.error(error instanceof Error ? error.message : String(error));
     } finally {
       setIsConfirmOpen(false);
       setDocToDelete(null);
@@ -216,7 +216,7 @@ export const KnowledgeBaseDocumentsModal: React.FC<Props> = ({ kb, onClose }) =>
         hour: '2-digit',
         minute: '2-digit'
       }).format(new Date(dateString));
-    } catch (e) {
+    } catch {
       return dateString;
     }
   };

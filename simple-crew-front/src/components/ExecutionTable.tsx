@@ -6,7 +6,8 @@ import {
   createColumnHelper,
   getPaginationRowModel,
   getSortedRowModel,
-  type SortingState
+  type SortingState,
+  type ColumnDef
 } from '@tanstack/react-table';
 import { 
   CheckCircle2, 
@@ -32,7 +33,8 @@ const columnHelper = createColumnHelper<Execution>();
 export const ExecutionTable: React.FC<ExecutionTableProps> = ({ data, onViewDetails, onReRun }) => {
   const [sorting, setSorting] = React.useState<SortingState>([]);
 
-  const columns = [
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const columns: ColumnDef<Execution, any>[] = [
     columnHelper.accessor('status', {
       header: 'Status',
       cell: info => {
@@ -96,7 +98,7 @@ export const ExecutionTable: React.FC<ExecutionTableProps> = ({ data, onViewDeta
       cell: info => {
         const duration = info.getValue();
         if (duration === undefined || duration === null) return <span className="text-brand-muted">-</span>;
-        return <span className="text-brand-text text-sm font-mono">{duration.toFixed(2)}s</span>;
+        return <span className="text-brand-text text-sm font-mono">{(duration / 1000).toFixed(2)}s</span>;
       },
     }),
     columnHelper.display({
@@ -123,6 +125,7 @@ export const ExecutionTable: React.FC<ExecutionTableProps> = ({ data, onViewDeta
     }),
   ];
 
+  // eslint-disable-next-line react-hooks/incompatible-library
   const table = useReactTable({
     data,
     columns,
@@ -155,10 +158,7 @@ export const ExecutionTable: React.FC<ExecutionTableProps> = ({ data, onViewDeta
                   >
                     <div className="flex items-center gap-2">
                       {flexRender(header.column.columnDef.header, header.getContext())}
-                      {{
-                        asc: ' 🔼',
-                        desc: ' 🔽',
-                      }[header.column.getIsSorted() as string] ?? null}
+                      {header.column.getIsSorted() === 'asc' ? ' 🔼' : header.column.getIsSorted() === 'desc' ? ' 🔽' : null}
                     </div>
                   </th>
                 ))}

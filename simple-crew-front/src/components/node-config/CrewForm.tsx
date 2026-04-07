@@ -12,14 +12,16 @@ import {
 } from 'lucide-react';
 import { 
   DndContext, 
-  closestCenter 
+  closestCenter,
+  useSensors
 } from '@dnd-kit/core';
+import type { DragEndEvent } from '@dnd-kit/core';
 import { 
   SortableContext, 
   verticalListSortingStrategy 
 } from '@dnd-kit/sortable';
 import { SortableItem } from './SortableItem';
-import type { CrewNodeData, AppNode } from '../../types/nodes.types';
+import type { CrewNodeData, AppNode, AgentNodeData, TaskNodeData } from '../../types/nodes.types';
 import type { ModelConfig } from '../../types/config.types';
 
 interface CrewFormProps {
@@ -31,9 +33,9 @@ interface CrewFormProps {
   nameError: boolean;
   renderableAgents: AppNode[];
   renderableTasks: AppNode[];
-  handleAgentDragEnd: (event: any) => void;
-  handleTaskDragEnd: (event: any) => void;
-  sensors: any;
+  handleAgentDragEnd: (event: DragEndEvent) => void;
+  handleTaskDragEnd: (event: DragEndEvent) => void;
+  sensors: ReturnType<typeof useSensors>;
   models: ModelConfig[];
 }
 
@@ -67,7 +69,8 @@ export const CrewForm: React.FC<CrewFormProps> = memo(({
         {tabs.map((tab) => (
           <button
             key={tab.id}
-            onClick={() => setActiveTab(tab.id as any)}
+            data-testid={`tab-${tab.id}`}
+            onClick={() => setActiveTab(tab.id as 'basic' | 'orch' | 'settings' | 'llm')}
             className={`flex items-center gap-2 py-2 px-3 text-[10px] font-bold uppercase tracking-wider transition-all rounded-lg mb-2 ${
               activeTab === tab.id 
                 ? 'text-blue-500 bg-blue-500/10 border border-blue-500/20' 
@@ -103,7 +106,7 @@ export const CrewForm: React.FC<CrewFormProps> = memo(({
               <select 
                 className="w-full bg-brand-bg border border-brand-border rounded-lg px-3 py-2 text-sm text-brand-text outline-none focus:ring-2 focus:ring-blue-500 transition-all cursor-pointer appearance-none" 
                 value={data.process || 'sequential'} 
-                onChange={(e) => updateNodeData(nodeId, { process: e.target.value as any })}
+                onChange={(e) => updateNodeData(nodeId, { process: e.target.value as 'sequential' | 'hierarchical' | 'consensual' })}
               >
                 <option value="sequential">Sequential (Step-by-step)</option>
                 <option value="hierarchical">Hierarchical (Manager led)</option>
@@ -122,6 +125,7 @@ export const CrewForm: React.FC<CrewFormProps> = memo(({
                 <button 
                   onClick={() => updateNodeData(nodeId, { inputs: { ...(data.inputs || {}), [`input_${Date.now()}`]: '' } })} 
                   className="px-2 py-1 bg-blue-500/10 border border-blue-500/20 text-blue-600 rounded-md text-[10px] font-bold uppercase hover:bg-blue-500/20 transition-colors"
+                  data-testid="btn-add-variable"
                 >
                   <Plus className="w-3 h-3 inline mr-1" />
                   Add Variable
@@ -135,10 +139,11 @@ export const CrewForm: React.FC<CrewFormProps> = memo(({
                     className="bg-brand-bg/50 border border-brand-border rounded-lg px-2.5 py-1.5 text-xs text-brand-text flex-1 min-w-0 focus:border-blue-500 outline-none transition-colors"
                     value={key.startsWith('input_') ? '' : key}
                     placeholder="Key"
+                    data-testid="input-variable-key"
                     onChange={(e) => {
-                      const newInputs: Record<string, any> = { ...data.inputs };
+                      const newInputs: Record<string, string> = { ...(data.inputs as Record<string, string>) };
                       delete newInputs[key];
-                      newInputs[e.target.value || `input_${idx}`] = value;
+                      newInputs[e.target.value || `input_${idx}`] = value as string;
                       updateNodeData(nodeId, { inputs: newInputs });
                     }}
                   />
@@ -146,15 +151,16 @@ export const CrewForm: React.FC<CrewFormProps> = memo(({
                     className="bg-brand-bg/50 border border-brand-border rounded-lg px-2.5 py-1.5 text-xs text-secondary flex-1 min-w-0 focus:border-blue-500 outline-none transition-colors"
                     value={value as string}
                     placeholder="Default Value"
+                    data-testid="input-variable-value"
                     onChange={(e) => {
-                      const newInputs: Record<string, any> = { ...data.inputs };
+                      const newInputs: Record<string, string> = { ...(data.inputs as Record<string, string>) };
                       newInputs[key] = e.target.value;
                       updateNodeData(nodeId, { inputs: newInputs });
                     }}
                   />
                   <button
                     onClick={() => {
-                      const newInputs: Record<string, any> = { ...data.inputs };
+                      const newInputs: Record<string, string> = { ...(data.inputs as Record<string, string>) };
                       delete newInputs[key];
                       updateNodeData(nodeId, { inputs: newInputs });
                     }}
@@ -190,7 +196,7 @@ export const CrewForm: React.FC<CrewFormProps> = memo(({
                   <SortableContext items={renderableAgents.map(a => a.id)} strategy={verticalListSortingStrategy}>
                     <div className="flex flex-col gap-1">
                       {renderableAgents.map((agentVal) => (
-                        <SortableItem key={agentVal.id} id={agentVal.id} name={(agentVal.data as any).name || 'Unnamed Agent'} />
+                        <SortableItem key={agentVal.id} id={agentVal.id} name={(agentVal.data as AgentNodeData).name || 'Unnamed Agent'} />
                       ))}
                     </div>
                   </SortableContext>
@@ -212,7 +218,7 @@ export const CrewForm: React.FC<CrewFormProps> = memo(({
                   <SortableContext items={renderableTasks.map(t => t.id)} strategy={verticalListSortingStrategy}>
                     <div className="flex flex-col gap-1">
                       {renderableTasks.map((task) => (
-                        <SortableItem key={task.id} id={task.id} name={(task.data as any).name || 'Unnamed Task'} />
+                        <SortableItem key={task.id} id={task.id} name={(task.data as TaskNodeData).name || 'Unnamed Task'} />
                       ))}
                     </div>
                   </SortableContext>
@@ -312,6 +318,7 @@ export const CrewForm: React.FC<CrewFormProps> = memo(({
               <div className="flex flex-col gap-2">
                 <label className="text-xs font-bold text-blue-500 uppercase tracking-wider">Manager LLM</label>
                 <select 
+                  data-testid="select-manager-llm"
                   className="w-full bg-brand-bg border border-blue-500/30 rounded-lg px-3 py-2 text-sm text-brand-text outline-none focus:ring-2 focus:ring-blue-500 transition-all cursor-pointer" 
                   value={data.manager_llm_id || ''} 
                   onChange={(e) => updateNodeData(nodeId, { manager_llm_id: e.target.value })}
@@ -332,6 +339,7 @@ export const CrewForm: React.FC<CrewFormProps> = memo(({
                   <p className="text-[10px] text-brand-muted leading-relaxed max-w-[200px]">Enables pre-analysis before execution for better results.</p>
                 </div>
                 <div 
+                  data-testid="toggle-planning"
                   className={`w-10 h-5 rounded-full relative transition-colors cursor-pointer ${data.planning ? 'bg-emerald-500' : 'bg-brand-border'}`}
                   onClick={() => updateNodeData(nodeId, { planning: !data.planning })}
                 >
@@ -343,6 +351,7 @@ export const CrewForm: React.FC<CrewFormProps> = memo(({
                 <div className="flex flex-col gap-2 pl-4 border-l-2 border-emerald-500/20 animate-in slide-in-from-left-2 duration-300">
                   <label className="text-[10px] font-bold text-brand-muted uppercase tracking-wider">Planning LLM</label>
                   <select 
+                    data-testid="select-planning-llm"
                     className="w-full bg-brand-bg border border-brand-border rounded-lg px-3 py-1.5 text-xs text-brand-text outline-none focus:ring-2 focus:ring-emerald-500 transition-all cursor-pointer" 
                     value={data.planning_llm_id || ''} 
                     onChange={(e) => updateNodeData(nodeId, { planning_llm_id: e.target.value })}

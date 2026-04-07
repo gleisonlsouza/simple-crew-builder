@@ -83,7 +83,10 @@ export function NodeConfigDrawer() {
   const { type, data } = activeNode;
 
   return (
-    <div className="absolute right-0 top-0 h-full w-96 bg-brand-card shadow-[-20px_0_50px_rgba(0,0,0,0.1)] dark:shadow-[-20px_0_50px_rgba(0,0,0,0.3)] z-50 flex flex-col border-l border-brand-border transition-all duration-300">
+    <div 
+      data-testid="config-drawer"
+      className="absolute right-0 top-0 h-full w-96 bg-brand-card shadow-[-20px_0_50px_rgba(0,0,0,0.1)] dark:shadow-[-20px_0_50px_rgba(0,0,0,0.3)] z-50 flex flex-col border-l border-brand-border transition-all duration-300"
+    >
       <div className="px-5 py-4 border-b border-brand-border flex items-center justify-between bg-brand-bg/50">
         <div className="flex items-center gap-3">
           <h2 className="text-lg font-bold text-brand-text capitalize tracking-tight">
@@ -138,9 +141,23 @@ export function NodeConfigDrawer() {
       {/* -- Autocomplete Dropdown -- */}
       {suggestionState.isOpen && (
         <div 
+          data-testid="suggestion-dropdown"
           className="fixed z-[100] bg-brand-card border border-brand-border rounded-xl shadow-2xl py-1.5 w-64 overflow-hidden animate-in fade-in zoom-in duration-150"
           style={(() => {
             const rect = suggestionState.anchorRect;
+            const cursorRect = suggestionState.cursorRect;
+            
+            // Priority 1: Use specific cursor coordinates from mirror div
+            if (cursorRect) {
+              const spaceBelow = window.innerHeight - cursorRect.top - cursorRect.height;
+              const dropdownHeight = 220;
+              if (spaceBelow < dropdownHeight) {
+                return { bottom: window.innerHeight - cursorRect.top + 4, left: Math.max(8, cursorRect.left), maxHeight: '200px' };
+              }
+              return { top: cursorRect.top + cursorRect.height + 4, left: Math.max(8, cursorRect.left), maxHeight: '200px' };
+            }
+
+            // Priority 2: Fallback to anchor element rect
             const spaceBelow = rect ? window.innerHeight - rect.bottom : 0;
             const dropdownHeight = 220;
             if (rect && spaceBelow < dropdownHeight) {
@@ -153,7 +170,7 @@ export function NodeConfigDrawer() {
             <span className="text-[10px] font-bold text-brand-muted uppercase tracking-wider">Crew Input Variables</span>
           </div>
           <div className="overflow-y-auto max-h-[160px] custom-scrollbar">
-            {Object.keys((nodes.find(n => n.type === 'crew')?.data as any)?.inputs || {})
+            {Object.keys((nodes.find(n => n.type === 'crew')?.data as CrewNodeData | undefined)?.inputs || {})
               .filter(k => !k.startsWith('input_') && k.toLowerCase().includes(suggestionState.filter.toLowerCase()))
               .map((key, idx) => (
                 <button
@@ -173,7 +190,7 @@ export function NodeConfigDrawer() {
                   <Plus className={`w-3 h-3 ${idx === suggestionState.selectedIndex ? 'opacity-100' : 'opacity-0'}`} />
                 </button>
               ))}
-            {Object.keys((nodes.find(n => n.type === 'crew')?.data as any)?.inputs || {})
+            {Object.keys((nodes.find(n => n.type === 'crew')?.data as CrewNodeData | undefined)?.inputs || {})
               .filter(k => !k.startsWith('input_') && k.toLowerCase().includes(suggestionState.filter.toLowerCase())).length === 0 && (
               <div className="px-3 py-3 text-center">
                 <p className="text-[10px] text-brand-muted italic">No matching inputs.</p>
@@ -291,7 +308,14 @@ export function NodeConfigDrawer() {
       </div>
 
       <div className="p-4 border-t border-brand-border bg-brand-bg/50 flex gap-3">
-        <button onClick={() => deleteNode(activeNode.id)} className="flex items-center gap-2 text-rose-500 hover:bg-rose-500/10 px-4 py-2 rounded-lg text-sm font-medium transition-all"><Trash2 className="w-4 h-4" />Delete</button>
+        <button 
+          onClick={() => deleteNode(activeNode.id)} 
+          data-testid="btn-delete-node"
+          className="flex items-center gap-2 text-rose-500 hover:bg-rose-500/10 px-4 py-2 rounded-lg text-sm font-medium transition-all"
+        >
+          <Trash2 className="w-4 h-4" />
+          Delete
+        </button>
         <button onClick={() => setActiveNode(null)} className="flex-1 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-bold transition-all shadow-md">Done</button>
       </div>
 
@@ -300,7 +324,7 @@ export function NodeConfigDrawer() {
           tool={toolToConfigure}
           isOpen={isToolConfigModalOpen}
           onClose={() => { setIsToolConfigModalOpen(false); setToolToConfigure(null); }}
-          onSave={(config) => { const currentIds = (data as any).globalToolIds || []; updateNodeData(activeNode.id, { globalToolIds: [...currentIds, { id: toolToConfigure.id, config }] }); }}
+          onSave={(config) => { const currentIds = (data as AgentNodeData | TaskNodeData).globalToolIds || []; updateNodeData(activeNode.id, { globalToolIds: [...currentIds, { id: toolToConfigure.id, config }] }); }}
         />
       )}
     </div>

@@ -1,7 +1,9 @@
 import { render, screen, fireEvent } from '@testing-library/react';
 import { WebhookForm } from '../WebhookForm';
 import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest';
+import type { WebhookNodeData } from '../../../types/nodes.types';
 import toast from 'react-hot-toast';
+import React from 'react';
 
 // Mock lucide-react
 vi.mock('lucide-react', () => ({
@@ -18,8 +20,15 @@ vi.mock('lucide-react', () => ({
 
 // Mock HighlightedTextField
 vi.mock('../../HighlightedTextField', () => ({
-  HighlightedTextField: ({ value, onChange, placeholder }: any) => (
+  default: ({ value, onChange, placeholder }: { value: string, onChange: (e: React.ChangeEvent<HTMLInputElement>) => void, placeholder?: string }) => (
     <input data-testid="highlighted-input" value={value} onChange={onChange} placeholder={placeholder} />
+  )
+}));
+
+// Mock WebhookMapperModal
+vi.mock('../WebhookMapperModal', () => ({
+  WebhookMapperModal: ({ isOpen, onClose }: { isOpen: boolean, onClose: () => void }) => (
+    isOpen ? <div data-testid="webhook-mapper-modal"><button onClick={onClose}>Done</button></div> : null
   )
 }));
 
@@ -33,24 +42,42 @@ vi.mock('react-hot-toast', () => ({
 
 // Mock clipboard
 if (!navigator.clipboard) {
-  (navigator as any).clipboard = {
-    writeText: vi.fn().mockImplementation(() => Promise.resolve()),
-  };
+  Object.defineProperty(navigator, 'clipboard', {
+    value: {
+      writeText: vi.fn().mockImplementation(() => Promise.resolve()),
+    },
+    configurable: true
+  });
 } else {
   vi.spyOn(navigator.clipboard, 'writeText').mockImplementation(() => Promise.resolve());
 }
 
 // Mock crypto.randomUUID
 if (typeof crypto === 'undefined') {
-  (globalThis as any).crypto = {
-    randomUUID: () => 'test-uuid'
-  };
+  Object.defineProperty(globalThis, 'crypto', {
+    value: {
+      randomUUID: () => 'test-uuid'
+    },
+    configurable: true
+  });
 } else if (!crypto.randomUUID) {
-  (crypto as any).randomUUID = () => 'test-uuid';
+  Object.defineProperty(crypto, 'randomUUID', {
+    value: () => 'test-uuid',
+    configurable: true
+  });
 }
 
 describe('WebhookForm', () => {
-  let mockProps: any;
+  interface WebhookFormTestProps {
+    data: WebhookNodeData;
+    nodeId: string;
+    updateNodeData: (id: string, data: Partial<WebhookNodeData>) => void;
+    onFieldKeyDown: (e: React.KeyboardEvent<HTMLInputElement | HTMLTextAreaElement>) => void;
+    onFieldChange: (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement> | { target: { value: string } }, field: string, updateFn: (val: string) => void) => void;
+    allProjectVariables: string[];
+  }
+
+  let mockProps: WebhookFormTestProps;
 
   afterEach(() => {
     vi.unstubAllEnvs();
@@ -71,13 +98,17 @@ describe('WebhookForm', () => {
         headers: { 'X-Auth': 'secret' },
         fieldMappings: { 'input1': 'data.field' },
         token: undefined
-      },
+      } as unknown as WebhookNodeData,
       nodeId: 'node-webhook-1',
       updateNodeData: vi.fn(),
       onFieldKeyDown: vi.fn(),
-      onFieldChange: vi.fn((e, _field, updateFn) => updateFn(e.target.value)),
+      onFieldChange: vi.fn((e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement> | { target: { value: string } }, _field: string, updateFn: (val: string) => void) => {
+        if ('target' in e && 'value' in e.target) {
+          updateFn(e.target.value);
+        }
+      }),
       allProjectVariables: ['topic', 'language']
-    };
+    } as unknown as WebhookFormTestProps;
   });
 
   it('renders initial values correctly', () => {
@@ -219,5 +250,56 @@ describe('WebhookForm', () => {
     const removeBtn = screen.getByTestId('icon-x');
     fireEvent.click(removeBtn);
     expect(mockProps.updateNodeData).toHaveBeenCalledWith('node-webhook-1', { fieldMappings: {} });
+  });
+
+  it('updates header and mapping values via second input', () => {
+    render(<WebhookForm {...mockProps} />);
+    
+    // Headers
+    const expectedValueInputs = screen.getAllByPlaceholderText('Expected Value');
+    fireEvent.change(expectedValueInputs[0], { target: { value: 'new-secret' } });
+    expect(mockProps.updateNodeData).toHaveBeenCalledWith('node-webhook-1', {
+      headers: { 'X-Auth': 'new-secret' }
+    });
+
+    // Mappings
+    fireEvent.click(screen.getByText('Input Mappings'));
+    const mappingValueInputs = screen.getAllByPlaceholderText('JSON Path (e.g. data.geo.city)');
+    fireEvent.change(mappingValueInputs[0], { target: { value: 'new.json.path' } });
+    expect(mockProps.updateNodeData).toHaveBeenCalledWith('node-webhook-1', {
+      fieldMappings: { 'input1': 'new.json.path' }
+    });
+  });
+
+  it('copies token to clipboard in Security tab', async () => {
+    const propsWithToken = { ...mockProps, data: { ...mockProps.data, token: 'secret-token' } };
+    render(<WebhookForm {...propsWithToken} />);
+    fireEvent.click(await screen.findByText('Security'));
+    
+    const copyBtn = screen.getByTitle('Copy token');
+    fireEvent.click(copyBtn);
+    
+    expect(navigator.clipboard.writeText).toHaveBeenCalledWith('secret-token');
+    expect(toast.success).toHaveBeenCalledWith('URL copied to clipboard!'); 
+  });
+
+  it('uses fallback URL when import.meta.env is missing', () => {
+    vi.unstubAllEnvs();
+    render(<WebhookForm {...mockProps} />);
+    expect(screen.getByDisplayValue('http://localhost:3001/webhook/test-path')).toBeInTheDocument();
+  });
+
+  it('opens and closes WebhookMapperModal', () => {
+    render(<WebhookForm {...mockProps} />);
+    fireEvent.click(screen.getByText('Input Mappings'));
+    const visualMapperBtn = screen.getByText('Visual Mapper');
+    fireEvent.click(visualMapperBtn);
+    
+    expect(screen.getByTestId('webhook-mapper-modal')).toBeInTheDocument();
+    
+    const doneBtn = screen.getByText('Done');
+    fireEvent.click(doneBtn);
+    
+    expect(screen.queryByTestId('webhook-mapper-modal')).not.toBeInTheDocument();
   });
 });

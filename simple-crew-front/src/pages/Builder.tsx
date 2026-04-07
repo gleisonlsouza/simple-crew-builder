@@ -6,6 +6,7 @@ import '@xyflow/react/dist/style.css';
 import { useShallow } from 'zustand/shallow';
 import { Play, Sparkles, Save, Loader2, ArrowLeft } from 'lucide-react';
 import { useParams, useNavigate } from 'react-router-dom';
+import type { AppNode } from '../types/nodes.types';
 
 import { useStore } from '../store/index';
 import logo from '../assets/logo.PNG';
@@ -16,6 +17,7 @@ import { CrewNode } from '../nodes/CrewNode';
 import { ChatNode } from '../nodes/ChatNode';
 import { WebhookNode } from '../nodes/WebhookNode';
 import { Sidebar } from '../components/Sidebar';
+
 
 import { NodeConfigDrawer } from '../components/NodeConfigDrawer';
 import { DeletableEdge } from '../nodes/DeletableEdge';
@@ -81,26 +83,31 @@ const FlowCanvas = () => {
       if (!type) return;
 
       const position = screenToFlowPosition({ x: event.clientX, y: event.clientY });
-      let data = {};
+      let data: AppNode['data'];
       const timestamp = Date.now().toString().slice(-4);
       if (type === 'agent') data = { name: `New Agent ${timestamp}`, role: '', goal: '', backstory: '', isCollapsed: false };
       else if (type === 'task') data = { name: `New Task ${timestamp}`, description: '', expected_output: '' };
-      else if (type === 'crew') data = { process: 'sequential', memory: false, cache: false, isCollapsed: false };
+      else if (type === 'crew') data = { name: 'New Crew', process: 'sequential', memory: false, cache: false, isCollapsed: false } as AppNode['data'];
+
       else if (type === 'chat') {
         data = { name: 'Chat Trigger', description: 'Start the Crew from a user\'s text message.', isCollapsed: false, inputMapping: 'chat_input' };
       } else if (type === 'webhook') {
         data = { 
           name: `Webhook ${timestamp}`, 
           method: 'POST', 
+          path: `webhook_${timestamp}`, 
+          url: '', 
           isActive: true, 
           waitForResult: false, 
           headers: {}, 
-          fieldMappings: {}, 
           isCollapsed: false 
-        };
+        } as unknown as AppNode['data'];
+      } else {
+        return;
       }
 
-      addNode({ id: getId(), type, position, data } as any);
+      const typeAsAppNode = type as AppNode['type'];
+      addNode({ id: getId(), type: typeAsAppNode, position, data } as AppNode);
       validateGraph();
       useStore.getState().setIsUsabilityDrawerOpen(false);
   }, [screenToFlowPosition, addNode, validateGraph]);
@@ -196,12 +203,16 @@ function FlowBuilder() {
   const [activeView, setActiveView] = React.useState<'editor' | 'animation' | 'executions'>('editor');
   const [isEditingTitle, setIsEditingTitle] = React.useState(false);
   const [editedTitle, setEditedTitle] = React.useState('');
-  
+
+  // Sincroniza o título local com o global sempre que um novo projeto é carregado
   useEffect(() => {
-    if (currentProjectName) {
+    if (currentProjectName && !isEditingTitle) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setEditedTitle(currentProjectName);
     }
-  }, [currentProjectName]);
+  }, [currentProjectName, isEditingTitle]);
+
+  
 
   const handleTitleSave = async () => {
     if (id && id !== 'new' && editedTitle !== currentProjectName) {
@@ -246,7 +257,12 @@ function FlowBuilder() {
                   />
                 ) : (
                   <h1
-                    onClick={() => id !== 'new' && setIsEditingTitle(true)}
+                    onClick={() => {
+                      if (id !== 'new') {
+                        setEditedTitle(currentProjectName || '');
+                        setIsEditingTitle(true);
+                      }
+                    }}
                     className={`text-xl font-bold text-brand-text tracking-tight ${id !== 'new' ? 'cursor-pointer hover:text-indigo-500 border-b border-transparent hover:border-indigo-500/30' : ''}`}
                   >
                     {currentProjectName || 'SimpleCrew'}
@@ -325,7 +341,9 @@ function FlowBuilder() {
 
           <button
             onClick={() => {
-              saveProject(editedTitle, currentProjectDescription || '');
+              // Garante que enviamos o nome da UI ou o da Store, nunca uma string vazia acidentalmente
+              const finalName = editedTitle.trim() || currentProjectName || 'Untitled Project';
+              saveProject(finalName, currentProjectDescription || '');
             }}
             disabled={isSaving}
             className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all shadow-sm ${isSaving
@@ -342,6 +360,7 @@ function FlowBuilder() {
       </header>
 
       <div className="flex-1 w-full h-full flex flex-row relative overflow-hidden">
+
         <Sidebar />
         
         {/* Editor View - Preserved in DOM via 'hidden' */}
@@ -350,13 +369,13 @@ function FlowBuilder() {
         </div>
 
         {/* Animation View - Live Simulation */}
-        {activeView === 'animation' && (
+        <div className={`flex-1 h-full ${activeView === 'animation' ? 'flex' : 'hidden'}`}>
           <AnimationView />
-        )}
+        </div>
         
-        {activeView === 'executions' && (
+        <div className={`flex-1 h-full ${activeView === 'executions' ? 'flex' : 'hidden'}`}>
           <ExecutionsTab onReRunSuccess={() => setActiveView('editor')} />
-        )}
+        </div>
 
         <UsabilityCardsDrawer />
         <NodeConfigDrawer />

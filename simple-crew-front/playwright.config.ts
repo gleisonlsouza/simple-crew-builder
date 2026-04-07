@@ -9,8 +9,9 @@ export default defineConfig({
   workers: process.env.CI ? 1 : undefined,
   reporter: 'html',
   use: {
-    baseURL: 'http://localhost:5173',
-    trace: 'on-first-retry',
+    baseURL: process.env.VITE_COVERAGE === 'true' ? 'http://localhost:5174' : 'http://localhost:5173',
+    trace: 'retain-on-failure',
+    screenshot: 'only-on-failure',
   },
   projects: [
     {
@@ -19,8 +20,8 @@ export default defineConfig({
     },
   ],
   webServer: {
-    command: 'npm run dev',
-    url: 'http://localhost:5173',
-    reuseExistingServer: !process.env.CI,
+    command: process.env.VITE_COVERAGE === 'true' ? 'cross-env VITE_COVERAGE=true vite --port 5174' : 'npm run dev',
+    url: process.env.VITE_COVERAGE === 'true' ? 'http://localhost:5174' : 'http://localhost:5173',
+    reuseExistingServer: process.env.VITE_COVERAGE === 'true' ? false : !process.env.CI,
   },
 });

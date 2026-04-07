@@ -30,12 +30,13 @@ import {
   Type
 } from 'lucide-react';
 import { useStore } from '../store/index';
-import { HighlightedTextField } from '../components/HighlightedTextField';
+import HighlightedTextField from '../components/HighlightedTextField';
 import { CustomSelect } from '../components/CustomSelect';
-import { type ModelConfig, type MCPServer, type CustomTool } from '../types/config.types';
+import { type ModelConfig, type MCPServer, type CustomTool, type Credential } from '../types/config.types';
 import { ConfirmationModal } from '../components/ConfirmationModal';
 import { KnowledgeBaseSettings } from '../components/KnowledgeBaseSettings';
 import { Database } from 'lucide-react';
+import { type Workspace } from '../types/store.types';
 
 
 const INITIAL_CREDENTIAL = { name: '', description: '', key: '', provider: '' };
@@ -50,6 +51,47 @@ const INITIAL_MODEL = {
   maxCompletionTokens: undefined, 
   isDefault: false,
   model_type: 'GENERATIVE' as const
+};
+
+const SensitiveListItem = ({ 
+  label, 
+  value, 
+  onDelete, 
+  variant = 'indigo' 
+}: { 
+  label: string; 
+  value?: string; 
+  onDelete: () => void; 
+  variant?: 'indigo' | 'emerald' | 'blue' 
+}) => {
+  const [isVisible, setIsVisible] = useState(false);
+  const colorClass = variant === 'emerald' ? 'text-emerald-500' : variant === 'blue' ? 'text-blue-500' : 'text-indigo-500';
+
+  return (
+    <div className="flex items-center gap-2 bg-brand-card border border-brand-border rounded-lg px-2 py-1.5 animate-in zoom-in-95 duration-200">
+      <span className={`text-[10px] font-bold ${colorClass}`}>{label}</span>
+      <span className="text-brand-muted opacity-30">|</span>
+      <span className="text-[10px] text-brand-muted font-mono">
+        {isVisible && value ? value : (value ? '••••••••' : '••••••••')}
+      </span>
+      <div className="flex items-center gap-1">
+        <button 
+          onClick={() => setIsVisible(!isVisible)}
+          className="p-1 text-brand-muted hover:text-brand-text transition-colors"
+          title={isVisible ? "Hide value" : "Show value"}
+        >
+          {isVisible ? <EyeOff className="w-3 h-3" /> : <Eye className="w-3 h-3" />}
+        </button>
+        <button 
+          onClick={onDelete}
+          className="p-1 text-brand-muted hover:text-red-500 transition-colors"
+          title="Remove"
+        >
+          <X className="w-3 h-3" />
+        </button>
+      </div>
+    </div>
+  );
 };
 
 const SettingsPage = () => {
@@ -99,6 +141,7 @@ const SettingsPage = () => {
   });
   const [mcpArgsString, setMcpArgsString] = useState('');
   const [newEnvVar, setNewEnvVar] = useState({ key: '', value: '' });
+  const [showNewMcpValue, setShowNewMcpValue] = useState(false);
   const [editingModelId, setEditingModelId] = useState<string | null>(null);
   const [editingCredentialId, setEditingCredentialId] = useState<string | null>(null);
   const [editingMCPId, setEditingMCPId] = useState<string | null>(null);
@@ -137,7 +180,7 @@ const SettingsPage = () => {
     if (newCred.name && (newCred.key || editingCredentialId)) {
       if (editingCredentialId) {
         // If key is empty, it won't be updated on the backend if we use PATCH correctly
-        const updateData: any = { ...newCred };
+        const updateData: Partial<Omit<Credential, 'id' | 'created_at'>> = { ...newCred };
         if (!newCred.key) delete updateData.key;
         updateCredential(editingCredentialId, updateData);
       } else {
@@ -149,7 +192,7 @@ const SettingsPage = () => {
     }
   };
 
-  const handleEditCredential = (cred: any) => {
+  const handleEditCredential = (cred: Credential) => {
     setNewCred({
       name: cred.name,
       description: cred.description || '',
@@ -281,7 +324,7 @@ const SettingsPage = () => {
     }
   };
 
-  const handleEditWorkspace = (ws: any) => {
+  const handleEditWorkspace = (ws: Workspace) => {
     setNewWorkspace({
       name: ws.name,
       path: ws.path
@@ -1365,12 +1408,23 @@ const SettingsPage = () => {
                           onChange={(e) => setNewEnvVar({ ...newEnvVar, key: e.target.value.toUpperCase() })}
                         />
                         <div className="flex gap-2">
-                          <input 
-                            placeholder={editingMCPId ? 'Leave empty to keep existing value' : 'Value'}
-                            className={`flex-1 bg-brand-bg border border-brand-border rounded-lg px-3 py-2 text-xs text-brand-text outline-none focus:ring-1 ${newMCP.transportType === 'sse' ? 'focus:ring-emerald-600' : 'focus:ring-blue-600'}`}
-                            value={newEnvVar.value}
-                            onChange={(e) => setNewEnvVar({ ...newEnvVar, value: e.target.value })}
-                          />
+                          <div className="relative flex-1">
+                            <input 
+                              type={showNewMcpValue ? 'text' : 'password'}
+                              placeholder={editingMCPId ? 'Leave empty to keep existing value' : 'Value'}
+                              className={`w-full bg-brand-bg border border-brand-border rounded-lg pl-3 pr-10 py-2 text-xs text-brand-text outline-none focus:ring-1 ${newMCP.transportType === 'sse' ? 'focus:ring-emerald-600' : 'focus:ring-blue-600'}`}
+                              value={newEnvVar.value}
+                              onChange={(e) => setNewEnvVar({ ...newEnvVar, value: e.target.value })}
+                            />
+                            <button 
+                              type="button"
+                              onClick={() => setShowNewMcpValue(!showNewMcpValue)}
+                              className="absolute right-3 top-1/2 -translate-y-1/2 text-brand-muted hover:text-brand-text transition-colors"
+                              aria-label={showNewMcpValue ? "Hide token" : "Show token"}
+                            >
+                              {showNewMcpValue ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                            </button>
+                          </div>
                           <button 
                             onClick={() => {
                               // Allow empty value in edit mode (signals "keep existing secret")
@@ -1380,6 +1434,7 @@ const SettingsPage = () => {
                                   headers: { ...(newMCP.headers || {}), [newEnvVar.key]: newEnvVar.value }
                                 });
                                 setNewEnvVar({ key: '', value: '' });
+                                setShowNewMcpValue(false);
                               }
                             }}
                             className={`p-2 rounded-lg text-white transition-colors ${newMCP.transportType === 'sse' ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-blue-600 hover:bg-blue-700'}`}
@@ -1391,22 +1446,17 @@ const SettingsPage = () => {
 
                       <div className="flex flex-wrap gap-2 mt-4">
                         {Object.entries(newMCP.headers || {}).map(([key, value]) => (
-                          <div key={key} className="flex items-center gap-2 bg-brand-card border border-brand-border rounded-lg px-2 py-1.5 animate-in zoom-in-95 duration-200">
-                            <span className={`text-[10px] font-bold ${newMCP.transportType === 'sse' ? 'text-emerald-500' : 'text-blue-500'}`}>{key}</span>
-                            <span className="text-brand-muted opacity-30">|</span>
-                            {/* Always show masked value — real value stays in DB */}
-                            <span className="text-[10px] text-brand-muted font-mono">{value ? value : '••••••••'}</span>
-                            <button 
-                              onClick={() => {
-                                const newHeaders = { ...(newMCP.headers || {}) };
-                                delete newHeaders[key];
-                                setNewMCP({ ...newMCP, headers: newHeaders });
-                              }}
-                              className="text-brand-muted hover:text-red-500"
-                            >
-                              <X className="w-3 h-3" />
-                            </button>
-                          </div>
+                          <SensitiveListItem
+                            key={key}
+                            label={key}
+                            value={value}
+                            variant={newMCP.transportType === 'sse' ? 'emerald' : 'blue'}
+                            onDelete={() => {
+                              const newHeaders = { ...(newMCP.headers || {}) };
+                              delete newHeaders[key];
+                              setNewMCP({ ...newMCP, headers: newHeaders });
+                            }}
+                          />
                         ))}
                         {Object.keys(newMCP.headers || {}).length === 0 && (
                           <p className="text-[10px] text-brand-muted italic w-full text-center">No headers added.</p>
@@ -1452,20 +1502,32 @@ const SettingsPage = () => {
                           onChange={(e) => setNewEnvVar({ ...newEnvVar, key: e.target.value.toUpperCase() })}
                         />
                         <div className="flex gap-2">
-                          <input 
-                            placeholder={editingMCPId ? 'Leave empty to keep existing value' : 'VALUE'}
-                            className="flex-1 bg-brand-bg border border-brand-border rounded-lg px-3 py-2 text-xs text-brand-text outline-none focus:ring-1 focus:ring-indigo-600"
-                            value={newEnvVar.value}
-                            onChange={(e) => setNewEnvVar({ ...newEnvVar, value: e.target.value })}
-                          />
+                          <div className="relative flex-1">
+                            <input 
+                              type={showNewMcpValue ? 'text' : 'password'}
+                              placeholder={editingMCPId ? 'Leave empty to keep existing value' : 'VALUE'}
+                              className="w-full bg-brand-bg border border-brand-border rounded-lg pl-3 pr-10 py-2 text-xs text-brand-text outline-none focus:ring-1 focus:ring-indigo-600"
+                              value={newEnvVar.value}
+                              onChange={(e) => setNewEnvVar({ ...newEnvVar, value: e.target.value })}
+                            />
+                            <button 
+                              type="button"
+                              onClick={() => setShowNewMcpValue(!showNewMcpValue)}
+                              className="absolute right-3 top-1/2 -translate-y-1/2 text-brand-muted hover:text-brand-text transition-colors"
+                              aria-label={showNewMcpValue ? "Hide token" : "Show token"}
+                            >
+                              {showNewMcpValue ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                            </button>
+                          </div>
                           <button 
                             onClick={() => {
-                              if (newEnvVar.key && newEnvVar.value) {
+                              if (newEnvVar.key && (newEnvVar.value || editingMCPId)) {
                                 setNewMCP({
                                   ...newMCP,
                                   envVars: { ...(newMCP.envVars || {}), [newEnvVar.key]: newEnvVar.value }
                                 });
                                 setNewEnvVar({ key: '', value: '' });
+                                setShowNewMcpValue(false);
                               }
                             }}
                             className="bg-indigo-600 p-2 rounded-lg text-white hover:bg-indigo-700 transition-colors"
@@ -1477,22 +1539,17 @@ const SettingsPage = () => {
 
                       <div className="flex flex-wrap gap-2 mt-4">
                         {Object.entries(newMCP.envVars || {}).map(([key, value]) => (
-                          <div key={key} className="flex items-center gap-2 bg-brand-card border border-brand-border rounded-lg px-2 py-1.5 animate-in zoom-in-95 duration-200">
-                            <span className="text-[10px] font-bold text-indigo-500">{key}</span>
-                            <span className="text-brand-muted opacity-30">|</span>
-                            {/* Always show masked value — real value stays in DB */}
-                            <span className="text-[10px] text-brand-muted font-mono">{value ? value : '••••••••'}</span>
-                            <button 
-                              onClick={() => {
-                                const newEnv = { ...(newMCP.envVars || {}) };
-                                delete newEnv[key];
-                                setNewMCP({ ...newMCP, envVars: newEnv });
-                              }}
-                              className="text-brand-muted hover:text-red-500"
-                            >
-                              <X className="w-3 h-3" />
-                            </button>
-                          </div>
+                          <SensitiveListItem
+                            key={key}
+                            label={key}
+                            value={value}
+                            variant="indigo"
+                            onDelete={() => {
+                              const newEnv = { ...(newMCP.envVars || {}) };
+                              delete newEnv[key];
+                              setNewMCP({ ...newMCP, envVars: newEnv });
+                            }}
+                          />
                         ))}
                         {Object.keys(newMCP.envVars || {}).length === 0 && (
                           <p className="text-[10px] text-brand-muted italic w-full text-center">No environment variables added.</p>

@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime
 from typing import Optional, Dict, Any
-from sqlalchemy import Column, DateTime, func, JSON
+from sqlalchemy import Column, DateTime, func, JSON, ForeignKey
 from enum import Enum
 from sqlmodel import SQLModel, Field, Relationship
 
@@ -69,7 +69,10 @@ class CrewProject(SQLModel, table=True):
     user_id: uuid.UUID = Field(foreign_key="user.id")
     user: User = Relationship(back_populates="crews")
 
-    workspace_id: Optional[uuid.UUID] = Field(default=None, foreign_key="workspace.id", sa_column_kwargs={"nullable": True})
+    workspace_id: Optional[uuid.UUID] = Field(
+        default=None, 
+        sa_column=Column(ForeignKey("workspace.id", ondelete="SET NULL"), nullable=True)
+    )
 
     executions: list["Execution"] = Relationship(back_populates="project", sa_relationship_kwargs={"cascade": "all, delete-orphan"})
 
@@ -174,6 +177,10 @@ class Workspace(SQLModel, table=True):
     # Relationship
     user_id: uuid.UUID = Field(foreign_key="user.id")
     user: User = Relationship(back_populates="workspaces")
+    
+    projects: list["CrewProject"] = Relationship(
+        sa_relationship_kwargs={"cascade": "save-update, merge"}
+    )
     
     created_at: datetime = Field(
         sa_column=Column(DateTime(timezone=True), server_default=func.now())

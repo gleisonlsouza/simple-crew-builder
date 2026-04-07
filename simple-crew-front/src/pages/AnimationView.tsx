@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { useShallow } from 'zustand/react/shallow';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
   Coffee, 
@@ -25,12 +26,13 @@ import {
   Activity,
   Monitor
 } from 'lucide-react';
-import type { Robot, Station as StationType, LogEntry } from '../components/Animation/types';
+import type { Robot, RobotState, Station as StationType, LogEntry } from '../components/Animation/types';
 import { RobotIcon } from '../components/Animation/RobotIcon';
 import { Station } from '../components/Animation/Station';
 import { SimulationLog } from '../components/Animation/SimulationLog';
 import { ResultComputerScreen } from '../components/Animation/ResultComputerScreen';
 import { useStore } from '../store/index';
+import type { AgentNodeData, TaskNodeData } from '../types/nodes.types';
 
 // --- Helpers ---
 
@@ -60,20 +62,43 @@ const RESTING_THOUGHTS = ["Task done!", "GG WP", "Recharging...", "Livin' the li
 const WORKING_THOUGHTS = ["Full focus!", "Processing...", "AI > Human", "Almost there...", "Debugging...", "Compiling..."];
 const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#f43f5e', '#06b6d4'];
 
+
 const CONFETTI_PARTICLES = [...Array(15)].map((_, i) => ({
   id: i,
-  x: Math.random() * 100,
-  delay: Math.random() * 2
+  x: (i * 7) % 100, // Deterministic spread
+  delay: (i * 0.13) % 2 // Deterministic delay
+}));
+
+const generateRainConfig = () => [...Array(15)].map((_, i) => ({
+  id: i,
+  duration: 5 + Math.random() * 10,
+  delay: Math.random() * 5,
+  content: Math.random().toString(2).substring(2, 15)
+}));
+
+const generateConfettiConfig = () => CONFETTI_PARTICLES.map((p, i) => ({
+  ...p,
+  duration: 2 + Math.random() * 2,
+  content: i % 2 === 0 ? '1' : '0'
 }));
 
 export default function AnimationView() {
   const { 
     nodes, edges, currentProjectName, isExecuting, 
     startRealExecution, validateGraph, showNotification,
-    executionResult
-  } = useStore();
-  const [robots, setRobots] = useState<Robot[]>([]);
-  const [stations, setStations] = useState<StationType[]>([]);
+    executionResult, nodeStatuses
+  } = useStore(useShallow(state => ({
+    nodes: state.nodes,
+    edges: state.edges,
+    currentProjectName: state.currentProjectName,
+    isExecuting: state.isExecuting,
+    startRealExecution: state.startRealExecution,
+    validateGraph: state.validateGraph,
+    showNotification: state.showNotification,
+    executionResult: state.executionResult,
+    nodeStatuses: state.nodeStatuses
+  })));
+  
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [isRunning, setIsRunning] = useState<boolean>(false);
   const [selectedRobotId, setSelectedRobotId] = useState<string | null>(null);
@@ -84,12 +109,19 @@ export default function AnimationView() {
   
   // Refs for tracking sync
   const lastLogLength = useRef<number>(0);
+  const wasExecuting = useRef<boolean>(false);
   
   // Zoom and Pan State
   const [viewState, setViewState] = useState({ x: 0, y: 0, scale: 1 });
   const [isDragging, setIsDragging] = useState(false);
   const dragStart = useRef({ x: 0, y: 0 });
   const containerRef = useRef<HTMLDivElement>(null);
+  // Initialize Random Configs
+  const [restStations] = useState<StationType[]>(REST_STATIONS);
+
+  // 1. STABLE CONFIGS: Initialize rain/confetti once using state initializers (Purity)
+  const [rainConfig] = useState(generateRainConfig);
+  const [confettiConfig] = useState(generateConfettiConfig);
 
   // Derive Simulation Graph from Store
   const crewGraph = useMemo(() => {
@@ -105,14 +137,11 @@ export default function AnimationView() {
   }, [nodes]);
 
   const totalTasks = crewGraph.tasks.length;
-  const completedTasks = useMemo(() => stations.filter((s: StationType) => s.status === 'done').length, [stations]);
-  const progressPercent = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
 
-  // Initialize from Actual Workspace
-  useEffect(() => {
+  const initialStations = useMemo(() => {
     const taskStations: StationType[] = crewGraph.tasks.map((t, i) => {
       const angle = (i / Math.max(1, crewGraph.tasks.length)) * Math.PI * 2;
-      const data = t.data as any;
+      const data = t.data as TaskNodeData;
       return {
         id: t.id,
         name: data.name || 'Untitled Task',
@@ -122,10 +151,12 @@ export default function AnimationView() {
         status: 'pending'
       };
     });
-    setStations([...taskStations, ...REST_STATIONS]);
+    return [...taskStations, ...restStations];
+  }, [crewGraph.tasks, restStations]);
 
-    const initialRobots: Robot[] = crewGraph.agents.map((node, i) => {
-      const data = node.data as any;
+  const initialRobots = useMemo(() => {
+    return crewGraph.agents.map((node, i) => {
+      const data = node.data as AgentNodeData;
       
       const assignedTaskIds = edges
         .filter(e => e.source === node.id)
@@ -144,24 +175,133 @@ export default function AnimationView() {
         y: 105,
         targetX: startX,
         targetY: 105,
-        state: 'idle',
+        state: 'idle' as RobotState,
         currentTask: null,
+        progress: 0,
         color: COLORS[i % COLORS.length],
         assignedTasks: assignedTaskIds.length > 0 ? assignedTaskIds : (data.taskOrder || []),
         thought: null,
         energy: 100,
-        efficiency: 85 + Math.random() * 15,
+        efficiency: 90,
         mood: 'Ready',
         tasksCompleted: 0,
         trail: []
       };
     });
-    setRobots(initialRobots);
-  }, [crewGraph, edges]);
+  }, [crewGraph.agents, crewGraph.tasks, edges]);
+
+  const [stations, setStations] = useState<StationType[]>(initialStations);
+  const [robots, setRobots] = useState<Robot[]>(initialRobots);
+  
+  const robotsRef = useRef<Robot[]>(robots);
+  useEffect(() => {
+    robotsRef.current = robots;
+  }, [robots]);
+
+  const completedTasks = useMemo(() => stations.filter((s: StationType) => s.status === 'done').length, [stations]);
+  const progressPercent = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
+
+  // Sync with Store Node Statuses & Robot Movement
+  useEffect(() => {
+    // 1. Update Stations (tasks) UI mapping status
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setStations(prev => {
+      let hasChanged = false;
+      const next = prev.map(s => {
+        const status = nodeStatuses[s.id];
+        let nextStatus: StationType['status'] = s.status;
+        if (status === 'running') nextStatus = 'active';
+        else if (status === 'success') nextStatus = 'done';
+        
+        if (nextStatus !== s.status) {
+          hasChanged = true;
+          return { ...s, status: nextStatus };
+        }
+        return s;
+      });
+      return hasChanged ? next : prev;
+    });
+
+    // 2. Update Robots assignments and movement with offsets
+    setRobots(prevRobots => {
+      let hasChanged = false;
+      const next = prevRobots.map((robot, i) => {
+        const nodeStatus = nodeStatuses[robot.id];
+        
+        // Target calculation logic
+        let targetX = robot.targetX;
+        let targetY = robot.targetY;
+        let nextState = robot.state;
+        let nextMood = robot.mood;
+        let nextCurrentTask = robot.currentTask;
+
+        // If agent is running, find which task it's working on
+        if (nodeStatus === 'running') {
+          const activeTaskId = robot.assignedTasks.find(tid => 
+            nodeStatuses[tid] === 'running' || nodeStatuses[tid] === 'waiting'
+          );
+
+          if (activeTaskId) {
+            const station = initialStations.find(s => s.id === activeTaskId);
+            if (station) {
+              const angle = (i / prevRobots.length) * Math.PI * 2;
+              const radius = 4;
+              const offsetX = Math.cos(angle) * radius;
+              const offsetY = Math.sin(angle) * radius;
+              
+              targetX = station.x + offsetX;
+              targetY = station.y + offsetY;
+              nextState = nodeStatuses[activeTaskId] === 'running' ? 'working' : 'moving';
+              nextCurrentTask = station.name;
+              nextMood = nextState === 'working' ? 'Full Focus!' : 'On my way...';
+            }
+          }
+        }
+
+        // Case B: Task was completed or robot is idle
+        const isFinishing = robot.state === 'working' && nodeStatus !== 'running';
+        if (isFinishing || nodeStatus === 'success' || robot.state === 'completed') {
+          const initialPos = initialRobots.find(ir => ir.id === robot.id);
+          const restIndex = (robot.id.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0)) % restStations.length;
+          const restStation = restStations[restIndex];
+          
+          const baseTarget = restStation || initialPos || { x: robot.x, y: robot.y };
+          const angle = (i / prevRobots.length) * Math.PI * 2;
+          const radius = 3;
+          const offsetX = Math.cos(angle) * radius;
+          const offsetY = Math.sin(angle) * radius;
+          
+          targetX = baseTarget.x + offsetX;
+          targetY = baseTarget.y + offsetY;
+          nextState = nodeStatus === 'success' ? 'completed' : 'idle';
+          nextCurrentTask = null;
+          nextMood = nodeStatus === 'success' ? 'Mission Accomplished!' : 'Standing By';
+        }
+
+        // Deep equality check for robot update
+        if (targetX !== robot.targetX || targetY !== robot.targetY || nextState !== robot.state || nextMood !== robot.mood) {
+          hasChanged = true;
+          return {
+            ...robot,
+            x: targetX,
+            y: targetY,
+            targetX,
+            targetY,
+            state: nextState,
+            currentTask: nextCurrentTask,
+            mood: nextMood,
+            tasksCompleted: isFinishing ? robot.tasksCompleted + 1 : robot.tasksCompleted
+          };
+        }
+        return robot;
+      });
+      return hasChanged ? next : prevRobots;
+    });
+  }, [nodeStatuses, initialStations, initialRobots, restStations]);
 
   const addLog = useCallback((message: string, type: LogEntry['type'] = 'info', agentName?: string) => {
     const newLog: LogEntry = {
-      id: Math.random().toString(36).substr(2, 9),
+      id: `log-${Date.now()}-${(Math.floor(Math.random() * 1000000)).toString(36)}`,
       timestamp: new Date().toLocaleTimeString(),
       message,
       type,
@@ -174,7 +314,7 @@ export default function AnimationView() {
   useEffect(() => {
     if (!executionResult) {
       if (lastLogLength.current > 0) {
-        setLogs([]);
+        Promise.resolve().then(() => setLogs([]));
         lastLogLength.current = 0;
       }
       return;
@@ -185,114 +325,21 @@ export default function AnimationView() {
       const newLines = newContent.split('\n').filter(line => line.trim().length > 0);
       
       newLines.forEach(line => {
-        // Strip box-drawing characters and clean up
-        const cleanLine = line.replace(/[─╰╯│╭╮┬┴┤├┼═║╔╗╚╝]/g, '').trim();
+        // eslint-disable-next-line no-control-regex
+        const cleanLine = line.replace(/[\u001b\u009b][[()#;?]*(?:[0-9]{1,4}(?:;[0-9]{0,4})*)?[0-9A-ORZcf-nqry=><]/g, '').trim();
         if (cleanLine.length === 0) return;
 
-        // Simple heuristic to detect agent name or type
         let type: LogEntry['type'] = 'info';
-        let agentName: string | undefined = undefined;
-
         if (cleanLine.includes('Success') || cleanLine.includes('Finished')) type = 'success';
         if (cleanLine.includes('Warning') || cleanLine.includes('Error')) type = 'warning';
         if (cleanLine.includes('working on')) type = 'ai';
 
-        addLog(cleanLine, type, agentName);
+        Promise.resolve().then(() => addLog(cleanLine, type));
       });
 
       lastLogLength.current = executionResult.length;
     }
   }, [executionResult, addLog]);
-
-  // 2. SYNC ROBOT STATES: Monitor nodeStatuses from store
-  useEffect(() => {
-    if (!isExecuting) return;
-
-    setRobots((prevRobots: Robot[]) => {
-      return prevRobots.map((robot, i) => {
-        const status = useStore.getState().nodeStatuses[robot.id];
-        
-        // If agent is running, find which task it's working on
-        if (status === 'running') {
-          // Find connected tasks that are currently running
-          const activeTaskId = robot.assignedTasks.find(tid => 
-            useStore.getState().nodeStatuses[tid] === 'running'
-          );
-
-          if (activeTaskId) {
-            const station = stations.find(s => s.id === activeTaskId);
-              const angle = (i / prevRobots.length) * Math.PI * 2;
-              const radius = 4;
-              const offsetX = Math.cos(angle) * radius;
-              const offsetY = Math.sin(angle) * radius;
-
-              if (station) {
-                return {
-                  ...robot,
-                  state: 'working',
-                  x: station.x + offsetX,
-                  y: station.y + offsetY,
-                  currentTask: station.name
-                };
-              }
-          } else {
-            // If agent is running but no specific task is 'running' yet, maybe it's moving
-            const nextTaskId = robot.assignedTasks.find(tid => 
-                useStore.getState().nodeStatuses[tid] === 'waiting' || 
-                useStore.getState().nodeStatuses[tid] === 'running'
-            );
-            if (nextTaskId) {
-                const station = stations.find(s => s.id === nextTaskId);
-                if (station) {
-                    const angle = (i / prevRobots.length) * Math.PI * 2;
-                    const radius = 4;
-                    const offsetX = Math.cos(angle) * radius;
-                    const offsetY = Math.sin(angle) * radius;
-
-                    return {
-                        ...robot,
-                        state: 'moving',
-                        targetX: station.x + offsetX,
-                        targetY: station.y + offsetY,
-                        currentTask: station.name
-                    };
-                }
-            }
-          }
-        }
-
-        if (status === 'success' && robot.state !== 'completed') {
-            const restStation = REST_STATIONS[Math.floor(Math.random() * REST_STATIONS.length)];
-            const angle = (i / prevRobots.length) * Math.PI * 2;
-            const radius = 3; 
-            const offsetX = Math.cos(angle) * radius;
-            const offsetY = Math.sin(angle) * radius;
-
-            return { 
-                ...robot, 
-                state: 'completed', 
-                currentTask: `Resting in ${restStation.name}`,
-                tasksCompleted: robot.tasksCompleted + 1,
-                x: restStation.x + offsetX,
-                y: restStation.y + offsetY
-            };
-        }
-
-        return robot;
-      });
-    });
-
-    // Sync Stations
-    setStations((prevStations: StationType[]) => {
-        return prevStations.map(station => {
-            const status = useStore.getState().nodeStatuses[station.id];
-            if (status === 'success') return { ...station, status: 'done' };
-            if (status === 'running') return { ...station, status: 'active' };
-            return station;
-        });
-    });
-
-  }, [isExecuting, nodes, stations]); // Watch nodes/stations for change to re-map
 
   const startCrew = () => {
     if (isExecuting || crewGraph.agents.length === 0) return;
@@ -302,7 +349,6 @@ export default function AnimationView() {
       return;
     }
 
-    // Reset local log tracking
     lastLogLength.current = 0;
     setLogs([]);
     setIsRunning(true);
@@ -313,26 +359,41 @@ export default function AnimationView() {
     addLog(`🚀 Starting Real Crew Execution`, 'ai');
   };
 
-  // Sync animation with real execution status
   useEffect(() => {
-    if (!isExecuting && isRunning) {
-      setIsRunning(false);
-      addLog("✅ Crew execution finished.", "success");
-      
-      // Select winner for the modal
-      const winner = [...robots].sort((a, b) => (b.tasksCompleted * b.efficiency) - (a.tasksCompleted * a.efficiency))[0];
-      setEmployeeOfMonth(winner || null);
-      setShowSuccessModal(true);
+    // Only show modal if we transitioned from executing=true to executing=false
+    if (wasExecuting.current && !isExecuting && isRunning) {
+      Promise.resolve().then(() => {
+        setIsRunning(false);
+        addLog("✅ Crew execution finished.", "success");
+        
+        // Restore winner selection logic
+        const winner = [...robots].sort((a, b) => (b.tasksCompleted * b.efficiency) - (a.tasksCompleted * a.efficiency))[0];
+        setEmployeeOfMonth(winner || null);
+        setShowSuccessModal(true);
+      });
     }
+    wasExecuting.current = isExecuting;
   }, [isExecuting, isRunning, addLog, robots]);
 
-  // Zoom and Pan Handlers
-  const handleWheel = (e: React.WheelEvent) => {
+  const handleWheel = useCallback((e: WheelEvent) => {
     e.preventDefault();
     const zoomSpeed = 0.001;
-    const newScale = Math.min(Math.max(viewState.scale - e.deltaY * zoomSpeed, 0.4), 4);
-    setViewState((prev) => ({ ...prev, scale: newScale }));
-  };
+    setViewState((prev) => {
+      const newScale = Math.min(Math.max(prev.scale - e.deltaY * zoomSpeed, 0.4), 4);
+      return { ...prev, scale: newScale };
+    });
+  }, []);
+
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+
+    // Attach wheel event manually to allow e.preventDefault() (non-passive)
+    container.addEventListener('wheel', handleWheel, { passive: false });
+    return () => {
+      container.removeEventListener('wheel', handleWheel);
+    };
+  }, [handleWheel]);
 
   const handleMouseDown = (e: React.MouseEvent) => {
     if (e.button !== 0 && e.button !== 1) return;
@@ -368,9 +429,25 @@ export default function AnimationView() {
     };
   }, [isDragging, handleMouseMove, handleMouseUp]);
 
-  // Thought Generator Loop
+  // Thought Generator
   useEffect(() => {
-    const interval = setInterval(() => {
+    const logInterval = setInterval(() => {
+      const activeRobot = robotsRef.current.find((r: Robot) => r.state === 'working');
+      if (activeRobot) {
+        const agentName = activeRobot.name;
+        setLogs((prev: LogEntry[]) => {
+          const newLog: LogEntry = {
+            id: `log-${Date.now()}-${(Math.floor(Math.random() * 1000000)).toString(36)}`,
+            timestamp: new Date().toLocaleTimeString(),
+            message: `[${new Date().toLocaleTimeString()}] ${agentName} processing task...`,
+            type: 'info'
+          };
+          return [newLog, ...prev].slice(0, 50);
+        });
+      }
+    }, 3000);
+    
+    const thoughtInterval = setInterval(() => {
       setRobots((prev: Robot[]) => prev.map((robot: Robot) => {
         if (robot.thought) {
           return Math.random() > 0.7 ? { ...robot, thought: null } : robot;
@@ -383,10 +460,11 @@ export default function AnimationView() {
         return robot;
       }));
     }, 1000);
-    return () => clearInterval(interval);
-  }, []);
-
-  // Legacy simulation logic removed in favor of real-time sync with nodeStatuses
+    return () => {
+      clearInterval(logInterval);
+      clearInterval(thoughtInterval);
+    };
+  }, []); // Empty dependency array - intervals are stable
 
   return (
     <div className="flex-1 relative bg-[#0a0a0f] text-white font-sans overflow-hidden flex flex-col animate-in fade-in duration-500">
@@ -397,7 +475,6 @@ export default function AnimationView() {
         {/* Simulation Area (Canvas) - Flexible */}
         <div 
           ref={containerRef}
-          onWheel={handleWheel}
           onMouseDown={handleMouseDown}
           className="flex-grow h-full relative overflow-hidden bg-black/20 transition-all duration-300 ease-in-out cursor-grab active:cursor-grabbing"
           style={{
@@ -415,21 +492,21 @@ export default function AnimationView() {
                {/* Digital Rain Background */}
                <div className="absolute inset-0 opacity-10 pointer-events-none">
                 <div className="flex justify-around h-full w-full">
-                  {[...Array(15)].map((_, i) => ( // Reduced to 15 for better perf
+                  {rainConfig.map((config: { id: number; duration: number; delay: number; content: string }) => (
                     <motion.div
-                      key={i}
+                      key={config.id}
                       initial={{ y: -100 }}
                       animate={{ y: 1000 }}
                       transition={{ 
-                        duration: 5 + Math.random() * 10, 
+                        duration: config.duration, 
                         repeat: Infinity, 
                         ease: "linear",
-                        delay: Math.random() * 5
+                        delay: config.delay
                       }}
                       className="text-[10px] font-mono text-indigo-500 whitespace-nowrap"
                       style={{ writingMode: 'vertical-rl' }}
                     >
-                      {Math.random().toString(2).substring(2, 15)}
+                      {config.content}
                     </motion.div>
                   ))}
                 </div>
@@ -804,12 +881,13 @@ export default function AnimationView() {
             <motion.div
               initial={{ scale: 0.9, opacity: 0, y: 20 }}
               animate={{ scale: 1, opacity: 1, y: 0 }}
+              data-testid="mission-success-modal"
               className="bg-[#0f172a] border-2 border-indigo-500/50 rounded-none p-10 max-w-xl w-full shadow-[0_0_50px_rgba(79,70,229,0.3)] text-center relative overflow-hidden"
               style={{ clipPath: 'polygon(0 0, 95% 0, 100% 5%, 100% 100%, 5% 100%, 0 95%)' }}
             >
               <div className="absolute inset-0 opacity-10 pointer-events-none" style={{ backgroundImage: 'linear-gradient(#4f46e5 1px, transparent 1px), linear-gradient(90deg, #4f46e5 1px, transparent 1px)', backgroundSize: '20px 20px' }} />
               
-              {CONFETTI_PARTICLES.map(p => (
+              {confettiConfig.map((p: { id: number; x: number; delay: number; duration: number; content: string }) => (
                 <motion.div
                   key={p.id}
                   initial={{ y: -20, opacity: 0 }}
@@ -818,7 +896,7 @@ export default function AnimationView() {
                     opacity: [0, 1, 1, 0],
                   }}
                   transition={{ 
-                    duration: 2 + Math.random() * 2, 
+                    duration: p.duration, 
                     repeat: Infinity, 
                     delay: p.delay,
                     ease: "linear"
@@ -826,7 +904,7 @@ export default function AnimationView() {
                   className="absolute top-0 pointer-events-none font-mono text-[10px] text-indigo-400/40"
                   style={{ left: `${p.x}%` }}
                 >
-                  {Math.random() > 0.5 ? '1' : '0'}
+                  {p.content}
                 </motion.div>
               ))}
 

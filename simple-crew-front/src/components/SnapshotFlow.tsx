@@ -4,9 +4,11 @@ import {
   Background, 
   Controls, 
   MiniMap, 
-  BackgroundVariant 
+  BackgroundVariant,
+  type NodeProps
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
+import type { AppNode, AppEdge } from '../types/nodes.types';
 
 // Import our custom nodes and edges to match the Builder visual style
 import { AgentNode } from '../nodes/AgentNode';
@@ -18,9 +20,10 @@ import { DeletableEdge } from '../nodes/DeletableEdge';
 import { useStore } from '../store';
 import { CheckCircle2, XCircle } from 'lucide-react';
 
-const withSnapshotBadge = (WrappedComponent: React.ComponentType<any>) => {
-  return function BadgeWrapper(props: any) {
-    const status = props.data?.executionStatus;
+const withSnapshotBadge = <T extends NodeProps>(WrappedComponent: React.ComponentType<T>) => {
+  return function BadgeWrapper(props: T) {
+    const data = props.data as Record<string, unknown>;
+    const status = data?.executionStatus;
     
     // To ensure the badge is positioned relative to the node bounds, we use a fragment
     // since React Flow's wrapper (.react-flow__node) is already positioned.
@@ -55,8 +58,8 @@ const edgeTypes = {
 };
 
 interface SnapshotFlowProps {
-  nodes: any[];
-  edges: any[];
+  nodes: AppNode[];
+  edges: AppEdge[];
   executionStatus?: string;
   nodeStatuses?: Record<string, string>;
 }

@@ -1,70 +1,67 @@
 import type { AppNode, AppEdge, AgentNodeData, TaskNodeData, CrewNodeData, ChatNodeData } from '../types/nodes.types';
 import type { ModelConfig, ToolConfig, CustomTool, MCPServer } from '../types/config.types';
 
-export const migrateNodes = (nodes: any[]): AppNode[] => {
+export const migrateNodes = (nodes: AppNode[]): AppNode[] => {
   return nodes.map(node => {
     const type = node.type;
-    const data = node.data || {};
+    const data = (node.data || {}) as Record<string, unknown>;
 
     if (type === 'agent') {
       const agentData: AgentNodeData = {
-        name: data.name || 'Unnamed Agent',
-        role: data.role || '',
-        goal: data.goal || '',
-        backstory: data.backstory || '',
-        modelId: data.modelId || undefined,
-        temperature: data.temperature !== undefined ? data.temperature : 0.7,
-        mcpServerIds: data.mcpServerIds || [],
-        customToolIds: data.customToolIds || [],
-        globalToolIds: (data.globalToolIds || []).map((gt: any) => 
-          typeof gt === 'string' ? gt : gt
+        name: typeof data.name === 'string' ? data.name : 'Unnamed Agent',
+        role: typeof data.role === 'string' ? data.role : '',
+        goal: typeof data.goal === 'string' ? data.goal : '',
+        backstory: typeof data.backstory === 'string' ? data.backstory : '',
+        modelId: typeof data.modelId === 'string' ? data.modelId : undefined,
+        temperature: typeof data.temperature === 'number' ? data.temperature : 0.7,
+        mcpServerIds: Array.isArray(data.mcpServerIds) ? (data.mcpServerIds as string[]) : [],
+        customToolIds: Array.isArray(data.customToolIds) ? (data.customToolIds as string[]) : [],
+        globalToolIds: (Array.isArray(data.globalToolIds) ? data.globalToolIds : []).map((gt: unknown) => 
+          typeof gt === 'string' ? gt : (gt && typeof gt === 'object' && 'id' in gt ? (gt as {id: string}).id : String(gt))
         ),
-        code_execution_mode: data.code_execution_mode || 'disabled',
-        ...data
+        code_execution_mode: (data.code_execution_mode === 'disabled' || data.code_execution_mode === 'allow' || data.code_execution_mode === 'confirm') ? data.code_execution_mode : 'disabled',
       };
-      return { ...node, data: agentData };
+      return { ...node, data: { ...data, ...agentData } };
     }
 
     if (type === 'task') {
       const taskData: TaskNodeData = {
-        name: data.name || 'Unnamed Task',
-        description: data.description || '',
-        expected_output: data.expected_output || '',
-        async_execution: data.async_execution || false,
-        human_input: data.human_input || false,
-        ...data
+        name: typeof data.name === 'string' ? data.name : 'Unnamed Task',
+        description: typeof data.description === 'string' ? data.description : '',
+        expected_output: typeof data.expected_output === 'string' ? data.expected_output : '',
+        async_execution: typeof data.async_execution === 'boolean' ? data.async_execution : false,
+        human_input: typeof data.human_input === 'boolean' ? data.human_input : false,
       };
-      return { ...node, data: taskData };
+      return { ...node, data: { ...data, ...taskData } };
     }
 
     if (type === 'crew') {
       const crewData: CrewNodeData = {
-        process: data.process || 'sequential',
-        verbose: data.verbose !== undefined ? data.verbose : true,
-        memory: data.memory !== undefined ? data.memory : false,
-        cache: data.cache !== undefined ? data.cache : false,
-        planning: data.planning || false,
-        share_crew: data.share_crew || false,
-        ...data
+        name: typeof data.name === 'string' ? data.name : 'Crew',
+        process: (data.process === 'sequential' || data.process === 'hierarchical') ? data.process : 'sequential',
+        verbose: typeof data.verbose === 'boolean' ? data.verbose : true,
+        memory: typeof data.memory === 'boolean' ? data.memory : false,
+        cache: typeof data.cache === 'boolean' ? data.cache : false,
+        planning: typeof data.planning === 'boolean' ? data.planning : false,
+        share_crew: typeof data.share_crew === 'boolean' ? data.share_crew : false,
       };
-      return { ...node, data: crewData };
+      return { ...node, data: { ...data, ...crewData } };
     }
 
     if (type === 'chat') {
       const chatData: ChatNodeData = {
-        name: data.name || 'Chat Trigger',
-        description: data.description || '',
-        includeHistory: data.includeHistory !== undefined ? data.includeHistory : true,
-        ...data
+        name: typeof data.name === 'string' ? data.name : 'Chat Trigger',
+        description: typeof data.description === 'string' ? data.description : '',
+        includeHistory: typeof data.includeHistory === 'boolean' ? data.includeHistory : true,
       };
-      return { ...node, data: chatData };
+      return { ...node, data: { ...data, ...chatData } };
     }
 
     return node;
   });
 };
 
-export const migrateEdges = (edges: any[]): AppEdge[] => {
+export const migrateEdges = (edges: AppEdge[]): AppEdge[] => {
   return edges.map(edge => ({
     ...edge,
     type: edge.type || 'deletable',
@@ -93,16 +90,16 @@ export const validateDependencies = (
   
   const migratedNodes = nodes.map(node => {
     const nodeWarnings: string[] = [];
-    const data = node.data as any;
+    const data = node.data as Record<string, unknown>;
 
     // 0. Workspace Validation
     if (!workspaceId) {
       if (node.type === 'task' || node.type === 'agent') {
         const needsWorkspace = node.type === 'task' || 
-          (data.globalToolIds && data.globalToolIds.some((gtIdObj: any) => {
+          ((data.globalToolIds || []) as (string | { id: string })[]).some((gtIdObj) => {
             const id = typeof gtIdObj === 'string' ? gtIdObj : gtIdObj.id;
             return id.toLowerCase().includes('file') || id.toLowerCase().includes('directory');
-          }));
+          });
 
         if (needsWorkspace) {
           if (originalWorkspaceName) {
@@ -130,7 +127,7 @@ export const validateDependencies = (
 
     // 2. Validate Global Tools
     if (data.globalToolIds) {
-      data.globalToolIds.forEach((gtIdObj: any) => {
+      ((data.globalToolIds || []) as (string | { id: string })[]).forEach((gtIdObj) => {
         const id = typeof gtIdObj === 'string' ? gtIdObj : gtIdObj.id;
         if (!globalTools.some(gt => gt.id === id)) {
           nodeWarnings.push(`Global Tool '${id}' not found.`);
@@ -140,7 +137,7 @@ export const validateDependencies = (
 
     // 3. Validate Custom Tools
     if (data.customToolIds) {
-      data.customToolIds.forEach((id: string) => {
+      (data.customToolIds as string[]).forEach((id: string) => {
         if (!customTools.some(ct => ct.id === id)) {
           nodeWarnings.push(`Custom Tool '${id}' not found.`);
         }
@@ -149,7 +146,7 @@ export const validateDependencies = (
 
     // 4. Validate MCP Servers
     if (data.mcpServerIds) {
-      data.mcpServerIds.forEach((id: string) => {
+      (data.mcpServerIds as string[]).forEach((id: string) => {
         if (!mcpServers.some(ms => ms.id === id)) {
           nodeWarnings.push(`MCP Server '${id}' not found.`);
         }

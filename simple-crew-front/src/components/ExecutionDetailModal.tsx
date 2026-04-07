@@ -33,7 +33,7 @@ export const ExecutionDetailModal: React.FC<ExecutionDetailModalProps> = ({
 
   if (!isOpen || !execution) return null;
 
-  const handleCopy = (data: any) => {
+  const handleCopy = (data: Record<string, unknown> | unknown) => {
     navigator.clipboard.writeText(JSON.stringify(data, null, 2));
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
@@ -47,7 +47,7 @@ export const ExecutionDetailModal: React.FC<ExecutionDetailModalProps> = ({
     }
   };
 
-  const renderJson = (data: any) => {
+  const renderJson = (data: Record<string, unknown> | unknown) => {
     if (!data) return <div className="text-brand-muted italic py-4">No data available.</div>;
     return (
       <div className="relative group">
@@ -191,7 +191,7 @@ export const ExecutionDetailModal: React.FC<ExecutionDetailModalProps> = ({
                     nodes={execution.graph_snapshot.nodes} 
                     edges={execution.graph_snapshot.edges} 
                     executionStatus={execution.status}
-                    nodeStatuses={execution.output_data?.node_statuses}
+                    nodeStatuses={(execution.output_data as Record<string, unknown>)?.node_statuses as Record<string, string>}
                   />
                 </ReactFlowProvider>
               ) : (

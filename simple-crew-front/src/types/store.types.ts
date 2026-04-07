@@ -17,6 +17,19 @@ import {
 
 export type NodeStatus = 'idle' | 'running' | 'success' | 'error' | 'waiting';
 
+export interface ExportedProject {
+  version: string;
+  nodes: AppNode[];
+  edges: AppEdge[];
+  globalTools?: ToolConfig[];
+  customTools?: CustomTool[];
+  mcpServers?: MCPServer[];
+  name?: string;
+  description?: string;
+  workspaceId?: string | null;
+  workspaceName?: string | null;
+}
+
 export interface Project {
   id: string;
   name: string;
@@ -86,9 +99,9 @@ export interface GraphSlice {
   onConnect: (connection: Connection) => void;
   deleteEdge: (edgeId: string) => void;
   deleteNode: (nodeId: string) => void;
-  updateNodeData: (nodeId: string, data: Partial<any>) => void;
+  updateNodeData: (nodeId: string, data: Partial<AppNode['data']>) => void;
   addNode: (node: AppNode) => void;
-  addNodeWithAutoPosition: (type: 'agent' | 'task' | 'crew' | 'chat' | 'webhook', data: any) => void;
+  addNodeWithAutoPosition: (type: 'agent' | 'task' | 'crew' | 'chat' | 'webhook', data: Partial<AppNode['data']>) => void;
   setNodeStatus: (id: string, status: NodeStatus) => void;
   setNodeWarnings: (warnings: Record<string, string[]>) => void;
   setActiveNode: (id: string | null) => void;
@@ -97,6 +110,7 @@ export interface GraphSlice {
   updateCrewTaskOrder: (crewId: string, newOrder: string[]) => void;
   updateAgentTaskOrder: (agentId: string, newOrder: string[]) => void;
   validateGraph: () => boolean;
+  setExecutionResult: (result: string | null) => void;
   setMessages: (messages: ChatMessage[] | ((prev: ChatMessage[]) => ChatMessage[])) => void;
   clearChat: () => void;
   resetProject: () => void;
@@ -109,6 +123,8 @@ export interface UISlice {
   isConsoleExpanded: boolean;
   isUsabilityDrawerOpen: boolean;
   isChatVisible: boolean;
+  isAboutModalOpen: boolean;
+  isSidebarCollapsed: boolean;
   notification: AppNotification | null;
   toggleTheme: () => void;
   setIsSettingsOpen: (open: boolean) => void;
@@ -116,6 +132,8 @@ export interface UISlice {
   setIsConsoleExpanded: (expanded: boolean) => void;
   setIsUsabilityDrawerOpen: (open: boolean) => void;
   setIsChatVisible: (visible: boolean) => void;
+  setIsAboutModalOpen: (open: boolean) => void;
+  setIsSidebarCollapsed: (collapsed: boolean) => void;
   resetUIState: () => void;
   showNotification: (message: string, type: 'success' | 'error' | 'warning' | 'info') => void;
   clearNotification: () => void;
@@ -133,7 +151,7 @@ export interface ProjectSlice {
   isDirty: boolean; // Add isDirty flag
   abortController: AbortController | null;
   setDirty: (dirty: boolean) => void;
-  hydrateFromSnapshot: (projectId: string, snapshot: any) => void;
+  hydrateFromSnapshot: (projectId: string, snapshot: Project['canvas_data']) => void;
   fetchProjects: () => Promise<void>;
   saveProject: (name: string, description?: string) => Promise<void>;
   updateProjectMetadata: (id: string, name: string, description: string) => Promise<void>;
@@ -143,8 +161,8 @@ export interface ProjectSlice {
   duplicateProject: (id: string) => Promise<void>;
   exportProjectJson: () => void;
   exportPythonProject: () => Promise<void>;
-  loadProjectJson: (data: any) => boolean;
-  importProjectJsonAndSave: (data: any) => Promise<Project | null>;
+  loadProjectJson: (data: unknown) => boolean;
+  importProjectJsonAndSave: (data: unknown) => Promise<Project | null>;
   startRealExecution: () => Promise<string | null>;
   stopExecution: () => void;
   updateProjectWorkspaceId: (workspaceId: string | null) => void;
@@ -216,9 +234,9 @@ export interface Execution {
   project_id: string;
   status: 'running' | 'success' | 'error';
   trigger_type: string;
-  input_data: any;
-  output_data?: any;
-  graph_snapshot: any;
+  input_data: unknown;
+  output_data?: unknown;
+  graph_snapshot: Project['canvas_data'];
   duration?: number;
   timestamp: string;
 }

@@ -154,7 +154,7 @@ export function WorkspaceExplorer() {
           {contextMenu.item.is_dir && (
             <button 
               onClick={() => {
-                currentWsId && downloadZip(currentWsId, contextMenu.item.path);
+                if (currentWsId) downloadZip(currentWsId, contextMenu.item.path);
                 closeContextMenu();
               }}
               className="w-full flex items-center gap-3 px-3 py-2 text-xs text-brand-text hover:bg-brand-bg/80 transition-all text-left"

@@ -1,15 +1,17 @@
 import { memo, useState, useEffect } from 'react';
 import { Handle, Position, type NodeProps, type Node } from '@xyflow/react';
 import { useShallow } from 'zustand/shallow';
-import { CheckSquare, Trash2, Loader2, CheckCircle2, AlertCircle, Clock, Settings, Plus, X, Terminal } from 'lucide-react';
+import { CheckSquare, Trash2, Loader2, CheckCircle2, AlertCircle, Clock, Settings, Plus, X, Terminal, ChevronDown, ChevronUp } from 'lucide-react';
 import { useStore } from '../store/index';
 import type { TaskNodeData } from '../types/nodes.types';
+import type { ToolConfig } from '../types/config.types';
 import { ToolConfigurationModal } from '../components/ToolConfigurationModal';
 
 export const TaskNode = memo(({ id, data }: NodeProps<Node<TaskNodeData, 'task'>>) => {
-  const { deleteNode, setActiveNode, updateNodeData, customTools, globalTools } = useStore(
+  const { deleteNode, toggleCollapse, setActiveNode, updateNodeData, customTools, globalTools } = useStore(
     useShallow((state) => ({
       deleteNode: state.deleteNode,
+      toggleCollapse: state.toggleCollapse,
       setActiveNode: state.setActiveNode,
       updateNodeData: state.updateNodeData,
       customTools: state.customTools,
@@ -20,7 +22,7 @@ export const TaskNode = memo(({ id, data }: NodeProps<Node<TaskNodeData, 'task'>
   const [isToolSelectorOpen, setIsToolSelectorOpen] = useState(false);
   const [isGlobalSelectorOpen, setIsGlobalSelectorOpen] = useState(false);
   const [isToolConfigModalOpen, setIsToolConfigModalOpen] = useState(false);
-  const [toolToConfigure, setToolToConfigure] = useState<any>(null);
+  const [toolToConfigure, setToolToConfigure] = useState<ToolConfig | null>(null);
   const [editingToolIndex, setEditingToolIndex] = useState<number | null>(null);
 
   // Close menus when clicking outside
@@ -51,6 +53,8 @@ export const TaskNode = memo(({ id, data }: NodeProps<Node<TaskNodeData, 'task'>
 
   return (
     <div
+      data-testid="node-task"
+      onClick={(e) => { e.stopPropagation(); setActiveNode(id); }}
       className={`group relative bg-white dark:bg-slate-900 rounded-xl shadow-sm hover:shadow-md dark:shadow-none border border-slate-200 dark:border-slate-700 w-56 overflow-visible transition-all duration-300 cursor-pointer ${statusClasses} ${status === 'running' ? 'running' : ''}`}
       style={{
         '--node-color': '#10b981',
@@ -119,13 +123,16 @@ export const TaskNode = memo(({ id, data }: NodeProps<Node<TaskNodeData, 'task'>
         </div>
       </div>
 
-      <div className="p-3 border-b border-slate-100 dark:border-slate-800/50">
-        <p className="text-xs text-slate-600 dark:text-slate-400 line-clamp-2" title={data.description}>
-          {data.description || 'No description defined'}
-        </p>
-      </div>
+      {!data.isCollapsed && (
+        <div className="p-3 border-b border-slate-100 dark:border-slate-800/50">
+          <p className="text-xs text-slate-600 dark:text-slate-400 line-clamp-2" title={data.description}>
+            {data.description || 'No description defined'}
+          </p>
+        </div>
+      )}
 
-      <div className="px-3 pb-3 pt-2">
+      {!data.isCollapsed && (
+        <div className="px-3 pb-3 pt-2">
         <div className="space-y-2">
 
           {/* Default CrewAI Tools Section */}
@@ -147,7 +154,7 @@ export const TaskNode = memo(({ id, data }: NodeProps<Node<TaskNodeData, 'task'>
                     <div className="px-2 py-1 text-[9px] font-bold text-slate-400 uppercase border-b border-slate-100 dark:border-slate-700 mb-1">Add CrewAI Tool</div>
                     <div className="max-h-48 overflow-y-auto custom-scrollbar">
                       {['Search', 'Web', 'Files & Documents', 'RAG / DATABASE'].map(cat => {
-                        const catTools = globalTools.filter(t => t.category === cat && t.isEnabled && !((data as any).globalToolIds || []).some((e: any) => (typeof e === 'string' ? e : e.id) === t.id));
+                        const catTools = globalTools.filter(t => t.category === cat && t.isEnabled && !(data.globalToolIds || []).some((e) => (typeof e === 'string' ? e : (e as { id: string }).id) === t.id));
                         if (catTools.length === 0) return null;
                         return (
                           <div key={cat} className="mb-2 last:mb-0">
@@ -176,7 +183,7 @@ export const TaskNode = memo(({ id, data }: NodeProps<Node<TaskNodeData, 'task'>
                           </div>
                         );
                       })}
-                      {globalTools.filter(t => t.isEnabled && !((data as any).globalToolIds || []).some((e: any) => (typeof e === 'string' ? e : e.id) === t.id)).length === 0 && (
+                      {globalTools.filter(t => t.isEnabled && !(data.globalToolIds || []).some((e) => (typeof e === 'string' ? e : (e as { id: string }).id) === t.id)).length === 0 && (
                         <div className="px-2 py-2 text-[9px] text-slate-400 italic text-center">No more tools enabled</div>
                       )}
                     </div>
@@ -187,7 +194,7 @@ export const TaskNode = memo(({ id, data }: NodeProps<Node<TaskNodeData, 'task'>
             <div className="flex flex-wrap gap-1 min-h-[1.25rem]">
               {(data.globalToolIds || []).length > 0 ? (
                 (data.globalToolIds || []).map((gtid, index) => {
-                  const actualId = typeof gtid === 'string' ? gtid : (gtid as any).id;
+                  const actualId = typeof gtid === 'string' ? gtid : (gtid as { id: string }).id;
                   const tool = globalTools.find(t => t.id === actualId);
                   if (!tool) return null;
                   return (
@@ -296,17 +303,29 @@ export const TaskNode = memo(({ id, data }: NodeProps<Node<TaskNodeData, 'task'>
           </div>
         </div>
       </div>
+    )}
+
+      <button
+        onClick={(e) => { e.stopPropagation(); toggleCollapse(id); }}
+        className="absolute -bottom-3 right-4 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-full p-0.5 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-700 shadow-sm z-10 transition-colors text-slate-400 dark:text-slate-500 hover:text-emerald-500 dark:hover:text-emerald-400"
+      >
+        {data.isCollapsed ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronUp className="w-3.5 h-3.5" />}
+      </button>
 
       <Handle type="target" position={Position.Top} id="top-target" className="w-2 h-2 bg-gray-400 border-none hover:bg-emerald-500 transition-colors" />
+      <Handle type="source" position={Position.Top} id="top-source" className="w-2 h-2 bg-gray-400 border-none hover:bg-emerald-500 transition-colors" />
       <Handle type="target" position={Position.Right} id="right-target" className="w-2 h-2 bg-gray-400 border-none hover:bg-emerald-500 transition-colors" />
+      <Handle type="source" position={Position.Right} id="right-source" className="w-2 h-2 bg-gray-400 border-none hover:bg-emerald-500 transition-colors" />
       <Handle type="target" position={Position.Bottom} id="bottom-target" className="w-2 h-2 bg-gray-400 border-none hover:bg-emerald-500 transition-colors" />
+      <Handle type="source" position={Position.Bottom} id="bottom-source" className="w-2 h-2 bg-gray-400 border-none hover:bg-emerald-500 transition-colors" />
       <Handle type="target" position={Position.Left} id="left-target" className="w-2 h-2 bg-gray-400 border-none hover:bg-emerald-500 transition-colors" />
+      <Handle type="source" position={Position.Left} id="left-source" className="w-2 h-2 bg-gray-400 border-none hover:bg-emerald-500 transition-colors" />
 
       {toolToConfigure && (
         <ToolConfigurationModal
           tool={toolToConfigure}
           isOpen={isToolConfigModalOpen}
-          initialConfig={editingToolIndex !== null ? (data.globalToolIds![editingToolIndex] as any).config : undefined}
+          initialConfig={editingToolIndex !== null ? (data.globalToolIds![editingToolIndex] as { config: Record<string, unknown> }).config : undefined}
           onClose={() => {
             setIsToolConfigModalOpen(false);
             setToolToConfigure(null);

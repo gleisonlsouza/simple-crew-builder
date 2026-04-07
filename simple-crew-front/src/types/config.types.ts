@@ -38,7 +38,7 @@ export interface ToolConfig {
       placeholder?: string;
       description?: string;
       required?: boolean;
-      options?: { label: string; value: any }[];
+      options?: { label: string; value: string | number | boolean }[];
       optionsUrl?: string;
     }>;
   };

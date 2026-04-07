@@ -82,7 +82,8 @@ export function ResizableChatPanel() {
       return;
     }
 
-    const inputMapping = (chatNode.data as any).inputMapping;
+    const chatData = chatNode.data as Record<string, unknown>;
+    const inputMapping = chatData.inputMapping as string;
     if (!inputMapping) {
       setMessages(prev => [...prev, { id: Date.now().toString(), role: 'assistant', content: 'Chat Trigger is not mapped to any Crew variable. Please configure it in node settings.' }]);
       return;
@@ -101,9 +102,8 @@ export function ResizableChatPanel() {
     }
 
     // Build the OpenAI-format payload: system → history → current
-    const chatData = chatNode.data as any;
-    const includeHistory = chatData.includeHistory ?? false;
-    const systemMessage = chatData.systemMessage?.trim() || null;
+    const includeHistory = (chatData.includeHistory as boolean) ?? false;
+    const systemMessage = (chatData.systemMessage as string)?.trim() || null;
     const currentMessage = { role: 'user' as const, content: userMessage.content };
 
     // Build ordered payload
@@ -125,7 +125,8 @@ export function ResizableChatPanel() {
     payload.push(currentMessage);
 
     // Update Crew's inputs dict globally before executing
-    const currentInputs = (crewNode.data as any).inputs || {};
+    const crewData = crewNode.data as Record<string, unknown>;
+    const currentInputs = (crewData.inputs as Record<string, unknown>) || {};
     updateNodeData(crewNode.id, {
       inputs: {
         ...currentInputs,
@@ -143,11 +144,12 @@ export function ResizableChatPanel() {
         role: 'assistant',
         content: finalResult || 'Crew execution finished with no explicit payload.'
       }]);
-    } catch (err: any) {
+    } catch (err: unknown) {
+      const errorMessage = err instanceof Error ? err.message : String(err);
       setMessages(prev => [...prev, {
         id: Date.now().toString(),
         role: 'assistant',
-        content: `Execution failed: ${err.message}`
+        content: `Execution failed: ${errorMessage}`
       }]);
     } finally {
       setIsLoading(false);
@@ -165,12 +167,16 @@ export function ResizableChatPanel() {
   };
 
 
+  const isSidebarCollapsed = useStore((state) => state.isSidebarCollapsed);
+
   if (!isChatVisible) return null;
 
   return (
     <div
       ref={panelRef}
-      className={`absolute bottom-0 left-64 right-0 z-[50] bg-brand-bg border-t border-brand-border flex flex-col transition-[height] duration-0 shadow-2xl ${
+      className={`absolute bottom-0 ${isSidebarCollapsed ? 'left-20' : 'left-64'} right-0 z-[50] bg-brand-bg border-t border-brand-border flex flex-col ${
+        !isResizing && !isMinimized ? 'transition-[left] duration-300 ease-in-out' : ''
+      } shadow-2xl ${
         isMinimized ? 'h-12' : ''
       }`}
       style={!isMinimized ? { height: `${chatHeight}px` } : undefined}

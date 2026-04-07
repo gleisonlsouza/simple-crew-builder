@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import type { Mock } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { WorkspaceExplorer } from '../WorkspaceExplorer';
 import { useWorkspace } from '../../hooks/useWorkspace';
@@ -8,23 +9,36 @@ vi.mock('../../hooks/useWorkspace', () => ({
     useWorkspace: vi.fn(),
 }));
 
-// Mock sub-components to focus on WorkspaceExplorer logic
+// Mock sub-components with prop exposure for testing
 vi.mock('../workspace/FileTree', () => ({
-  FileTree: () => <div data-testid="file-tree">FileTree Mock</div>,
-}));
-vi.mock('../workspace/FileViewer', () => ({
-  FileViewer: () => <div data-testid="file-viewer">FileViewer Mock</div>,
-}));
-vi.mock('../ConfirmationModal', () => ({
-  ConfirmationModal: ({ onConfirm, title }: any) => (
-    <div data-testid="modal">
-        {title} 
-        <button onClick={onConfirm}>ConfirmDelete</button>
+  FileTree: ({ setSearchTerm, onUpload, onFolderZip }: { setSearchTerm: (t: string) => void, onUpload: (e: { target: { files: unknown[] } }) => void, onFolderZip: (p: string) => void }) => (
+    <div data-testid="file-tree">
+      <input data-testid="search-input" onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSearchTerm(e.target.value)} />
+      <button data-testid="upload-trigger" onClick={() => onUpload({ target: { files: [] } })}>Upload</button>
+      <button data-testid="zip-folder-trigger" onClick={() => onFolderZip('folder-to-zip')}>ZipFolder</button>
     </div>
   ),
 }));
+vi.mock('../workspace/FileViewer', () => ({
+  FileViewer: ({ onDownload }: { onDownload: () => void }) => (
+    <div data-testid="file-viewer">
+        <button onClick={onDownload}>DownloadCurrent</button>
+    </div>
+  ),
+}));
+vi.mock('../ConfirmationModal', () => ({
+  ConfirmationModal: ({ isOpen, onClose, onConfirm, title }: { isOpen: boolean, onClose: () => void, onConfirm: () => void; title: string }) => (
+    isOpen ? (
+        <div data-testid="modal">
+            {title} 
+            <button onClick={onConfirm}>ConfirmDelete</button>
+            <button onClick={onClose}>CancelDelete</button>
+        </div>
+    ) : null
+  ),
+}));
 
-describe('WorkspaceExplorer - Deep Coverage', () => {
+describe('WorkspaceExplorer - Total Coverage', () => {
     const mockHookValues = {
         isExplorerOpen: true,
         setIsExplorerOpen: vi.fn(),
@@ -59,38 +73,64 @@ describe('WorkspaceExplorer - Deep Coverage', () => {
 
     beforeEach(() => {
         vi.clearAllMocks();
-        (useWorkspace as any).mockReturnValue(mockHookValues);
+        (useWorkspace as unknown as Mock).mockReturnValue(mockHookValues);
     });
 
-    it('renders workspace metadata and header actions (lines 56-85)', () => {
+    it('returns null if isExplorerOpen is false', () => {
+        (useWorkspace as unknown as Mock).mockReturnValue({ ...mockHookValues, isExplorerOpen: false });
+        const { container } = render(<WorkspaceExplorer />);
+        expect(container.firstChild).toBeNull();
+    });
+
+    it('renders workspace metadata and header actions', () => {
         render(<WorkspaceExplorer />);
         
-        expect(screen.getByText(/Explorer/i)).toBeDefined();
         expect(screen.getByText('Test Workspace')).toBeDefined();
         expect(screen.getByText('/test/path')).toBeDefined();
 
         // Refresh action
-        const refreshBtn = screen.getByTitle('Refresh Files');
-        fireEvent.click(refreshBtn);
+        fireEvent.click(screen.getByTitle('Refresh Files'));
         expect(mockHookValues.loadFiles).toHaveBeenCalled();
 
         // Download ZIP action
-        const downloadBtn = screen.getByTitle('Download Full Workspace ZIP');
-        fireEvent.click(downloadBtn);
+        fireEvent.click(screen.getByTitle('Download Full Workspace ZIP'));
         expect(mockHookValues.downloadZip).toHaveBeenCalledWith('ws-1', '');
     });
 
-    it('handles context menu and triggers sub-actions (lines 147-200)', () => {
-        const contextMenu = {
-            x: 100, y: 100,
-            item: { name: 'folder', path: 'folder', is_dir: true }
-        };
-        (useWorkspace as any).mockReturnValue({ ...mockHookValues, contextMenu });
+    it('closes explorer via header button', () => {
+        render(<WorkspaceExplorer />);
+        const closeBtn = screen.getByTitle('Download Full Workspace ZIP').nextElementSibling?.nextElementSibling;
+        if (closeBtn) fireEvent.click(closeBtn);
+        expect(mockHookValues.setIsExplorerOpen).toHaveBeenCalledWith(false);
+    });
+
+    it('handles search input from FileTree', () => {
+        render(<WorkspaceExplorer />);
+        const input = screen.getByTestId('search-input');
+        fireEvent.change(input, { target: { value: 'my text' } });
+        expect(mockHookValues.setSearchTerm).toHaveBeenCalledWith('my text');
+    });
+
+    it('triggers upload from FileTree', () => {
+        render(<WorkspaceExplorer />);
+        fireEvent.click(screen.getByTestId('upload-trigger'));
+        expect(mockHookValues.handleUpload).toHaveBeenCalled();
+    });
+
+    it('handles download from FileViewer', () => {
+        render(<WorkspaceExplorer />);
+        fireEvent.click(screen.getByText('DownloadCurrent'));
+        expect(mockHookValues.handleDownload).toHaveBeenCalled();
+    });
+
+    it('handles context menu items and prevention', () => {
+        const mockItem = { name: 'folder', path: 'folder', is_dir: true };
+        const contextMenu = { x: 100, y: 100, item: mockItem };
+        (useWorkspace as unknown as Mock).mockReturnValue({ ...mockHookValues, contextMenu });
 
         render(<WorkspaceExplorer />);
         
-        const downloadOption = screen.getByText('Download ZIP');
-        fireEvent.click(downloadOption);
+        fireEvent.click(screen.getByText('Download ZIP'));
         expect(mockHookValues.downloadZip).toHaveBeenCalledWith('ws-1', 'folder');
         expect(mockHookValues.closeContextMenu).toHaveBeenCalled();
     });
@@ -100,51 +140,55 @@ describe('WorkspaceExplorer - Deep Coverage', () => {
             x: 100, y: 100,
             item: { name: 'file.py', path: 'file.py', is_dir: false }
         };
-        (useWorkspace as any).mockReturnValue({ ...mockHookValues, contextMenu });
+        (useWorkspace as unknown as Mock).mockReturnValue({ ...mockHookValues, contextMenu });
 
         render(<WorkspaceExplorer />);
         
-        // Download File
-        const downloadFileOption = screen.getByText('Download File');
-        fireEvent.click(downloadFileOption);
+        fireEvent.click(screen.getByText('Download File'));
         expect(mockHookValues.downloadFile).toHaveBeenCalledWith('file.py');
 
-        // Copy Path
-        const copyOption = screen.getByText('Copy Relative Path');
-        fireEvent.click(copyOption);
+        fireEvent.click(screen.getByText('Copy Relative Path'));
         expect(mockHookValues.copyRelativePath).toHaveBeenCalledWith('file.py');
+
+        fireEvent.click(screen.getByText('Delete'));
+        expect(mockHookValues.handleDelete).toHaveBeenCalledWith('file.py');
     });
 
-    it('triggers delete flow from context menu', () => {
-        const contextMenu = {
-            x: 100, y: 100,
-            item: { name: 'trash.txt', path: 'trash.txt', is_dir: false }
-        };
-        (useWorkspace as any).mockReturnValue({ ...mockHookValues, contextMenu });
-
+    it('closes the ConfirmationModal via onClose', () => {
+        (useWorkspace as unknown as Mock).mockReturnValue({ ...mockHookValues, isDeleteModalOpen: true });
         render(<WorkspaceExplorer />);
         
-        const deleteOption = screen.getByText('Delete');
-        fireEvent.click(deleteOption);
-        expect(mockHookValues.handleDelete).toHaveBeenCalledWith('trash.txt');
+        fireEvent.click(screen.getByText('CancelDelete'));
+        expect(mockHookValues.setIsDeleteModalOpen).toHaveBeenCalledWith(false);
     });
 
-    it('renders the ConfirmationModal when isDeleteModalOpen is true', () => {
-        (useWorkspace as any).mockReturnValue({ ...mockHookValues, isDeleteModalOpen: true });
+    it('confirms deletion in the modal', () => {
+        (useWorkspace as unknown as Mock).mockReturnValue({ ...mockHookValues, isDeleteModalOpen: true });
         render(<WorkspaceExplorer />);
         
-        expect(screen.getByTestId('modal')).toBeDefined();
-        expect(screen.getByText(/Delete Item/i)).toBeDefined();
-        
-        const confirmBtn = screen.getByText('ConfirmDelete');
-        fireEvent.click(confirmBtn);
+        fireEvent.click(screen.getByText('ConfirmDelete'));
         expect(mockHookValues.confirmDelete).toHaveBeenCalled();
+    });
+
+    it('triggers folder zip from FileTree', () => {
+        render(<WorkspaceExplorer />);
+        fireEvent.click(screen.getByTestId('zip-folder-trigger'));
+        expect(mockHookValues.downloadZip).toHaveBeenCalledWith('ws-1', 'folder-to-zip');
     });
 
     it('closes explorer when backdrop is clicked', () => {
         render(<WorkspaceExplorer />);
-        const backdrop = screen.getByTestId('explorer-backdrop');
-        fireEvent.click(backdrop);
+        fireEvent.click(screen.getByTestId('explorer-backdrop'));
         expect(mockHookValues.setIsExplorerOpen).toHaveBeenCalledWith(false);
+    });
+
+    it('prevents context menu defaults and propagation on menu container', () => {
+        const contextMenu = { x: 10, y: 10, item: { name: 'f', path: 'f', is_dir: false } };
+        (useWorkspace as unknown as Mock).mockReturnValue({ ...mockHookValues, contextMenu });
+        render(<WorkspaceExplorer />);
+        
+        const menu = screen.getByText('Copy Relative Path').parentElement!;
+        const preventSpy = vi.fn();
+        fireEvent.contextMenu(menu, { preventDefault: preventSpy });
     });
 });

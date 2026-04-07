@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { X, Settings2, Save, AlertCircle, Loader2 } from 'lucide-react';
 import type { ToolConfig } from '../types/config.types';
@@ -8,41 +8,17 @@ interface ToolConfigurationModalProps {
   tool: ToolConfig;
   isOpen: boolean;
   onClose: () => void;
-  onSave: (config: Record<string, any>) => void;
-  initialConfig?: Record<string, any>; // Adicionado para edição
+  onSave: (config: Record<string, unknown>) => void;
+  initialConfig?: Record<string, unknown>; // Adicionado para edição
 }
 
 export const ToolConfigurationModal = ({ tool, isOpen, onClose, onSave, initialConfig }: ToolConfigurationModalProps) => {
-  const [config, setConfig] = useState<Record<string, any>>({});
+  const [config, setConfig] = useState<Record<string, unknown>>({});
   const [loading, setLoading] = useState(false);
   const [options, setOptions] = useState<Record<string, { label: string; value: string }[]>>({});
   const [errors, setErrors] = useState<Record<string, string>>({});
 
-  useEffect(() => {
-    if (isOpen && tool.user_config_schema) {
-      // Usa initialConfig se fornecido, senão usa defaults
-      const startConfig: Record<string, any> = { ...(initialConfig || {}) };
-      
-      if (!initialConfig) {
-        Object.entries(tool.user_config_schema.fields).forEach(([key, field]) => {
-          if (field.type === 'boolean') startConfig[key] = false;
-          else startConfig[key] = '';
-        });
-      }
-      
-      setConfig(startConfig);
-      setErrors({});
-
-      // Fetch dynamic options
-      Object.entries(tool.user_config_schema.fields).forEach(([key, field]) => {
-        if (field.type === 'select' && field.optionsUrl) {
-          fetchOptions(key, field.optionsUrl);
-        }
-      });
-    }
-  }, [isOpen, tool]);
-
-  const fetchOptions = async (fieldKey: string, url: string) => {
+  const fetchOptions = useCallback(async (fieldKey: string, url: string) => {
     setLoading(true);
     try {
       const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
@@ -50,7 +26,7 @@ export const ToolConfigurationModal = ({ tool, isOpen, onClose, onSave, initialC
       if (!response.ok) throw new Error(`Failed to fetch options for ${fieldKey}`);
       const data = await response.json();
       
-      const transformedOptions = data.map((item: any) => ({
+      const transformedOptions = data.map((item: Record<string, string>) => ({
         label: item.name || item.filename || item.label || item.id,
         value: item.id || item.value
       }));
@@ -61,7 +37,31 @@ export const ToolConfigurationModal = ({ tool, isOpen, onClose, onSave, initialC
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    if (isOpen && tool.user_config_schema) {
+      // Usa initialConfig se fornecido, senão usa defaults
+      const startConfig: Record<string, unknown> = { ...(initialConfig || {}) };
+      
+      if (!initialConfig) {
+        Object.entries(tool.user_config_schema.fields).forEach(([key, field]) => {
+          if (field.type === 'boolean') startConfig[key] = false;
+          else startConfig[key] = '';
+        });
+      }
+      
+      setConfig(startConfig);
+      setErrors({});
+ 
+      // Fetch dynamic options
+      Object.entries(tool.user_config_schema.fields).forEach(([key, field]) => {
+        if (field.type === 'select' && field.optionsUrl) {
+          fetchOptions(key, field.optionsUrl);
+        }
+      });
+    }
+  }, [isOpen, tool, initialConfig, fetchOptions]);
 
   const handleSave = () => {
     const newErrors: Record<string, string> = {};
@@ -123,7 +123,7 @@ export const ToolConfigurationModal = ({ tool, isOpen, onClose, onSave, initialC
                 <div className="relative">
                   <CustomSelect
                     options={options[key] || field.options || []}
-                    value={config[key] || ''}
+                    value={(config[key] as string) || ''}
                     onChange={(val) => setConfig(prev => ({ ...prev, [key]: val }))}
                     placeholder={field.placeholder}
                     className={errors[key] ? 'border-red-500 focus:ring-red-500' : ''}
@@ -138,20 +138,20 @@ export const ToolConfigurationModal = ({ tool, isOpen, onClose, onSave, initialC
                 <div 
                   onClick={() => setConfig(prev => ({ ...prev, [key]: !prev[key] }))}
                   className={`flex items-center gap-3 p-3 rounded-xl border cursor-pointer transition-all duration-300 ${
-                    config[key] 
+                    config[key] as boolean 
                       ? 'bg-indigo-500/10 border-indigo-500/40' 
                       : 'bg-brand-bg border-brand-border hover:border-brand-muted'
                   }`}
                 >
-                  <div className={`w-10 h-5 rounded-full relative transition-colors duration-300 ${config[key] ? 'bg-indigo-500' : 'bg-brand-muted/30'}`}>
-                    <div className={`absolute top-1 left-1 w-3 h-3 bg-white rounded-full transition-transform duration-300 shadow-sm ${config[key] ? 'translate-x-5' : 'translate-x-0'}`} />
+                  <div className={`w-10 h-5 rounded-full relative transition-colors duration-300 ${config[key] as boolean ? 'bg-indigo-500' : 'bg-brand-muted/30'}`}>
+                    <div className={`absolute top-1 left-1 w-3 h-3 bg-white rounded-full transition-transform duration-300 shadow-sm ${config[key] as boolean ? 'translate-x-5' : 'translate-x-0'}`} />
                   </div>
                   <span className="text-sm font-medium text-brand-text">{field.placeholder || field.label}</span>
                 </div>
               ) : (
                 <input
                   type={field.type === 'number' ? 'number' : 'text'}
-                  value={config[key] || ''}
+                  value={(config[key] as string) || ''}
                   onChange={(e) => setConfig(prev => ({ ...prev, [key]: e.target.value }))}
                   placeholder={field.placeholder}
                   className={`w-full bg-brand-bg border rounded-xl px-4 py-2.5 text-sm text-brand-text outline-none focus:ring-2 focus:ring-indigo-600 transition-all font-medium ${

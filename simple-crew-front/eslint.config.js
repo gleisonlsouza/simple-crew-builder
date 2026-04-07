@@ -6,7 +6,14 @@ import tseslint from 'typescript-eslint'
 import { defineConfig, globalIgnores } from 'eslint/config'
 
 export default defineConfig([
-  globalIgnores(['dist']),
+  globalIgnores([
+    'dist/**',
+    'build/**',
+    'node_modules/**',
+    'coverage/**',
+    '*.log',
+    '.env*'
+  ]),
   {
     files: ['**/*.{ts,tsx}'],
     extends: [
@@ -20,4 +27,18 @@ export default defineConfig([
       globals: globals.browser,
     },
   },
+  {
+    files: [
+      '**/*.test.tsx', 
+      '**/*.test.ts', 
+      '**/*.spec.ts', 
+      '**/__tests__/**',
+      'e2e/**'
+    ],
+    rules: {
+      '@typescript-eslint/no-explicit-any': 'off',
+    },
+  },
+
 ])
+

@@ -8,6 +8,8 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set) => (
   isConsoleExpanded: false,
   isUsabilityDrawerOpen: false,
   isChatVisible: false,
+  isAboutModalOpen: false,
+  isSidebarCollapsed: false,
   notification: null,
 
   toggleTheme: () => {
@@ -23,12 +25,16 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set) => (
   setIsConsoleExpanded: (expanded) => set({ isConsoleExpanded: expanded }),
   setIsUsabilityDrawerOpen: (open) => set({ isUsabilityDrawerOpen: open }),
   setIsChatVisible: (visible) => set({ isChatVisible: visible }),
+  setIsAboutModalOpen: (open) => set({ isAboutModalOpen: open }),
+  setIsSidebarCollapsed: (collapsed) => set({ isSidebarCollapsed: collapsed }),
   resetUIState: () => set({ 
     isChatVisible: false, 
     isConsoleOpen: false, 
     isConsoleExpanded: false, 
     isSettingsOpen: false, 
-    isUsabilityDrawerOpen: false 
+    isUsabilityDrawerOpen: false,
+    isAboutModalOpen: false,
+    isSidebarCollapsed: false
   }),
 
   showNotification: (message, type) => {
