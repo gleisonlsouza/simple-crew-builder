@@ -43,6 +43,8 @@ export const CrewNode = memo(({ id, data }: NodeProps<Node<CrewNodeData, 'crew'>
 
   return (
     <div 
+      data-testid="node-crew"
+      onClick={(e) => { e.stopPropagation(); setActiveNode(id); }}
       className={`group relative bg-white dark:bg-slate-900 rounded-xl shadow-sm hover:shadow-md dark:shadow-none border border-slate-200 dark:border-slate-700 w-56 overflow-visible transition-colors transition-shadow duration-300 cursor-pointer ${statusClasses} ${status === 'running' ? 'running' : ''}`}
       style={{ 
         '--node-color': '#8b5cf6',

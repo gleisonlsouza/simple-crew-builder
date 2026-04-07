@@ -1,4 +1,4 @@
-import { test } from '@playwright/test';
+import { test } from './utils/fixtures';
 import { setupBaseApiMocks } from './utils/apiMocks';
 import { DashboardPage } from './pages/DashboardPage';
 import { BuilderPage } from './pages/BuilderPage';
@@ -22,7 +22,7 @@ test('Frontend Smoke Test - Core Flow (POM Refactored)', async ({ page }) => {
   await builder.expectLoaded(project.name);
   
   // 6. Interaction: Open Node Configuration
-  await builder.openNodeConfig(0); // Agent Node
+  await builder.openNodeConfig('Test Agent'); // Agent Node
   await builder.expectConfigDrawerOpen();
 
   // 7. Interaction: Close Configuration Drawer

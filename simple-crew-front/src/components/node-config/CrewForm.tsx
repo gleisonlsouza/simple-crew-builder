@@ -125,6 +125,7 @@ export const CrewForm: React.FC<CrewFormProps> = memo(({
                 <button 
                   onClick={() => updateNodeData(nodeId, { inputs: { ...(data.inputs || {}), [`input_${Date.now()}`]: '' } })} 
                   className="px-2 py-1 bg-blue-500/10 border border-blue-500/20 text-blue-600 rounded-md text-[10px] font-bold uppercase hover:bg-blue-500/20 transition-colors"
+                  data-testid="btn-add-variable"
                 >
                   <Plus className="w-3 h-3 inline mr-1" />
                   Add Variable
@@ -138,6 +139,7 @@ export const CrewForm: React.FC<CrewFormProps> = memo(({
                     className="bg-brand-bg/50 border border-brand-border rounded-lg px-2.5 py-1.5 text-xs text-brand-text flex-1 min-w-0 focus:border-blue-500 outline-none transition-colors"
                     value={key.startsWith('input_') ? '' : key}
                     placeholder="Key"
+                    data-testid="input-variable-key"
                     onChange={(e) => {
                       const newInputs: Record<string, string> = { ...(data.inputs as Record<string, string>) };
                       delete newInputs[key];
@@ -149,6 +151,7 @@ export const CrewForm: React.FC<CrewFormProps> = memo(({
                     className="bg-brand-bg/50 border border-brand-border rounded-lg px-2.5 py-1.5 text-xs text-secondary flex-1 min-w-0 focus:border-blue-500 outline-none transition-colors"
                     value={value as string}
                     placeholder="Default Value"
+                    data-testid="input-variable-value"
                     onChange={(e) => {
                       const newInputs: Record<string, string> = { ...(data.inputs as Record<string, string>) };
                       newInputs[key] = e.target.value;

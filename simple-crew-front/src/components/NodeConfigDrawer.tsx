@@ -83,7 +83,10 @@ export function NodeConfigDrawer() {
   const { type, data } = activeNode;
 
   return (
-    <div className="absolute right-0 top-0 h-full w-96 bg-brand-card shadow-[-20px_0_50px_rgba(0,0,0,0.1)] dark:shadow-[-20px_0_50px_rgba(0,0,0,0.3)] z-50 flex flex-col border-l border-brand-border transition-all duration-300">
+    <div 
+      data-testid="config-drawer"
+      className="absolute right-0 top-0 h-full w-96 bg-brand-card shadow-[-20px_0_50px_rgba(0,0,0,0.1)] dark:shadow-[-20px_0_50px_rgba(0,0,0,0.3)] z-50 flex flex-col border-l border-brand-border transition-all duration-300"
+    >
       <div className="px-5 py-4 border-b border-brand-border flex items-center justify-between bg-brand-bg/50">
         <div className="flex items-center gap-3">
           <h2 className="text-lg font-bold text-brand-text capitalize tracking-tight">
@@ -138,6 +141,7 @@ export function NodeConfigDrawer() {
       {/* -- Autocomplete Dropdown -- */}
       {suggestionState.isOpen && (
         <div 
+          data-testid="suggestion-dropdown"
           className="fixed z-[100] bg-brand-card border border-brand-border rounded-xl shadow-2xl py-1.5 w-64 overflow-hidden animate-in fade-in zoom-in duration-150"
           style={(() => {
             const rect = suggestionState.anchorRect;
@@ -304,7 +308,14 @@ export function NodeConfigDrawer() {
       </div>
 
       <div className="p-4 border-t border-brand-border bg-brand-bg/50 flex gap-3">
-        <button onClick={() => deleteNode(activeNode.id)} className="flex items-center gap-2 text-rose-500 hover:bg-rose-500/10 px-4 py-2 rounded-lg text-sm font-medium transition-all"><Trash2 className="w-4 h-4" />Delete</button>
+        <button 
+          onClick={() => deleteNode(activeNode.id)} 
+          data-testid="btn-delete-node"
+          className="flex items-center gap-2 text-rose-500 hover:bg-rose-500/10 px-4 py-2 rounded-lg text-sm font-medium transition-all"
+        >
+          <Trash2 className="w-4 h-4" />
+          Delete
+        </button>
         <button onClick={() => setActiveNode(null)} className="flex-1 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-bold transition-all shadow-md">Done</button>
       </div>
 

@@ -109,6 +109,7 @@ export default function AnimationView() {
   
   // Refs for tracking sync
   const lastLogLength = useRef<number>(0);
+  const wasExecuting = useRef<boolean>(false);
   
   // Zoom and Pan State
   const [viewState, setViewState] = useState({ x: 0, y: 0, scale: 1 });
@@ -359,7 +360,8 @@ export default function AnimationView() {
   };
 
   useEffect(() => {
-    if (!isExecuting && isRunning) {
+    // Only show modal if we transitioned from executing=true to executing=false
+    if (wasExecuting.current && !isExecuting && isRunning) {
       Promise.resolve().then(() => {
         setIsRunning(false);
         addLog("✅ Crew execution finished.", "success");
@@ -370,6 +372,7 @@ export default function AnimationView() {
         setShowSuccessModal(true);
       });
     }
+    wasExecuting.current = isExecuting;
   }, [isExecuting, isRunning, addLog, robots]);
 
   const handleWheel = useCallback((e: WheelEvent) => {
@@ -878,6 +881,7 @@ export default function AnimationView() {
             <motion.div
               initial={{ scale: 0.9, opacity: 0, y: 20 }}
               animate={{ scale: 1, opacity: 1, y: 0 }}
+              data-testid="mission-success-modal"
               className="bg-[#0f172a] border-2 border-indigo-500/50 rounded-none p-10 max-w-xl w-full shadow-[0_0_50px_rgba(79,70,229,0.3)] text-center relative overflow-hidden"
               style={{ clipPath: 'polygon(0 0, 95% 0, 100% 5%, 100% 100%, 5% 100%, 0 95%)' }}
             >

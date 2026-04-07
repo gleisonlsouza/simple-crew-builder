@@ -98,6 +98,7 @@ export const TaskForm: React.FC<TaskFormProps> = memo(({
             </button>
           </div>
           <HighlightedTextField 
+            data-testid={`input-${(field as string).replace(/_/g, '-')}`}
             type="textarea" 
             value={(data[field] as string) || ''} 
             onKeyDown={onFieldKeyDown} 

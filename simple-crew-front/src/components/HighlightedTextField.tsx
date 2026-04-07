@@ -27,6 +27,7 @@ interface HighlightedTextFieldProps {
   highlightClassName?: string;
   language?: 'none' | 'python';
   rows?: number;
+  'data-testid'?: string;
 }
 
 const HighlightedTextField: React.FC<HighlightedTextFieldProps> = ({
@@ -37,7 +38,8 @@ const HighlightedTextField: React.FC<HighlightedTextFieldProps> = ({
   placeholder,
   className = '',
   language = 'none',
-  rows = 3
+  rows = 3,
+  'data-testid': dataTestId
 }) => {
   const [isFocused, setIsFocused] = React.useState(false);
   const containerRef = React.useRef<HTMLDivElement>(null);
@@ -104,7 +106,9 @@ const HighlightedTextField: React.FC<HighlightedTextFieldProps> = ({
       relative w-full rounded-xl border transition-all duration-200 overflow-hidden bg-brand-bg/30
       ${isFocused ? 'border-indigo-500 ring-4 ring-indigo-500/10' : 'border-brand-border'} 
       ${className}
-    `}>
+    `}
+    data-testid={dataTestId}
+    >
       {type === 'textarea' ? (
         <div ref={containerRef} className="min-h-full">
           <Editor

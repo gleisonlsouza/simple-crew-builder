@@ -124,6 +124,7 @@ export interface UISlice {
   isUsabilityDrawerOpen: boolean;
   isChatVisible: boolean;
   isAboutModalOpen: boolean;
+  isSidebarCollapsed: boolean;
   notification: AppNotification | null;
   toggleTheme: () => void;
   setIsSettingsOpen: (open: boolean) => void;
@@ -132,6 +133,7 @@ export interface UISlice {
   setIsUsabilityDrawerOpen: (open: boolean) => void;
   setIsChatVisible: (visible: boolean) => void;
   setIsAboutModalOpen: (open: boolean) => void;
+  setIsSidebarCollapsed: (collapsed: boolean) => void;
   resetUIState: () => void;
   showNotification: (message: string, type: 'success' | 'error' | 'warning' | 'info') => void;
   clearNotification: () => void;

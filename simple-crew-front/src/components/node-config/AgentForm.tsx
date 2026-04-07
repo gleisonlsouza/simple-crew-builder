@@ -116,6 +116,7 @@ export const AgentForm: React.FC<AgentFormProps> = memo(({
             onKeyDown={onFieldKeyDown}
             onChange={(e) => onFieldChange(e, 'role', (val) => updateNodeData(nodeId, { role: val }))}
             placeholder="e.g. Senior Researcher"
+            data-testid="field-agent-role"
           />
         </div>
 
@@ -138,6 +139,7 @@ export const AgentForm: React.FC<AgentFormProps> = memo(({
             onChange={(e) => onFieldChange(e, 'goal', (val) => updateNodeData(nodeId, { goal: val }))}
             placeholder="What does this agent need to achieve?"
             rows={3}
+            data-testid="input-goal"
           />
         </div>
 
@@ -160,6 +162,7 @@ export const AgentForm: React.FC<AgentFormProps> = memo(({
             onChange={(e) => onFieldChange(e, 'backstory', (val) => updateNodeData(nodeId, { backstory: val }))}
             placeholder="The agent's background and expertise..."
             rows={4}
+            data-testid="field-agent-backstory"
           />
         </div>
       </div>

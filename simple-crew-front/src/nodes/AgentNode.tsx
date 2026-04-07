@@ -51,6 +51,8 @@ export const AgentNode = memo(({ id, data }: NodeProps<Node<AgentNodeData, 'agen
 
   return (
     <div
+      data-testid="node-agent"
+      onClick={(e) => { e.stopPropagation(); setActiveNode(id); }}
       className={`group relative bg-white dark:bg-slate-900 rounded-xl shadow-sm hover:shadow-md dark:shadow-none border border-slate-200 dark:border-slate-700 w-56 overflow-visible transition-colors transition-shadow duration-300 cursor-pointer ${statusClasses} ${status === 'running' ? 'running' : ''}`}
       style={{
         '--node-color': '#3b82f6',

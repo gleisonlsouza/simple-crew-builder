@@ -16,8 +16,10 @@ export function Sidebar() {
   const setIsExplorerOpen = useStore((state) => state.setIsExplorerOpen);
   const setCurrentExplorerWsId = useStore((state) => state.setCurrentExplorerWsId);
   
+  const isSidebarCollapsed = useStore((state) => state.isSidebarCollapsed);
+  const setIsSidebarCollapsed = useStore((state) => state.setIsSidebarCollapsed);
+  
   const [isWsSelectorOpen, setIsWsSelectorOpen] = useState(false);
-  const [isCollapsed, setIsCollapsed] = useState(false);
   
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { fitView } = useReactFlow();
@@ -89,32 +91,32 @@ export function Sidebar() {
   const linkedWorkspace = workspaces.find(ws => ws.id === linkedWsId);
 
   return (
-    <div className={`${isCollapsed ? 'w-20' : 'w-64'} bg-brand-card border-r border-brand-border h-full flex flex-col transition-all duration-300 relative group/sidebar`}>
-      <div className={`p-4 border-b border-brand-border h-16 flex items-center ${isCollapsed ? 'justify-center' : ''}`}>
-        {!isCollapsed && (
+    <div className={`${isSidebarCollapsed ? 'w-20' : 'w-64'} bg-brand-card border-r border-brand-border h-full flex flex-col transition-all duration-300 ease-in-out relative group/sidebar`}>
+      <div className={`p-4 border-b border-brand-border h-16 flex items-center ${isSidebarCollapsed ? 'justify-center' : ''}`}>
+        {!isSidebarCollapsed && (
           <h2 className="text-xs font-semibold text-brand-muted uppercase tracking-wider animate-in fade-in duration-300">
             Components
           </h2>
         )}
-        {isCollapsed && <LayoutTemplate className="w-5 h-5 text-brand-muted" />}
+        {isSidebarCollapsed && <LayoutTemplate className="w-5 h-5 text-brand-muted" />}
       </div>
       
       <div className="flex-1 overflow-y-auto p-4 custom-scrollbar">
         <div className="flex flex-col gap-3">
           {/* Crew Node */}
           <div
-            className={`bg-brand-card border border-brand-border rounded-lg p-3 flex items-center ${isCollapsed ? 'justify-center' : 'justify-between'} cursor-grab hover:shadow-md hover:border-violet-400 dark:hover:border-violet-500 transition-all active:cursor-grabbing group relative`}
+            className={`bg-brand-card border border-brand-border rounded-lg p-3 flex items-center ${isSidebarCollapsed ? 'justify-center' : 'justify-between'} cursor-grab hover:shadow-md hover:border-violet-400 dark:hover:border-violet-500 transition-all active:cursor-grabbing group relative`}
             onDragStart={(event) => onDragStart(event, 'crew')}
             draggable
-            title={isCollapsed ? "Drag Crew to canvas" : ""}
+            title={isSidebarCollapsed ? "Drag Crew to canvas" : ""}
           >
             <div className="flex items-center gap-3">
               <div className="bg-violet-100 dark:bg-violet-900/30 p-2 rounded-md group-hover:bg-violet-500 group-hover:text-white transition-colors">
                 <Users className="w-4 h-4 text-violet-600 dark:text-violet-400 group-hover:text-white" />
               </div>
-              {!isCollapsed && <span className="text-sm font-medium text-brand-text">Crew</span>}
+              {!isSidebarCollapsed && <span className="text-sm font-medium text-brand-text">Crew</span>}
             </div>
-            {!isCollapsed && (
+            {!isSidebarCollapsed && (
               <button
                 onClick={(e) => {
                   e.stopPropagation();
@@ -124,6 +126,7 @@ export function Sidebar() {
                 }}
                 className="p-1.5 hover:bg-violet-100 dark:hover:bg-violet-900/50 rounded-md text-violet-600 dark:text-violet-400 transition-colors"
                 aria-label="Add Crew to canvas"
+                data-testid="btn-add-crew"
               >
                 <PlusCircle className="w-4 h-4" />
               </button>
@@ -132,18 +135,18 @@ export function Sidebar() {
 
           {/* Agent Node */}
           <div
-            className={`bg-brand-card border border-brand-border rounded-lg p-3 flex items-center ${isCollapsed ? 'justify-center' : 'justify-between'} cursor-grab hover:shadow-md hover:border-blue-400 dark:hover:border-blue-500 transition-all active:cursor-grabbing group relative`}
+            className={`bg-brand-card border border-brand-border rounded-lg p-3 flex items-center ${isSidebarCollapsed ? 'justify-center' : 'justify-between'} cursor-grab hover:shadow-md hover:border-blue-400 dark:hover:border-blue-500 transition-all active:cursor-grabbing group relative`}
             onDragStart={(event) => onDragStart(event, 'agent')}
             draggable
-            title={isCollapsed ? "Drag Agent to canvas" : ""}
+            title={isSidebarCollapsed ? "Drag Agent to canvas" : ""}
           >
             <div className="flex items-center gap-3">
               <div className="bg-blue-100 dark:bg-blue-900/30 p-2 rounded-md group-hover:bg-blue-500 group-hover:text-white transition-colors">
                 <User className="w-4 h-4 text-blue-600 dark:text-blue-400 group-hover:text-white" />
               </div>
-              {!isCollapsed && <span className="text-sm font-medium text-brand-text">Agent</span>}
+              {!isSidebarCollapsed && <span className="text-sm font-medium text-brand-text">Agent</span>}
             </div>
-            {!isCollapsed && (
+            {!isSidebarCollapsed && (
               <button
                 onClick={(e) => {
                   e.stopPropagation();
@@ -154,6 +157,7 @@ export function Sidebar() {
                 }}
                 className="p-1.5 hover:bg-blue-100 dark:hover:bg-blue-900/50 rounded-md text-blue-600 dark:text-blue-400 transition-colors"
                 aria-label="Add Agent to canvas"
+                data-testid="btn-add-agent"
               >
                 <PlusCircle className="w-4 h-4" />
               </button>
@@ -162,18 +166,18 @@ export function Sidebar() {
 
           {/* Task Node */}
           <div
-            className={`bg-brand-card border border-brand-border rounded-lg p-3 flex items-center ${isCollapsed ? 'justify-center' : 'justify-between'} cursor-grab hover:shadow-md hover:border-emerald-400 dark:hover:border-emerald-500 transition-all active:cursor-grabbing group relative`}
+            className={`bg-brand-card border border-brand-border rounded-lg p-3 flex items-center ${isSidebarCollapsed ? 'justify-center' : 'justify-between'} cursor-grab hover:shadow-md hover:border-emerald-400 dark:hover:border-emerald-500 transition-all active:cursor-grabbing group relative`}
             onDragStart={(event) => onDragStart(event, 'task')}
             draggable
-            title={isCollapsed ? "Drag Task to canvas" : ""}
+            title={isSidebarCollapsed ? "Drag Task to canvas" : ""}
           >
             <div className="flex items-center gap-3">
               <div className="bg-emerald-100 dark:bg-emerald-900/30 p-2 rounded-md group-hover:bg-emerald-500 group-hover:text-white transition-colors">
                 <CheckSquare className="w-4 h-4 text-emerald-600 dark:text-emerald-400 group-hover:text-white" />
               </div>
-              {!isCollapsed && <span className="text-sm font-medium text-brand-text">Task</span>}
+              {!isSidebarCollapsed && <span className="text-sm font-medium text-brand-text">Task</span>}
             </div>
-            {!isCollapsed && (
+            {!isSidebarCollapsed && (
               <button
                 onClick={(e) => {
                   e.stopPropagation();
@@ -184,6 +188,7 @@ export function Sidebar() {
                 }}
                 className="p-1.5 hover:bg-emerald-100 dark:hover:bg-emerald-900/50 rounded-md text-emerald-600 dark:text-emerald-400 transition-colors"
                 aria-label="Add Task to canvas"
+                data-testid="btn-add-task"
               >
                 <PlusCircle className="w-4 h-4" />
               </button>
@@ -192,18 +197,18 @@ export function Sidebar() {
 
           {/* Usability Cards */}
           <div
-            className={`bg-brand-card border border-brand-border rounded-lg p-3 flex items-center ${isCollapsed ? 'justify-center' : 'justify-between'} hover:shadow-md hover:border-fuchsia-400 dark:hover:border-fuchsia-500 transition-all group relative cursor-pointer`}
+            className={`bg-brand-card border border-brand-border rounded-lg p-3 flex items-center ${isSidebarCollapsed ? 'justify-center' : 'justify-between'} hover:shadow-md hover:border-fuchsia-400 dark:hover:border-fuchsia-500 transition-all group relative cursor-pointer`}
             onClick={() => setIsUsabilityDrawerOpen(true)}
             data-testid="btn-open-usability-drawer"
-            title={isCollapsed ? "Open Usability Cards" : ""}
+            title={isSidebarCollapsed ? "Open Usability Cards" : ""}
           >
             <div className="flex items-center gap-3">
               <div className="bg-fuchsia-100 dark:bg-fuchsia-900/30 p-2 rounded-md group-hover:bg-fuchsia-500 group-hover:text-white transition-colors">
                 <LayoutTemplate className="w-4 h-4 text-fuchsia-600 dark:text-fuchsia-400 group-hover:text-white" />
               </div>
-              {!isCollapsed && <span className="text-sm font-medium text-brand-text">Usability c.</span>}
+              {!isSidebarCollapsed && <span className="text-sm font-medium text-brand-text">Usability c.</span>}
             </div>
-            {!isCollapsed && (
+            {!isSidebarCollapsed && (
               <div className="p-1.5 hover:bg-fuchsia-100 dark:hover:bg-fuchsia-900/50 rounded-md text-fuchsia-600 dark:text-fuchsia-400 transition-colors" aria-label="Open Usability Cards">
                 <PlusCircle className="w-4 h-4" />
               </div>
@@ -211,7 +216,7 @@ export function Sidebar() {
           </div>
         </div>
 
-        {!isCollapsed && (
+        {!isSidebarCollapsed && (
           <div className="mt-6 pt-6 border-t border-brand-border animate-in fade-in duration-500">
             <div className="flex items-center gap-2 px-1 mb-4">
               <FolderOpen className="w-3.5 h-3.5 text-indigo-500" />
@@ -274,34 +279,34 @@ export function Sidebar() {
         )}
       </div>
 
-      <div className={`p-4 border-t border-brand-border bg-brand-bg/30 space-y-2 ${isCollapsed ? 'flex flex-col items-center' : ''}`}>
+      <div className={`p-4 border-t border-brand-border bg-brand-bg/30 space-y-2 ${isSidebarCollapsed ? 'flex flex-col items-center' : ''}`}>
         <input type="file" accept=".json" ref={fileInputRef} onChange={handleFileChange} className="hidden" />
         <button
           onClick={() => fileInputRef.current?.click()}
-          className={`w-full flex items-center ${isCollapsed ? 'justify-center px-0' : 'gap-3 px-4'} py-2 text-sm font-medium text-brand-muted hover:bg-brand-card hover:text-brand-text rounded-lg transition-all`}
+          className={`w-full flex items-center ${isSidebarCollapsed ? 'justify-center px-0' : 'gap-3 px-4'} py-2 text-sm font-medium text-brand-muted hover:bg-brand-card hover:text-brand-text rounded-lg transition-all`}
           title="Import JSON"
         >
           <Upload className="w-4 h-4" />
-          {!isCollapsed && "Import JSON"}
+          {!isSidebarCollapsed && "Import JSON"}
         </button>
         
         <button
           onClick={() => setIsSettingsOpen(true)}
-          className={`w-full flex items-center ${isCollapsed ? 'justify-center px-0' : 'gap-3 px-4'} py-2 text-sm font-medium text-brand-muted hover:bg-brand-card hover:text-brand-text rounded-lg transition-all`}
+          className={`w-full flex items-center ${isSidebarCollapsed ? 'justify-center px-0' : 'gap-3 px-4'} py-2 text-sm font-medium text-brand-muted hover:bg-brand-card hover:text-brand-text rounded-lg transition-all`}
           title="Settings"
         >
           <Settings className="w-4 h-4" />
-          {!isCollapsed && "Settings"}
+          {!isSidebarCollapsed && "Settings"}
         </button>
       </div>
 
       {/* Collapse Toggle Button */}
       <button
-        onClick={() => setIsCollapsed(!isCollapsed)}
+        onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
         className="absolute -right-3 top-1/2 -translate-y-1/2 bg-brand-card border border-brand-border rounded-full p-1 shadow-md text-brand-muted hover:text-indigo-500 transition-all z-30 ring-4 ring-brand-bg"
-        aria-label={isCollapsed ? "Expand Sidebar" : "Collapse Sidebar"}
+        aria-label={isSidebarCollapsed ? "Expand Sidebar" : "Collapse Sidebar"}
       >
-        {isCollapsed ? <ChevronRight className="w-3 h-3" /> : <ChevronLeft className="w-3 h-3" />}
+        {isSidebarCollapsed ? <ChevronRight className="w-3 h-3" /> : <ChevronLeft className="w-3 h-3" />}
       </button>
     </div>
   );

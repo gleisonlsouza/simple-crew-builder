@@ -194,6 +194,7 @@ const Dashboard = () => {
                 <div 
                   key={project.id}
                   onClick={() => handleEditWorkflow(project.id)}
+                  data-testid="project-card"
                   className="group bg-brand-card border border-brand-border p-6 rounded-2xl hover:shadow-xl hover:shadow-indigo-500/10 hover:border-indigo-500 dark:hover:border-indigo-500/50 transition-all cursor-pointer relative overflow-hidden flex flex-col"
                 >
                   <div className="flex items-start justify-between mb-4">
@@ -345,18 +346,28 @@ const Dashboard = () => {
       {isCreateModalOpen && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-slate-950/40 backdrop-blur-sm transition-opacity" onClick={() => setIsCreateModalOpen(false)} />
-          <div className="bg-brand-card w-full max-w-md rounded-2xl border border-brand-border shadow-2xl relative z-10 animate-in fade-in zoom-in duration-200">
+          <div 
+            role="dialog" 
+            aria-modal="true" 
+            aria-labelledby="modal-title"
+            className="bg-brand-card w-full max-w-md rounded-2xl border border-brand-border shadow-2xl relative z-10 animate-in fade-in zoom-in duration-200"
+          >
             <div className="px-6 py-4 border-b border-brand-border flex items-center justify-between">
-              <h2 className="text-lg font-bold text-brand-text">Create New Workflow</h2>
-              <button onClick={() => setIsCreateModalOpen(false)} className="p-2 hover:bg-brand-bg rounded-lg text-brand-muted transition-colors">
+              <h2 id="modal-title" className="text-lg font-bold text-brand-text">Create New Workflow</h2>
+              <button 
+                onClick={() => setIsCreateModalOpen(false)} 
+                aria-label="Close modal"
+                className="p-2 hover:bg-brand-bg rounded-lg text-brand-muted transition-colors"
+              >
                 <X className="w-5 h-5" />
               </button>
             </div>
             
             <div className="p-6 space-y-4">
               <div>
-                <label className="block text-sm font-semibold text-brand-text mb-1.5">Name</label>
+                <label htmlFor="workflowName" className="block text-sm font-semibold text-brand-text mb-1.5">Name</label>
                 <input 
+                  id="workflowName"
                   type="text"
                   autoFocus
                   value={newProject.name}
@@ -366,8 +377,9 @@ const Dashboard = () => {
                 />
               </div>
               <div>
-                <label className="block text-sm font-semibold text-brand-text mb-1.5">Description (Optional)</label>
+                <label htmlFor="workflowDescription" className="block text-sm font-semibold text-brand-text mb-1.5">Description (Optional)</label>
                 <textarea 
+                  id="workflowDescription"
                   value={newProject.description}
                   onChange={(e) => setNewProject({...newProject, description: e.target.value})}
                   className="w-full px-4 py-2.5 bg-brand-bg border border-brand-border rounded-xl focus:border-indigo-500 outline-none text-brand-text transition-all min-h-[100px] resize-none"

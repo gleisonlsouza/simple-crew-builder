@@ -18,3 +18,14 @@ export const useStore = create<AppState>()((...a) => ({
   ...createAISlice(...a),
   ...createExecutionSlice(...a),
 }));
+
+declare global {
+  interface Window {
+    __SIMPLE_CREW_STORE__?: typeof useStore;
+  }
+}
+
+// Expose store on window for E2E testing
+if (typeof window !== 'undefined') {
+  window.__SIMPLE_CREW_STORE__ = useStore;
+}

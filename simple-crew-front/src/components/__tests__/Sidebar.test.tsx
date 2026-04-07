@@ -60,12 +60,14 @@ describe('Sidebar (Builder Node Palette)', () => {
   const mockSetIsUsabilityDrawerOpen = vi.fn();
   const mockUpdateProjectWorkspaceId = vi.fn();
   const mockUpdateSettings = vi.fn();
+  const mockSetIsSidebarCollapsed = vi.fn();
 
   const defaultState = {
     workspaces: [{ id: 'ws-1', name: 'Test Workspace', path: '/test' }],
     activeWorkspaceId: null,
     currentProjectId: 'proj-1',
     currentProjectWorkspaceId: null,
+    isSidebarCollapsed: false,
     addNodeWithAutoPosition: mockAddNodeWithAutoPosition,
     loadProjectJson: mockLoadProjectJson,
     setIsSettingsOpen: mockSetIsSettingsOpen,
@@ -74,6 +76,7 @@ describe('Sidebar (Builder Node Palette)', () => {
     updateSettings: mockUpdateSettings,
     setIsExplorerOpen: vi.fn(),
     setCurrentExplorerWsId: vi.fn(),
+    setIsSidebarCollapsed: mockSetIsSidebarCollapsed,
   };
 
   beforeEach(() => {
@@ -120,21 +123,23 @@ describe('Sidebar (Builder Node Palette)', () => {
     expect(dataTransfer.effectAllowed).toBe('move');
   });
 
-  it('toggles collapse state', () => {
+  it('calls setIsSidebarCollapsed when toggle button is clicked', () => {
     render(wrap(<Sidebar />));
     const toggleBtn = screen.getByLabelText('Collapse Sidebar');
-    
-    // Initial: Expanded
-    expect(screen.getByText('Components')).toBeInTheDocument();
-    
-    // Collapse
     fireEvent.click(toggleBtn);
+    expect(mockSetIsSidebarCollapsed).toHaveBeenCalledWith(true);
+  });
+
+  it('renders collapsed state correctly', () => {
+    (useStore as unknown as Mock).mockImplementation((selector: any) => 
+        selector({ ...defaultState, isSidebarCollapsed: true })
+    );
+    render(wrap(<Sidebar />));
     expect(screen.queryByText('Components')).not.toBeInTheDocument();
     expect(screen.getByLabelText('Expand Sidebar')).toBeInTheDocument();
     
-    // Expand
     fireEvent.click(screen.getByLabelText('Expand Sidebar'));
-    expect(screen.getByText('Components')).toBeInTheDocument();
+    expect(mockSetIsSidebarCollapsed).toHaveBeenCalledWith(false);
   });
 
   it('opens usability drawer', () => {

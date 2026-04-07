@@ -167,12 +167,16 @@ export function ResizableChatPanel() {
   };
 
 
+  const isSidebarCollapsed = useStore((state) => state.isSidebarCollapsed);
+
   if (!isChatVisible) return null;
 
   return (
     <div
       ref={panelRef}
-      className={`absolute bottom-0 left-64 right-0 z-[50] bg-brand-bg border-t border-brand-border flex flex-col transition-[height] duration-0 shadow-2xl ${
+      className={`absolute bottom-0 ${isSidebarCollapsed ? 'left-20' : 'left-64'} right-0 z-[50] bg-brand-bg border-t border-brand-border flex flex-col ${
+        !isResizing && !isMinimized ? 'transition-[left] duration-300 ease-in-out' : ''
+      } shadow-2xl ${
         isMinimized ? 'h-12' : ''
       }`}
       style={!isMinimized ? { height: `${chatHeight}px` } : undefined}

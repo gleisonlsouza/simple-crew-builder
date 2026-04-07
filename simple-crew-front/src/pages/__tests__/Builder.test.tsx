@@ -95,9 +95,7 @@ vi.mock('@xyflow/react', () => {
 vi.mock('../../components/Sidebar', () => ({
   Sidebar: () => <div data-testid="mock-sidebar" />,
 }));
-vi.mock('../../components/MainSidebar', () => ({
-  MainSidebar: () => <div data-testid="mock-main-sidebar" />,
-}));
+
 vi.mock('../../components/NodeConfigDrawer', () => ({
   NodeConfigDrawer: () => <div data-testid="mock-node-config-drawer" />,
 }));
@@ -114,7 +112,7 @@ vi.mock('../../components/ResizableChatPanel', () => ({
   ResizableChatPanel: () => <div data-testid="mock-chat-panel" />,
 }));
 vi.mock('../../components/ExecutionsTab', () => ({
-  ExecutionsTab: () => <div data-testid="mock-executions-tab" />,
+  default: () => <div data-testid="mock-executions-tab">Mocked Executions Tab</div>
 }));
 vi.mock('../../components/AboutModal', () => ({
   AboutModal: ({ isOpen }: { isOpen: boolean }) => isOpen ? <div data-testid="mock-about-modal" /> : null,

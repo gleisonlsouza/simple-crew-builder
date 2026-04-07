@@ -17,7 +17,7 @@ import { CrewNode } from '../nodes/CrewNode';
 import { ChatNode } from '../nodes/ChatNode';
 import { WebhookNode } from '../nodes/WebhookNode';
 import { Sidebar } from '../components/Sidebar';
-import { MainSidebar } from '../components/MainSidebar';
+
 
 import { NodeConfigDrawer } from '../components/NodeConfigDrawer';
 import { DeletableEdge } from '../nodes/DeletableEdge';
@@ -360,7 +360,7 @@ function FlowBuilder() {
       </header>
 
       <div className="flex-1 w-full h-full flex flex-row relative overflow-hidden">
-        <MainSidebar />
+
         <Sidebar />
         
         {/* Editor View - Preserved in DOM via 'hidden' */}
@@ -369,13 +369,13 @@ function FlowBuilder() {
         </div>
 
         {/* Animation View - Live Simulation */}
-        {activeView === 'animation' && (
+        <div className={`flex-1 h-full ${activeView === 'animation' ? 'flex' : 'hidden'}`}>
           <AnimationView />
-        )}
+        </div>
         
-        {activeView === 'executions' && (
+        <div className={`flex-1 h-full ${activeView === 'executions' ? 'flex' : 'hidden'}`}>
           <ExecutionsTab onReRunSuccess={() => setActiveView('editor')} />
-        )}
+        </div>
 
         <UsabilityCardsDrawer />
         <NodeConfigDrawer />
