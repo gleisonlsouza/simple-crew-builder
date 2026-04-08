@@ -23,13 +23,14 @@ def get_search_knowledge_base_tool(kb_id: str):
             embedding_config = get_embedding_model_config(db_session)
             api_key = embedding_config.get("api_key")
             model_name = embedding_config.get("model_name")
+            base_url = embedding_config.get("base_url")
             
         if not api_key:
             return "Erro: OpenAI API Key não configurada para embeddings."
             
         # 2. Gera o Embedding da Query via Cliente Nativo da OpenAI
         try:
-            client = OpenAI(api_key=api_key)
+            client = OpenAI(api_key=api_key, base_url=base_url)
             response = client.embeddings.create(
                 input=query,
                 model=model_name

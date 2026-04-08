@@ -31,12 +31,10 @@ def process_document(kb_id: str, file_path: str, doc_id: str = None):
     try:
         content = extract_text_from_file(file_path)
     except Exception as e:
-        print(f"DEBUG: Error extracting text from {file_path}: {e}")
-        return False
+        raise RuntimeError(f"Error extracting text from {file_path}: {str(e)}")
         
     if not content:
-        print(f"DEBUG: No text extracted from {file_path}")
-        return False
+        raise RuntimeError(f"No text extracted from {file_path}")
         
     # 2. Chunking
     language = get_language_from_ext(file_path)
@@ -48,20 +46,20 @@ def process_document(kb_id: str, file_path: str, doc_id: str = None):
         chunks = chunk_text(content)
         
     if not chunks:
-        return False
+        raise RuntimeError("No chunks generated from document")
         
     # 3. Get Model Config for Embeddings
     with Session(engine) as db_session:
         embedding_config = get_embedding_model_config(db_session)
         api_key = embedding_config.get("api_key")
         model_name = embedding_config.get("model_name")
+        base_url = embedding_config.get("base_url")
         
     if not api_key:
-        print("DEBUG: OpenAI API Key not configured for indexing.")
-        return False
+        raise RuntimeError("OpenAI API Key not configured for indexing.")
         
     # 4. Generate Embeddings & Save to Neo4j
-    client = OpenAI(api_key=api_key)
+    client = OpenAI(api_key=api_key, base_url=base_url)
     driver = neo4j_manager.driver
     
     try:
@@ -114,5 +112,5 @@ def process_document(kb_id: str, file_path: str, doc_id: str = None):
         print(f"DEBUG: Successfully indexed {len(chunks)} chunks for KB: {kb_id}")
         return True
     except Exception as e:
-        print(f"DEBUG: Error during RAG indexing: {e}")
-        return False
+        # Rethrowing with context
+        raise RuntimeError(f"Error during RAG indexing: {str(e)}")

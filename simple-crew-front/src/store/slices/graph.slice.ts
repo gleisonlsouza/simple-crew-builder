@@ -628,7 +628,11 @@ export const createGraphSlice: StateCreator<AppState, [], [], GraphSlice> = (set
       nodeWarnings: {},
       executionResult: null,
       messages: INITIAL_CHAT_MESSAGES,
-      activeNodeId: null
+      activeNodeId: null,
+      currentProjectId: null,
+      currentProjectName: null,
+      currentProjectDescription: null,
+      isDirty: false
     });
   },
 

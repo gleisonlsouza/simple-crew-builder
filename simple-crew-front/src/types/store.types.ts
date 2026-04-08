@@ -76,6 +76,8 @@ export interface KnowledgeBaseDocument {
   id: string;
   filename: string;
   size?: number;
+  status?: 'indexing' | 'success' | 'failed';
+  error?: string | null;
   created_at: string;
 }
 
