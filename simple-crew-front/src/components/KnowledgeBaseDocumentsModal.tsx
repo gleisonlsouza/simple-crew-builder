@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { X, Upload, FileText, Loader2, HardDrive, CheckCircle2, Trash2, AlertTriangle, Folder, ChevronRight, ChevronDown } from 'lucide-react';
-import toast from 'react-hot-toast';
+import { X, Upload, FileText, Loader2, HardDrive, CheckCircle2, Trash2, AlertTriangle, AlertCircle, Clock, Folder, ChevronRight, ChevronDown } from 'lucide-react';
 import { useStore } from '../store/index';
 import type { KnowledgeBase, KnowledgeBaseDocument } from '../types/store.types';
 import { ConfirmationModal } from './ConfirmationModal';
@@ -63,10 +62,39 @@ const FileTreeItem: React.FC<{
         {!isFolder && node.document && (
           <div className="flex items-center gap-4 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
             <span className="text-[10px] text-brand-muted hidden sm:inline">{formatSize(node.document.size)}</span>
-            <span className="text-[10px] font-bold text-emerald-500 bg-emerald-500/10 px-2 py-0.5 rounded-full flex items-center gap-1 scale-90">
-              <CheckCircle2 className="w-3 h-3" />
-              INDEXED
-            </span>
+            
+            {/* Dynamic Status Badge */}
+            {(!node.document.status || node.document.status === 'success') && (
+              <span className="text-[10px] font-bold text-emerald-500 bg-emerald-500/10 px-2 py-0.5 rounded-full flex items-center gap-1 scale-90">
+                <CheckCircle2 className="w-3 h-3" />
+                READY
+              </span>
+            )}
+            
+            {node.document.status === 'indexing' && (
+              <span className="text-[10px] font-bold text-amber-500 bg-amber-500/10 px-2 py-0.5 rounded-full flex items-center gap-1 scale-90">
+                <Clock className="w-3 h-3 animate-pulse" />
+                INDEXING...
+              </span>
+            )}
+
+            {node.document.status === 'failed' && (
+              <div className="flex flex-col items-end gap-0.5">
+                <span 
+                  className="text-[10px] font-bold text-rose-500 bg-rose-500/10 px-2 py-0.5 rounded-full flex items-center gap-1 scale-90"
+                  title={node.document.error || 'Unknown error during indexing'}
+                >
+                  <AlertCircle className="w-3 h-3" />
+                  FAILED
+                </span>
+                {node.document.error && (
+                  <span className="text-[9px] text-rose-500/60 max-w-[120px] truncate leading-tight pr-1">
+                    {node.document.error}
+                  </span>
+                )}
+              </div>
+            )}
+
             <button
               onClick={(e) => {
                 e.stopPropagation();
@@ -113,6 +141,7 @@ export const KnowledgeBaseDocumentsModal: React.FC<Props> = ({ kb, onClose }) =>
   const fileInputRef = useRef<HTMLInputElement>(null);
   const embeddingModelId = useStore((state) => state.embeddingModelId);
   const models = useStore((state) => state.models);
+  const showNotification = useStore((state) => state.showNotification);
   
   const isValidEmbeddingModel = !!embeddingModelId && 
     embeddingModelId !== 'null' && 
@@ -122,15 +151,15 @@ export const KnowledgeBaseDocumentsModal: React.FC<Props> = ({ kb, onClose }) =>
     setIsLoading(true);
     try {
       const response = await fetch(`${API_URL}/api/knowledge-bases/${kb.id}/documents`);
-      if (!response.ok) throw new Error('Failed to fetch documents');
       const data = await response.json();
       setDocuments(data);
     } catch (error: unknown) {
-      toast.error(error instanceof Error ? error.message : String(error));
+      const message = error instanceof Error ? error.message : String(error);
+      showNotification(message, 'error');
     } finally {
       setIsLoading(false);
     }
-  }, [kb.id]);
+  }, [kb.id, showNotification]);
 
   useEffect(() => {
     fetchDocuments();
@@ -141,10 +170,7 @@ export const KnowledgeBaseDocumentsModal: React.FC<Props> = ({ kb, onClose }) =>
     if (!files || files.length === 0) return;
     
     if (!isValidEmbeddingModel) {
-      toast.error('No Default Embedding Model selected. Please go to Settings > AI Models and select an Embedding LLM first.', {
-        duration: 5000,
-        icon: '⚠️'
-      });
+      showNotification('No Default Embedding Model selected. Please go to Settings > AI Models and select an Embedding LLM first.', 'warning');
       return;
     }
 
@@ -160,15 +186,19 @@ export const KnowledgeBaseDocumentsModal: React.FC<Props> = ({ kb, onClose }) =>
         body: formData,
       });
 
-      if (!response.ok) throw new Error('Upload failed');
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ detail: 'Failed to index document. Check your AI Provider settings.' }));
+        throw new Error(errorData.detail || 'Failed to index document. Check your AI Provider settings.');
+      }
       
       const newDocs = await response.json();
-      toast.success(`${newDocs.length} file(s) uploaded successfully!`);
+      showNotification(`${newDocs.length} file(s) uploaded successfully!`, 'success');
       // Reset input
       if (fileInputRef.current) fileInputRef.current.value = '';
       fetchDocuments();
     } catch (error: unknown) {
-      toast.error(error instanceof Error ? error.message : String(error));
+      const message = error instanceof Error ? error.message : String(error);
+      showNotification(`Upload Failed: ${message}`, 'error');
     } finally {
       setIsUploading(false);
     }
@@ -189,10 +219,11 @@ export const KnowledgeBaseDocumentsModal: React.FC<Props> = ({ kb, onClose }) =>
 
       if (!response.ok) throw new Error('Delete failed');
       
-      toast.success('Document deleted successfully');
+      showNotification('Document deleted successfully', 'success');
       fetchDocuments();
     } catch (error: unknown) {
-      toast.error(error instanceof Error ? error.message : String(error));
+      const message = error instanceof Error ? error.message : String(error);
+      showNotification(message, 'error');
     } finally {
       setIsConfirmOpen(false);
       setDocToDelete(null);
@@ -283,7 +314,7 @@ export const KnowledgeBaseDocumentsModal: React.FC<Props> = ({ kb, onClose }) =>
               e.preventDefault();
               e.stopPropagation();
               if (!isValidEmbeddingModel) {
-                toast.error('No Embedding Model. Please configure one in Settings first.');
+                showNotification('No Embedding Model. Please configure one in Settings first.', 'error');
                 return;
               }
               const files = e.dataTransfer.files;
@@ -294,7 +325,7 @@ export const KnowledgeBaseDocumentsModal: React.FC<Props> = ({ kb, onClose }) =>
             }}
             onClick={() => {
               if (!isValidEmbeddingModel) {
-                toast.error('Please configure a Default Embedding Model in Settings first.');
+                showNotification('Please configure a Default Embedding Model in Settings first.', 'error');
                 return;
               }
               fileInputRef.current?.click();

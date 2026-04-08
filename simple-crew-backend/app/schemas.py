@@ -378,6 +378,8 @@ class KnowledgeBaseDocumentResponse(BaseModel):
     id: str
     filename: str
     size: Optional[int] = None
+    status: str = "success"
+    error: Optional[str] = None
     created_at: Any
 
 # Execution History Schemas

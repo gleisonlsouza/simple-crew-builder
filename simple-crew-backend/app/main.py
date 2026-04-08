@@ -1,5 +1,6 @@
 import json
 import uuid
+from uuid import UUID
 import io
 import os
 import shutil
@@ -1170,13 +1171,13 @@ async def delete_workspace_file(
 
 # --- Execution History Endpoints ---
 @app.get("/api/v1/projects/{project_id}/executions", response_model=List[ExecutionRead])
-async def list_project_executions(project_id: str, session: Session = Depends(get_session)):
-    statement = select(Execution).where(Execution.project_id == uuid.UUID(project_id)).order_by(Execution.timestamp.desc())
+async def list_project_executions(project_id: UUID, session: Session = Depends(get_session)):
+    statement = select(Execution).where(Execution.project_id == project_id).order_by(Execution.timestamp.desc())
     return session.exec(statement).all()
 
 @app.get("/api/v1/executions/{execution_id}", response_model=ExecutionRead)
-async def get_execution(execution_id: str, session: Session = Depends(get_session)):
-    execution = session.get(Execution, uuid.UUID(execution_id))
+async def get_execution(execution_id: UUID, session: Session = Depends(get_session)):
+    execution = session.get(Execution, execution_id)
     if not execution:
         raise HTTPException(status_code=404, detail="Execução não encontrada")
     return execution

@@ -93,3 +93,5 @@ playwright-report/
 
 # Rastros, vídeos e screenshots gerados quando um teste falha (Traces)
 test-results/
+
+documents/

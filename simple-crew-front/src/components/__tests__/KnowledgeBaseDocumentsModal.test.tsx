@@ -26,6 +26,8 @@ vi.mock('lucide-react', () => ({
   CheckCircle2: () => <span data-testid="icon-check" />,
   Trash2: () => <span data-testid="icon-trash" />,
   AlertTriangle: () => <span data-testid="icon-alert" />,
+  AlertCircle: () => <span data-testid="icon-alert-circle" />,
+  Clock: () => <span data-testid="icon-clock" />,
   Folder: () => <span data-testid="icon-folder" />,
   ChevronRight: () => <span data-testid="icon-chevron-right" />,
   ChevronDown: () => <span data-testid="icon-chevron-down" />,
@@ -47,9 +49,7 @@ vi.mock('../../store/index', () => ({
 }));
 
 // Mock do Toast
-vi.mock('react-hot-toast', () => ({
-  default: { success: vi.fn(), error: vi.fn() }
-}));
+const mockShowNotification = vi.fn();
 
 describe('KnowledgeBaseDocumentsModal', () => {
   const mockKB = { 
@@ -69,6 +69,7 @@ describe('KnowledgeBaseDocumentsModal', () => {
     vi.mocked(useStore).mockImplementation((selector: any) => selector({
       embeddingModelId: 'model-123',
       models: [{ id: 'model-123', name: 'Embed Model', model_type: 'EMBEDDING' }],
+      showNotification: mockShowNotification,
     }));
 
     fetchSpy = vi.fn().mockImplementation((url) => {
@@ -106,22 +107,24 @@ describe('KnowledgeBaseDocumentsModal', () => {
     vi.mocked(useStore).mockImplementation((selector: any) => selector({
       embeddingModelId: null,
       models: [],
+      showNotification: mockShowNotification,
     }));
 
     render(<KnowledgeBaseDocumentsModal kb={mockKB} onClose={mockOnClose} />);
     const uploadArea = (await screen.findByText(/Embedding Model Missing/i)).parentElement;
     fireEvent.click(uploadArea!);
     
-    const toast = (await import('react-hot-toast')).default;
-    expect(toast.error).toHaveBeenCalled();
+    expect(mockShowNotification).toHaveBeenCalledWith(
+      expect.stringContaining('Please configure a Default Embedding Model'),
+      'error'
+    );
   });
 
   it('triggers upload fetch', async () => {
-    vi.setConfig({ testTimeout: 60000 });
-    // Garantir que o store esteja correto para o upload
     vi.mocked(useStore).mockImplementation((selector: any) => selector({
       embeddingModelId: 'model-123',
       models: [{ id: 'model-123', name: 'Embed Model', model_type: 'EMBEDDING' }],
+      showNotification: mockShowNotification,
     }));
 
     render(<KnowledgeBaseDocumentsModal kb={mockKB} onClose={mockOnClose} />);

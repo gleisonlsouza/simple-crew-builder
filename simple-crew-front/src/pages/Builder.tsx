@@ -186,6 +186,11 @@ function FlowBuilder() {
           return;
         }
 
+        // Clean previous workflow state to prevent stale data blinking
+        if (storeState.currentProjectId && storeState.currentProjectId !== id) {
+          resetProject();
+        }
+
         loadProject(id);
       }
     } else {
@@ -197,8 +202,9 @@ function FlowBuilder() {
   useEffect(() => {
     return () => {
       resetUIState();
+      resetProject();
     };
-  }, [resetUIState]);
+  }, [resetUIState, resetProject]);
 
   const [activeView, setActiveView] = React.useState<'editor' | 'animation' | 'executions'>('editor');
   const [isEditingTitle, setIsEditingTitle] = React.useState(false);

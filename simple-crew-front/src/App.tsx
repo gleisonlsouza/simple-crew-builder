@@ -5,6 +5,7 @@ import Builder from './pages/Builder';
 import SettingsPage from './pages/Settings';
 import { useStore } from './store/index';
 import { WorkspaceExplorer } from './components/WorkspaceExplorer';
+import { Toast } from './components/Toast';
 
 function App() {
   const theme = useStore((state) => state.theme);
@@ -38,6 +39,7 @@ function App() {
         <Route path="/settings" element={<SettingsPage />} />
       </Routes>
       <WorkspaceExplorer />
+      <Toast />
     </BrowserRouter>
   );
 }

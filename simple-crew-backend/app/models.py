@@ -14,6 +14,11 @@ class ExecutionStatus(str, Enum):
     SUCCESS = "success"
     ERROR = "error"
 
+class DocumentStatus(str, Enum):
+    INDEXING = "indexing"
+    SUCCESS = "success"
+    FAILED = "failed"
+
 class User(SQLModel, table=True):
     id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
     name: str
