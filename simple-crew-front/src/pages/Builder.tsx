@@ -379,9 +379,11 @@ function FlowBuilder() {
           <AnimationView />
         </div>
         
-        <div className={`flex-1 h-full ${activeView === 'executions' ? 'flex' : 'hidden'}`}>
-          <ExecutionsTab onReRunSuccess={() => setActiveView('editor')} />
-        </div>
+        {activeView === 'executions' && (
+          <div className="flex-1 h-full flex">
+            <ExecutionsTab onReRunSuccess={() => setActiveView('editor')} />
+          </div>
+        )}
 
         <UsabilityCardsDrawer />
         <NodeConfigDrawer />

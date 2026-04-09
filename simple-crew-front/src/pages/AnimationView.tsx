@@ -2,16 +2,13 @@ import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { useShallow } from 'zustand/react/shallow';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
-  Coffee, 
-  Cpu,
-  Play, 
-  Gamepad2, 
+  Coffee,
+  Gamepad2,
   BatteryCharging,
-  Search,
+  Play,
+  Sparkles,
   Type,
   Layout,
-  Code,
-  Sparkles,
   FileText,
   Globe,
   Database,
@@ -24,7 +21,15 @@ import {
   Award,
   BarChart3,
   Activity,
-  Monitor
+  Monitor,
+  PenTool,
+  Brain,
+  Search as SearchIcon,
+  Code as CodeIcon,
+  Ghost,
+  User,
+  Settings,
+  Cpu as CpuIcon
 } from 'lucide-react';
 import type { Robot, RobotState, Station as StationType, LogEntry } from '../components/Animation/types';
 import { RobotIcon } from '../components/Animation/RobotIcon';
@@ -38,16 +43,32 @@ import type { AgentNodeData, TaskNodeData } from '../types/nodes.types';
 
 const getTaskIcon = (name: string, description: string) => {
   const text = (name + ' ' + description).toLowerCase();
-  if (text.includes('code') || text.includes('dev')) return <Code size={20} />;
+  if (text.includes('code') || text.includes('dev')) return <CodeIcon size={20} />;
   if (text.includes('design') || text.includes('ui') || text.includes('layout')) return <Layout size={20} />;
   if (text.includes('write') || text.includes('copy') || text.includes('text')) return <Type size={20} />;
-  if (text.includes('search') || text.includes('find') || text.includes('research')) return <Search size={20} />;
+  if (text.includes('search') || text.includes('find') || text.includes('research')) return <SearchIcon size={20} />;
   if (text.includes('data') || text.includes('base') || text.includes('sql')) return <Database size={20} />;
   if (text.includes('web') || text.includes('site') || text.includes('internet')) return <Globe size={20} />;
   if (text.includes('file') || text.includes('read') || text.includes('write')) return <FileText size={20} />;
   if (text.includes('term') || text.includes('cmd') || text.includes('shell')) return <Terminal size={20} />;
   if (text.includes('chat') || text.includes('prompt') || text.includes('message')) return <MessageSquare size={20} />;
   return <Sparkles size={20} />;
+};
+
+const getAgentIcon = (role: string, name: string, color: string) => {
+  const text = (role + ' ' + name).toLowerCase();
+  const props = { size: 32, style: { color } };
+  
+  if (text.includes('writer') || text.includes('editor') || text.includes('copy')) return <PenTool {...props} />;
+  if (text.includes('analyst') || text.includes('brain') || text.includes('strategic')) return <Brain {...props} />;
+  if (text.includes('search') || text.includes('research')) return <SearchIcon {...props} />;
+  if (text.includes('dev') || text.includes('code') || text.includes('engineer')) return <CodeIcon {...props} />;
+  if (text.includes('ghost') || text.includes('silent')) return <Ghost {...props} />;
+  if (text.includes('manager') || text.includes('lead') || text.includes('boss')) return <User {...props} />;
+  if (text.includes('tool') || text.includes('utility')) return <Settings {...props} />;
+  if (text.includes('tech') || text.includes('cpu') || text.includes('hardware')) return <CpuIcon {...props} />;
+  
+  return <Bot {...props} />;
 };
 
 const REST_STATIONS: StationType[] = [
@@ -179,6 +200,7 @@ export default function AnimationView() {
         currentTask: null,
         progress: 0,
         color: COLORS[i % COLORS.length],
+        icon: getAgentIcon(data.role || '', data.name || '', COLORS[i % COLORS.length]),
         assignedTasks: assignedTaskIds.length > 0 ? assignedTaskIds : (data.taskOrder || []),
         thought: null,
         energy: 100,
@@ -190,8 +212,83 @@ export default function AnimationView() {
     });
   }, [crewGraph.agents, crewGraph.tasks, edges]);
 
-  const [stations, setStations] = useState<StationType[]>(initialStations);
-  const [robots, setRobots] = useState<Robot[]>(initialRobots);
+  // Dynamic local state for things that cannot be derived (random thoughts, trails)
+  const [robotExtras, setRobotExtras] = useState<Record<string, { thought: string | null }>>({});
+
+  // Derive current state from base data and live statuses (Pure Derivation)
+  const stations = useMemo<StationType[]>(() => {
+    return initialStations.map(s => {
+      const status = nodeStatuses[s.id];
+      let displayStatus = s.status;
+      if (status === 'running') displayStatus = 'active';
+      else if (status === 'success') displayStatus = 'done';
+      return { ...s, status: displayStatus };
+    });
+  }, [initialStations, nodeStatuses]);
+
+  const robots = useMemo<Robot[]>(() => {
+    return initialRobots.map((robot, i) => {
+      const nodeStatus = nodeStatuses[robot.id];
+      
+      // Find active task (running or waiting)
+      const activeTaskId = robot.assignedTasks.find(tid => 
+        nodeStatuses[tid] === 'running' || nodeStatuses[tid] === 'waiting'
+      );
+
+      let targetX = robot.targetX;
+      let targetY = robot.targetY;
+      let nextState = robot.state;
+      let nextMood = robot.mood;
+      let nextCurrentTask: string | null = robot.currentTask;
+
+      // Deriving tasksCompleted from statuses
+      const tasksCompleted = robot.assignedTasks.filter(tid => nodeStatuses[tid] === 'success').length;
+      
+      if (activeTaskId) {
+        const station = initialStations.find(s => s.id === activeTaskId);
+        if (station) {
+          const angle = (i / Math.max(1, initialRobots.length)) * Math.PI * 2;
+          const radius = 4;
+          const offsetX = Math.cos(angle) * radius;
+          const offsetY = Math.sin(angle) * radius;
+          
+          targetX = (station.x || 50) + offsetX;
+          targetY = (station.y || 50) + offsetY;
+          nextState = nodeStatuses[activeTaskId] === 'running' ? 'working' : 'moving';
+          nextCurrentTask = station.name;
+          nextMood = nextState === 'working' ? 'Full Focus!' : 'On my way...';
+        }
+      } else if (nodeStatus === 'success' || tasksCompleted > 0 || robot.state === 'completed') {
+        // Move to rest station if mission is over or tasks are done
+        const restIndex = (robot.id.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0)) % restStations.length;
+        const restStation = restStations[restIndex];
+        const angle = (i / Math.max(1, initialRobots.length)) * Math.PI * 2;
+        const radius = 3;
+        
+        targetX = (restStation?.x || 50) + Math.cos(angle) * radius;
+        targetY = (restStation?.y || 50) + Math.sin(angle) * radius;
+        nextState = nodeStatus === 'success' ? 'completed' : 'resting';
+        nextCurrentTask = null;
+        nextMood = nodeStatus === 'success' ? 'Mission accomplished!' : 'Recharging...';
+      }
+
+      // Merge with dynamic extras (thoughts)
+      const extra = robotExtras[robot.id];
+
+      return {
+        ...robot,
+        targetX,
+        targetY,
+        x: targetX,
+        y: targetY,
+        state: nextState,
+        currentTask: nextCurrentTask,
+        mood: nextMood,
+        tasksCompleted,
+        thought: extra?.thought || null
+      };
+    });
+  }, [initialRobots, nodeStatuses, initialStations, restStations, robotExtras]);
   
   const robotsRef = useRef<Robot[]>(robots);
   useEffect(() => {
@@ -200,104 +297,6 @@ export default function AnimationView() {
 
   const completedTasks = useMemo(() => stations.filter((s: StationType) => s.status === 'done').length, [stations]);
   const progressPercent = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
-
-  // Sync with Store Node Statuses & Robot Movement
-  useEffect(() => {
-    // 1. Update Stations (tasks) UI mapping status
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setStations(prev => {
-      let hasChanged = false;
-      const next = prev.map(s => {
-        const status = nodeStatuses[s.id];
-        let nextStatus: StationType['status'] = s.status;
-        if (status === 'running') nextStatus = 'active';
-        else if (status === 'success') nextStatus = 'done';
-        
-        if (nextStatus !== s.status) {
-          hasChanged = true;
-          return { ...s, status: nextStatus };
-        }
-        return s;
-      });
-      return hasChanged ? next : prev;
-    });
-
-    // 2. Update Robots assignments and movement with offsets
-    setRobots(prevRobots => {
-      let hasChanged = false;
-      const next = prevRobots.map((robot, i) => {
-        const nodeStatus = nodeStatuses[robot.id];
-        
-        // Target calculation logic
-        let targetX = robot.targetX;
-        let targetY = robot.targetY;
-        let nextState = robot.state;
-        let nextMood = robot.mood;
-        let nextCurrentTask = robot.currentTask;
-
-        // If agent is running, find which task it's working on
-        if (nodeStatus === 'running') {
-          const activeTaskId = robot.assignedTasks.find(tid => 
-            nodeStatuses[tid] === 'running' || nodeStatuses[tid] === 'waiting'
-          );
-
-          if (activeTaskId) {
-            const station = initialStations.find(s => s.id === activeTaskId);
-            if (station) {
-              const angle = (i / prevRobots.length) * Math.PI * 2;
-              const radius = 4;
-              const offsetX = Math.cos(angle) * radius;
-              const offsetY = Math.sin(angle) * radius;
-              
-              targetX = station.x + offsetX;
-              targetY = station.y + offsetY;
-              nextState = nodeStatuses[activeTaskId] === 'running' ? 'working' : 'moving';
-              nextCurrentTask = station.name;
-              nextMood = nextState === 'working' ? 'Full Focus!' : 'On my way...';
-            }
-          }
-        }
-
-        // Case B: Task was completed or robot is idle
-        const isFinishing = robot.state === 'working' && nodeStatus !== 'running';
-        if (isFinishing || nodeStatus === 'success' || robot.state === 'completed') {
-          const initialPos = initialRobots.find(ir => ir.id === robot.id);
-          const restIndex = (robot.id.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0)) % restStations.length;
-          const restStation = restStations[restIndex];
-          
-          const baseTarget = restStation || initialPos || { x: robot.x, y: robot.y };
-          const angle = (i / prevRobots.length) * Math.PI * 2;
-          const radius = 3;
-          const offsetX = Math.cos(angle) * radius;
-          const offsetY = Math.sin(angle) * radius;
-          
-          targetX = baseTarget.x + offsetX;
-          targetY = baseTarget.y + offsetY;
-          nextState = nodeStatus === 'success' ? 'completed' : 'idle';
-          nextCurrentTask = null;
-          nextMood = nodeStatus === 'success' ? 'Mission Accomplished!' : 'Standing By';
-        }
-
-        // Deep equality check for robot update
-        if (targetX !== robot.targetX || targetY !== robot.targetY || nextState !== robot.state || nextMood !== robot.mood) {
-          hasChanged = true;
-          return {
-            ...robot,
-            x: targetX,
-            y: targetY,
-            targetX,
-            targetY,
-            state: nextState,
-            currentTask: nextCurrentTask,
-            mood: nextMood,
-            tasksCompleted: isFinishing ? robot.tasksCompleted + 1 : robot.tasksCompleted
-          };
-        }
-        return robot;
-      });
-      return hasChanged ? next : prevRobots;
-    });
-  }, [nodeStatuses, initialStations, initialRobots, restStations]);
 
   const addLog = useCallback((message: string, type: LogEntry['type'] = 'info', agentName?: string) => {
     const newLog: LogEntry = {
@@ -448,17 +447,28 @@ export default function AnimationView() {
     }, 3000);
     
     const thoughtInterval = setInterval(() => {
-      setRobots((prev: Robot[]) => prev.map((robot: Robot) => {
-        if (robot.thought) {
-          return Math.random() > 0.7 ? { ...robot, thought: null } : robot;
-        } else if (Math.random() > 0.95) {
-          let pool = WAITING_THOUGHTS;
-          if (robot.state === 'working') pool = WORKING_THOUGHTS;
-          if (robot.state === 'resting' || robot.state === 'completed') pool = RESTING_THOUGHTS;
-          return { ...robot, thought: pool[Math.floor(Math.random() * pool.length)] };
-        }
-        return robot;
-      }));
+      setRobotExtras(prev => {
+        const next = { ...prev };
+        let changed = false;
+        
+        robotsRef.current.forEach(robot => {
+          const currentExtra = next[robot.id];
+          if (currentExtra?.thought) {
+            if (Math.random() > 0.7) {
+              next[robot.id] = { ...currentExtra, thought: null };
+              changed = true;
+            }
+          } else if (Math.random() > 0.95) {
+            let pool = WAITING_THOUGHTS;
+            if (robot.state === 'working') pool = WORKING_THOUGHTS;
+            if (robot.state === 'resting' || robot.state === 'completed') pool = RESTING_THOUGHTS;
+            next[robot.id] = { thought: pool[Math.floor(Math.random() * pool.length)] };
+            changed = true;
+          }
+        });
+        
+        return changed ? next : prev;
+      });
     }, 1000);
     return () => {
       clearInterval(logInterval);
@@ -633,7 +643,7 @@ export default function AnimationView() {
           {/* Technical Sub-header */}
           <div className="absolute top-6 left-1/2 -translate-x-1/2 z-40 bg-black/40 backdrop-blur-md px-6 py-2 rounded-full border border-white/10 flex items-center gap-4 pointer-events-auto shadow-2xl">
             <div className="flex items-center gap-2">
-              <Cpu size={14} className="text-indigo-400" />
+              <CpuIcon size={14} className="text-indigo-400" />
               <span className="text-[10px] font-mono font-bold text-white uppercase tracking-tight">Simple Crew Builder</span>
             </div>
             <div className="h-3 w-[1px] bg-white/10" />
@@ -691,10 +701,10 @@ export default function AnimationView() {
           {/* View Controls */}
           <div className="absolute bottom-6 left-6 z-40 flex gap-2">
               <button onClick={() => setViewState((prev) => ({ ...prev, scale: Math.min(prev.scale + 0.2, 4) }))} className="p-2 bg-black/60 backdrop-blur-md border border-white/10 rounded-lg hover:bg-white/10 transition-colors text-white">
-                  <Search size={16} className="rotate-90" />
+                  <SearchIcon size={16} className="rotate-90" />
               </button>
               <button onClick={() => setViewState((prev) => ({ ...prev, scale: Math.max(prev.scale - 0.2, 0.4) }))} className="p-2 bg-black/60 backdrop-blur-md border border-white/10 rounded-lg hover:bg-white/10 transition-colors text-white">
-                  <Search size={16} />
+                  <SearchIcon size={16} />
               </button>
               <button onClick={() => setViewState({ x: 0, y: 0, scale: 1 })} className="p-2 bg-black/60 backdrop-blur-md border border-white/10 rounded-lg hover:bg-white/10 transition-colors text-white text-[10px] font-bold">1:1</button>
           </div>
