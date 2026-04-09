@@ -7,11 +7,12 @@ interface RobotIconProps {
   color: string;
   state: RobotState;
   thought: string | null;
+  icon?: React.ReactNode;
   isSelected?: boolean;
   onClick?: () => void;
 }
 
-export const RobotIcon = ({ color, state, thought, isSelected, onClick }: RobotIconProps) => (
+export const RobotIcon = ({ color, state, thought, icon, isSelected, onClick }: RobotIconProps) => (
   <div className="relative group cursor-pointer" onClick={onClick}>
     {state === 'working' && <WorkingParticles color={color} />}
     <motion.div
@@ -36,7 +37,7 @@ export const RobotIcon = ({ color, state, thought, isSelected, onClick }: RobotI
       className={`p-2 rounded-full bg-white/10 backdrop-blur-md border transition-colors ${isSelected ? 'border-white ring-2 ring-white/50' : 'border-white/20'} shadow-lg`}
       style={{ boxShadow: `0 0 15px ${color}44` }}
     >
-      <Bot size={32} style={{ color }} />
+      {icon || <Bot size={32} style={{ color }} />}
       {state === 'working' && (
         <motion.div
           initial={{ opacity: 0, scale: 0 }}

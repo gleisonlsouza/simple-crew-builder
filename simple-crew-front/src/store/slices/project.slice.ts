@@ -629,6 +629,11 @@ export const createProjectSlice: StateCreator<AppState, [], [], ProjectSlice> = 
       return null;
     } finally {
       set({ isExecuting: false, abortController: null });
+      // Refresh execution history so the list is updated auto-magically
+      const currentId = get().currentProjectId;
+      if (currentId) {
+        get().fetchExecutions(currentId);
+      }
     }
   },
 
