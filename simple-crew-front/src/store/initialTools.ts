@@ -1,4 +1,6 @@
-export const initialGlobalTools = [
+import type { ToolConfig } from '../types/config.types';
+
+export const initialGlobalTools: ToolConfig[] = [
     { id: 'serper', name: 'Google Search (Serper)', description: 'Search the web for real-time information.', isEnabled: false, requiresKey: true, category: 'Search' },
     { id: 'scrape', name: 'Website Scraper', description: 'Extract clean content from any website URL.', isEnabled: false, requiresKey: false, category: 'Web' },
     { id: 'directory_read', name: 'Directory Read', description: 'List all files within a directory.', isEnabled: false, requiresKey: false, category: 'Files & Documents' },
@@ -158,4 +160,12 @@ export const initialGlobalTools = [
       }
     },
     { id: 'ocr', name: 'OCR Tool', description: 'Extract text from images (local or URL).', isEnabled: false, requiresKey: false, category: 'Files & Documents' },
+    { 
+      id: 'grep_search', 
+      name: 'Grep Content Search', 
+      description: 'Fast recursive search for exact text within workspace files.', 
+      isEnabled: false, 
+      requiresKey: false, 
+      category: 'Search' 
+    },
 ];

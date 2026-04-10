@@ -2,17 +2,45 @@ import type { StateCreator } from 'zustand';
 import toast from 'react-hot-toast';
 
 import type { AppState, ConfigSlice } from '../../types/store.types';
-import type { ModelConfig, Credential, MCPServer, CustomTool } from '../../types/config.types';
+import type { ModelConfig, Credential, MCPServer, CustomTool, ToolConfig } from '../../types/config.types';
 
 const API_URL = import.meta.env.VITE_API_URL || '';
 
 import { initialGlobalTools } from '../initialTools';
 
+const getInitialGlobalTools = (): ToolConfig[] => {
+  const STORAGE_KEY = 'global_tools_v8';
+  const persistedRaw = localStorage.getItem(STORAGE_KEY);
+  
+  if (!persistedRaw) return initialGlobalTools;
+
+  try {
+    const persistedTools = JSON.parse(persistedRaw) as ToolConfig[];
+    
+    // Check for tools in initialGlobalTools that are missing in persistedTools
+    const missingTools = initialGlobalTools.filter(
+      it => !persistedTools.some(pt => pt.id === it.id)
+    );
+
+    if (missingTools.length > 0) {
+      const merged = [...persistedTools, ...missingTools];
+      // Persist the merged list so next time we don't have to re-merge
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(merged));
+      return merged;
+    }
+
+    return persistedTools;
+  } catch (error) {
+    console.error('Error hydrating global tools:', error);
+    return initialGlobalTools;
+  }
+};
+
 export const createConfigSlice: StateCreator<AppState, [], [], ConfigSlice> = (set, get) => ({
   credentials: [],
   models: JSON.parse(localStorage.getItem('models') || '[]'),
   defaultModel: localStorage.getItem('default_model') || 'gpt-4o',
-  globalTools: JSON.parse(localStorage.getItem('global_tools_v8') || JSON.stringify(initialGlobalTools)),
+  globalTools: getInitialGlobalTools(),
   customTools: [],
   mcpServers: [],
   systemAiModelId: localStorage.getItem('default_system_ai_model_id'),
