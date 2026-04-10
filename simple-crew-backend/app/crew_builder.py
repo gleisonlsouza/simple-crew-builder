@@ -33,6 +33,7 @@ from crewai_tools import (
     MCPServerAdapter
 )
 from .tools.knowledge_base_search import get_search_knowledge_base_tool
+from .tools.grep_search import GrepSearchTool
 from .database import engine
 from sqlmodel import Session, select
 from dotenv import load_dotenv
@@ -538,6 +539,8 @@ def run_crew_stream(graph_data: GraphData, workspace_id: Optional[Any] = None, i
                                 kb_id = config_data.get("knowledge_base_id")
                                 if kb_id:
                                     node_tools.append(get_search_knowledge_base_tool(kb_id=kb_id))
+                            elif gid == 'grep_search':
+                                node_tools.append(GrepSearchTool(workspace_path=workspace_path))
                             elif gid in ['pdf_search', 'docx_search', 'json_search', 'xml_search', 'csv_search', 'mdx_search', 'txt_search']:
                                 # RAG Tools: Use provided config (like knowledge_base_id)
                                 tool_config = {'directory': workspace_path} if workspace_path else {}
@@ -613,10 +616,23 @@ def run_crew_stream(graph_data: GraphData, workspace_id: Optional[Any] = None, i
                             found_tool = None
                             
                             # Discovery: prioritiza o que foi definido (locals)
-                            # 1. Check for BaseTool instances
+                            # 1. Check for BaseTool instances or classes inheriting from BaseTool
                             for obj in tool_locals.values():
                                 if isinstance(obj, BaseTool):
                                     found_tool = obj
+                                    break
+                                elif isinstance(obj, type) and issubclass(obj, BaseTool) and obj is not BaseTool:
+                                    try:
+                                        # Try to inject workspace_path if it's a field in the model
+                                        found_tool = obj(workspace_path=workspace_path)
+                                        log_debug(f"Custom Tool Class '{obj.__name__}' instantiated with workspace_path.")
+                                    except Exception:
+                                        try:
+                                            found_tool = obj()
+                                            log_debug(f"Custom Tool Class '{obj.__name__}' instantiated without arguments.")
+                                        except Exception as ie:
+                                            log_debug(f"Failed to instantiate custom tool class '{obj.__name__}': {str(ie)}")
+                                            continue
                                     break
                             
                             if not found_tool:
