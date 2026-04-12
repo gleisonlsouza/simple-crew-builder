@@ -64,6 +64,7 @@ vi.mock('lucide-react', () => ({
   Save: () => <div />,
   Loader2: () => <div />,
   ArrowLeft: () => <div />,
+  Wand2: () => <div />,
   Workflow: () => <div />,
   Settings: () => <div />,
   Key: () => <div />,
@@ -84,10 +85,12 @@ vi.mock('@xyflow/react', () => {
         useReactFlow: () => ({
             screenToFlowPosition: vi.fn((pos) => pos),
             fitView: vi.fn(),
+            getNode: vi.fn(),
         }),
         useNodesState: () => [[], vi.fn()],
         useEdgesState: () => [[], vi.fn()],
         BackgroundVariant: { Dots: 'dots' },
+        ConnectionLineType: { SmoothStep: 'smoothstep' },
     };
 });
 

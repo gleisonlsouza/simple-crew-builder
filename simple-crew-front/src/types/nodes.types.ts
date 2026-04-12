@@ -98,11 +98,33 @@ export interface WebhookNodeData extends Record<string, unknown> {
   isCollapsed?: boolean;
 }
 
+export interface ToolNodeData extends Record<string, unknown> {
+  name: string;
+  toolId: string;
+  config?: Record<string, unknown>;
+  category?: string;
+}
+
+export interface CustomToolNodeData extends Record<string, unknown> {
+  name: string;
+  toolId: string;
+  description?: string;
+}
+
+export interface McpNodeData extends Record<string, unknown> {
+  name: string;
+  serverId: string;
+  url?: string;
+}
+
 export type AppNode =
   | Node<AgentNodeData, 'agent'>
   | Node<TaskNodeData, 'task'>
   | Node<CrewNodeData, 'crew'>
   | Node<ChatNodeData, 'chat'>
-  | Node<WebhookNodeData, 'webhook'>;
+  | Node<WebhookNodeData, 'webhook'>
+  | Node<ToolNodeData, 'tool'>
+  | Node<CustomToolNodeData, 'customTool'>
+  | Node<McpNodeData, 'mcp'>;
 
 export type AppEdge = Edge;

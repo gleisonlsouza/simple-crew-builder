@@ -130,8 +130,17 @@ export const WebhookNode = memo(({ id, data }: NodeProps<Node<WebhookNodeData, '
         </div>
       </div>
 
-      <Handle type="source" position={Position.Bottom} id="bottom-source" className="w-2 h-2 bg-gray-400 border-none hover:bg-orange-500 transition-colors" />
-      <Handle type="source" position={Position.Right} id="right-source" className="w-2 h-2 bg-gray-400 border-none hover:bg-orange-500 transition-colors" />
+      {/* Output Handle (Bottom) */}
+      <div className="absolute left-1/2 -bottom-[1px] -translate-x-1/2 flex flex-col items-center gap-1 group/h-webhook translate-y-full pointer-events-none">
+        <Handle 
+          type="source" 
+          position={Position.Bottom} 
+          id="right-source" 
+          className="!w-3 !h-3 !border-2 !border-white dark:!border-slate-900 !static !translate-x-0 !cursor-crosshair pointer-events-auto shadow-sm"
+          style={{ backgroundColor: '#f97316' }}
+        />
+        <span className="text-[9px] font-bold text-orange-500 bg-white dark:bg-slate-900 px-1 rounded shadow-sm opacity-0 group-hover/h-webhook:opacity-100 transition-opacity whitespace-nowrap border border-orange-100 dark:border-orange-900/30">Connect Crew</span>
+      </div>
     </div>
   );
 });

@@ -17,6 +17,8 @@ import type {
   WebhookNodeData 
 } from '../../types/nodes.types';
 import type { NodeStatus, AppState, GraphSlice, ChatMessage } from '../../types/store.types';
+import { getLayoutedElements } from '../../utils/layoutUtils';
+
 
 // Helper functions for collapsing logic
 function getDescendantsToHide(nodeId: string, edges: AppEdge[]): string[] {
@@ -103,7 +105,7 @@ const initialNodes: AppNode[] = [
 ];
 
 const initialEdges: AppEdge[] = [
-  { id: 'e1-2', source: 'agent-1', target: 'task-1', type: 'deletable', sourceHandle: 'right-source', targetHandle: 'left-target' }
+  { id: 'e1-2', source: 'agent-1', target: 'task-1', type: 'deletable', sourceHandle: 'out-task', targetHandle: 'left-target' }
 ];
 
 export const INITIAL_CHAT_MESSAGES: AppState['messages'] = [
@@ -128,39 +130,44 @@ export const createGraphSlice: StateCreator<AppState, [], [], GraphSlice> = (set
     const { nodes } = get();
     const nextNodes = applyNodeChanges(changes, nodes);
     
-    const removedTaskIds = changes
-      .filter((c): c is { type: 'remove'; id: string } => c.type === 'remove')
-      .map((c) => c.id);
+    // O SEGREDO DO FPS: Checa se é apenas drag (posição). Se for, pula todo o código pesado.
+    const hasRemoval = changes.some(c => c.type === 'remove');
+    
+    if (hasRemoval) {
+      const removedTaskIds = changes
+        .filter((c): c is { type: 'remove'; id: string } => c.type === 'remove')
+        .map((c) => c.id);
 
-    if (removedTaskIds.length > 0) {
-      set({
-        nodes: nextNodes.map((node: AppNode) => {
-          // Cleanup Agent.taskOrder
-          if (node.type === 'agent') {
-            const data = node.data as AgentNodeData;
-            const taskOrder = data.taskOrder || [];
-            const newTaskOrder = taskOrder.filter((id: string) => !removedTaskIds.includes(id));
-            if (newTaskOrder.length !== taskOrder.length) {
-                return { ...node, data: { ...node.data, taskOrder: newTaskOrder } } as AppNode;
+      if (removedTaskIds.length > 0) {
+        set({
+          nodes: nextNodes.map((node: AppNode) => {
+            if (node.type === 'agent') {
+              const data = node.data as AgentNodeData;
+              const taskOrder = data.taskOrder || [];
+              const newTaskOrder = taskOrder.filter((id: string) => !removedTaskIds.includes(id));
+              if (newTaskOrder.length !== taskOrder.length) {
+                  return { ...node, data: { ...node.data, taskOrder: newTaskOrder } } as AppNode;
+              }
             }
-          }
-          // Cleanup Crew.agentOrder and Crew.taskOrder
-          if (node.type === 'crew') {
-            const data = node.data as CrewNodeData;
-            const agentOrder = data.agentOrder || [];
-            const taskOrder = data.taskOrder || [];
-            const newAgentOrder = agentOrder.filter((id: string) => !removedTaskIds.includes(id));
-            const newTaskOrder = taskOrder.filter((id: string) => !removedTaskIds.includes(id));
-            if (newAgentOrder.length !== agentOrder.length || newTaskOrder.length !== taskOrder.length) {
-              return { ...node, data: { ...node.data, agentOrder: newAgentOrder, taskOrder: newTaskOrder } } as AppNode;
+            if (node.type === 'crew') {
+              const data = node.data as CrewNodeData;
+              const agentOrder = data.agentOrder || [];
+              const taskOrder = data.taskOrder || [];
+              const newAgentOrder = agentOrder.filter((id: string) => !removedTaskIds.includes(id));
+              const newTaskOrder = taskOrder.filter((id: string) => !removedTaskIds.includes(id));
+              if (newAgentOrder.length !== agentOrder.length || newTaskOrder.length !== taskOrder.length) {
+                return { ...node, data: { ...node.data, agentOrder: newAgentOrder, taskOrder: newTaskOrder } } as AppNode;
+              }
             }
-          }
-          return node;
-        })
-      });
-    } else {
-      set({ nodes: nextNodes });
-    }
+            return node;
+          })
+        });
+        return; // Previne o set duplo
+      }
+    } 
+    
+    // Caminho rápido para quando você está apenas arrastando um card (60 frames por segundo)
+    set({ nodes: nextNodes });
   },
 
   onEdgesChange: (changes: EdgeChange[]) => {
@@ -240,11 +247,13 @@ export const createGraphSlice: StateCreator<AppState, [], [], GraphSlice> = (set
       if (!sourceNode || !targetNode) return state;
 
       const isCrewToAgent = sourceNode.type === 'crew' && targetNode.type === 'agent';
-      const isAgentToTask = sourceNode.type === 'agent' && targetNode.type === 'task';
+      const isAgentToTask = sourceNode.type === 'agent' && ['task', 'taskNode', 'agentTask'].includes(targetNode.type);
       const isChatToCrew = sourceNode.type === 'chat' && targetNode.type === 'crew';
       const isWebhookToCrew = sourceNode.type === 'webhook' && targetNode.type === 'crew';
+      const isAgentToTool = sourceNode.type === 'agent' && ['tool', 'customTool', 'toolNode', 'customToolNode', 'globalTool'].includes(targetNode.type);
+      const isAgentToMcp = sourceNode.type === 'agent' && targetNode.type === 'mcp';
 
-      if (!isCrewToAgent && !isAgentToTask && !isChatToCrew && !isWebhookToCrew) {
+      if (!isCrewToAgent && !isAgentToTask && !isChatToCrew && !isWebhookToCrew && !isAgentToTool && !isAgentToMcp) {
         console.warn(`[CrewAI Rules] Invalid connection blocked: ${sourceNode.type} -> ${targetNode.type}`);
         return state;
       }
@@ -266,6 +275,8 @@ export const createGraphSlice: StateCreator<AppState, [], [], GraphSlice> = (set
         newConnection = {
           ...newConnection,
           animated: true,
+          sourceHandle: 'right-source',
+          targetHandle: 'left-target',
           style: { stroke: '#22d3ee', strokeWidth: 2, strokeDasharray: '5 5' }
         };
         // This action triggers UI change:
@@ -276,6 +287,8 @@ export const createGraphSlice: StateCreator<AppState, [], [], GraphSlice> = (set
         newConnection = {
           ...newConnection,
           animated: true,
+          sourceHandle: 'right-source',
+          targetHandle: 'left-target',
           style: { stroke: '#f97316', strokeWidth: 2, strokeDasharray: '5 5' }
         };
       }
@@ -434,7 +447,7 @@ export const createGraphSlice: StateCreator<AppState, [], [], GraphSlice> = (set
     });
   },
 
-  addNodeWithAutoPosition: (type: 'agent' | 'task' | 'crew' | 'chat' | 'webhook', data: Partial<AppNode['data']>) => {
+  addNodeWithAutoPosition: (type: 'agent' | 'task' | 'crew' | 'chat' | 'webhook' | 'tool' | 'customTool' | 'mcp', data: Partial<AppNode['data']>) => {
     const existingNodes = get().nodes;
     const startX = 600;
     const startY = 100;
@@ -646,5 +659,11 @@ export const createGraphSlice: StateCreator<AppState, [], [], GraphSlice> = (set
 
   clearChat: () => {
     set({ messages: INITIAL_CHAT_MESSAGES });
+  },
+
+  applyAutoLayout: () => {
+    const { nodes, edges } = get();
+    const { nodes: layoutedNodes, edges: layoutedEdges } = getLayoutedElements(nodes, edges);
+    set({ nodes: layoutedNodes, edges: layoutedEdges, isDirty: true });
   },
 });

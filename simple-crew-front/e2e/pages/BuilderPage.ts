@@ -119,11 +119,29 @@ export class BuilderPage {
         );
         
         if (srcNode && tgtNode) {
+          // Resolve handles based on the new Top-to-Bottom architecture
+          let sourceHandle = 'right-source'; 
+          let targetHandle = 'left-target'; 
+
+          // 1. Source Logic
+          if (srcNode.type === 'crew' || srcNode.type === 'chat' || srcNode.type === 'webhook') {
+            sourceHandle = 'right-source';
+          } else if (srcNode.type === 'agent') {
+            if (tgtNode.type === 'task') sourceHandle = 'out-task';
+            else if (tgtNode.type === 'tool' || tgtNode.type === 'customTool') sourceHandle = 'out-tool';
+            else if (tgtNode.type === 'mcp') sourceHandle = 'out-mcp';
+          }
+
+          // 2. Target Logic (Standardized for all receivers)
+          if (['agent', 'crew', 'task'].includes(tgtNode.type)) {
+            targetHandle = 'left-target';
+          }
+
           state.onConnect({
             source: srcNode.id,
             target: tgtNode.id,
-            sourceHandle: 'right-source',
-            targetHandle: 'top-target'
+            sourceHandle,
+            targetHandle
           });
           state.validateGraph();
           return;

@@ -15,7 +15,7 @@ vi.mock('@xyflow/react', () => ({
     </svg>
   ),
   EdgeLabelRenderer: ({ children }: any) => <div data-testid="edge-label-renderer">{children}</div>,
-  getBezierPath: vi.fn().mockReturnValue(['M0,0L10,10', 5, 5]),
+  getSmoothStepPath: vi.fn().mockReturnValue(['M0,0L10,10', 5, 5]),
   Position: {
       Left: 'left',
       Right: 'right',
@@ -60,10 +60,10 @@ describe('DeletableEdge', () => {
     target: 'node-2',
     sourceX: 0,
     sourceY: 0,
-    targetX: 100,
+    targetX: 0,
     targetY: 100,
-    sourcePosition: Position.Right,
-    targetPosition: Position.Left,
+    sourcePosition: Position.Bottom,
+    targetPosition: Position.Top,
     style: { stroke: 'black' },
     markerEnd: 'arrow',
     animated: false,

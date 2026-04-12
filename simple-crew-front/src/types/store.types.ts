@@ -103,7 +103,7 @@ export interface GraphSlice {
   deleteNode: (nodeId: string) => void;
   updateNodeData: (nodeId: string, data: Partial<AppNode['data']>) => void;
   addNode: (node: AppNode) => void;
-  addNodeWithAutoPosition: (type: 'agent' | 'task' | 'crew' | 'chat' | 'webhook', data: Partial<AppNode['data']>) => void;
+  addNodeWithAutoPosition: (type: 'agent' | 'task' | 'crew' | 'chat' | 'webhook' | 'tool' | 'customTool' | 'mcp', data: Partial<AppNode['data']>) => void;
   setNodeStatus: (id: string, status: NodeStatus) => void;
   setNodeWarnings: (warnings: Record<string, string[]>) => void;
   setActiveNode: (id: string | null) => void;
@@ -116,6 +116,7 @@ export interface GraphSlice {
   setMessages: (messages: ChatMessage[] | ((prev: ChatMessage[]) => ChatMessage[])) => void;
   clearChat: () => void;
   resetProject: () => void;
+  applyAutoLayout: () => void;
 }
 
 export interface UISlice {
