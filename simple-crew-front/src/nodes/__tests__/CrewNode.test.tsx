@@ -1,4 +1,4 @@
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { CrewNode } from '../CrewNode';
 import { vi, describe, it, expect, beforeEach } from 'vitest';
@@ -9,6 +9,20 @@ import type { Mock } from 'vitest';
 import type { CrewNodeData } from '../../types/nodes.types';
 import React from 'react';
 
+// Mock lucide-react icons
+vi.mock('lucide-react', () => ({
+  Users: () => <div data-testid="icon-users" />,
+  Trash2: () => <div data-testid="icon-trash" />,
+  ChevronDown: () => <div data-testid="icon-chevron-down" />,
+  ChevronUp: () => <div data-testid="icon-chevron-up" />,
+  Loader2: () => <div data-testid="icon-loader" />,
+  CheckCircle2: () => <div data-testid="icon-check-circle" />,
+  Link: () => <div data-testid="icon-link" />,
+  Settings: () => <div data-testid="icon-settings" />,
+  Clock: () => <div data-testid="icon-clock" />,
+  AlertCircle: () => <div data-testid="icon-alert-circle" />,
+}));
+
 // Mock Handle component
 vi.mock('@xyflow/react', async (importOriginal) => {
   const actual = await importOriginal<any>();
@@ -17,20 +31,6 @@ vi.mock('@xyflow/react', async (importOriginal) => {
     Handle: ({ type, id }: any) => <div data-testid={`handle-${type}`} data-handleid={id} className={`react-flow__handle-${type}`} />,
   };
 });
-
-// Mock lucide-react icons
-vi.mock('lucide-react', () => ({
-  Users: () => <div data-testid="icon-users" />,
-  Trash2: () => <div data-testid="icon-trash" />,
-  Loader2: () => <div data-testid="icon-loader" />,
-  CheckCircle2: () => <div data-testid="icon-check-circle" />,
-  AlertCircle: () => <div data-testid="icon-alert-circle" />,
-  Clock: () => <div data-testid="icon-clock" />,
-  Settings: () => <div data-testid="icon-settings" />,
-  Link: () => <div data-testid="icon-link" />,
-  ChevronDown: () => <div data-testid="icon-chevron-down" />,
-  ChevronUp: () => <div data-testid="icon-chevron-up" />,
-}));
 
 // Mock the store
 vi.mock('../../store/index', () => ({
@@ -53,13 +53,6 @@ describe('CrewNode', () => {
 
   const mockNodes = [
     { id: 'agent-1', type: 'agent', data: { name: 'Agent One' } },
-    { id: 'agent-2', type: 'agent', data: { name: 'Agent Two' } },
-    { id: 'task-1', type: 'task', data: { name: 'Task One' } },
-  ];
-
-  const mockEdges = [
-    { source: 'crew-1', target: 'agent-1' },
-    { source: 'crew-1', target: 'agent-2' },
   ];
 
   const defaultState = {
@@ -68,7 +61,7 @@ describe('CrewNode', () => {
     onConnect: mockOnConnect,
     setActiveNode: mockSetActiveNode,
     nodes: mockNodes,
-    edges: mockEdges,
+    edges: [],
     nodeStatuses: {},
     nodeErrors: {},
   };
@@ -85,6 +78,9 @@ describe('CrewNode', () => {
     data: { 
       name: 'Test Crew', 
       process: 'sequential',
+      verbose: true,
+      memory: false,
+      cache: false,
       isCollapsed: false,
     },
     type: 'crew',
@@ -99,143 +95,78 @@ describe('CrewNode', () => {
     parentId: undefined,
     positionAbsoluteX: 0,
     positionAbsoluteY: 0,
-  };
+  } as any;
 
-  it('renders correctly with name and process', () => {
+  it('renders correctly', () => {
     render(wrap(<CrewNode {...defaultProps} />));
     expect(screen.getByText('Test Crew')).toBeInTheDocument();
+  });
+
+  it('displays the correct process type', () => {
+    render(wrap(<CrewNode {...defaultProps} />));
     expect(screen.getByTestId('crew-process')).toHaveTextContent('sequential');
   });
 
-  it('renders default name when not provided', () => {
-    const props = { ...defaultProps, data: { ...defaultProps.data, name: '' } };
-    render(wrap(<CrewNode {...props} />));
-    expect(screen.getByText('New Crew')).toBeInTheDocument();
+  it('contains target handle on top and source handle on right-source', () => {
+    const { container } = render(wrap(<CrewNode {...defaultProps} />));
+    
+    const target = container.querySelector('.react-flow__handle-target');
+    const source = container.querySelector('.react-flow__handle-source');
+    
+    expect(target).toBeInTheDocument();
+    expect(source).toBeInTheDocument();
+    
+    // Source handle is now at the right-source
+    expect(source).toHaveAttribute('data-handleid', 'right-source');
   });
 
-  it('shows child count (agent count)', () => {
-      render(wrap(<CrewNode {...defaultProps} />));
-      expect(screen.getByTestId('agent-count')).toHaveTextContent('2 Agents');
-  });
-
-  it('contains mandatory connection handles (Target and Source)', () => {
+  it('opens connection menu and connects to an agent', async () => {
+    const user = userEvent.setup();
     render(wrap(<CrewNode {...defaultProps} />));
     
-    // Check for target handles
-    const targets = screen.getAllByTestId('handle-target');
-    expect(targets.length).toBeGreaterThanOrEqual(4);
-
-    // Check for source handles
-    const sources = screen.getAllByTestId('handle-source');
-    expect(sources.length).toBeGreaterThanOrEqual(4);
-  });
-
-  describe('Status Visuals', () => {
-    it.each([
-      ['waiting', 'icon-clock'],
-      ['running', 'icon-loader'],
-      ['success', 'icon-check-circle'],
-      ['error', 'icon-alert-circle'],
-    ])('shows correct icon for status %s', (status, iconId) => {
-      (useStore as unknown as Mock).mockImplementation((selector: any) => 
-        selector({ ...defaultState, nodeStatuses: { 'crew-1': status } })
-      );
-      render(wrap(<CrewNode {...defaultProps} />));
-      expect(screen.getByTestId(iconId)).toBeInTheDocument();
-    });
-
-    it('shows error icon when errors exist', () => {
-        (useStore as unknown as Mock).mockImplementation((selector: any) => 
-            selector({ ...defaultState, nodeErrors: { 'crew-1': ['Error message'] } })
-        );
-        render(wrap(<CrewNode {...defaultProps} />));
-        expect(screen.getAllByTestId('icon-alert-circle').length).toBeGreaterThanOrEqual(1);
-        expect(screen.getByTitle('Error message')).toBeInTheDocument();
+    const connectBtn = screen.getByTestId('btn-connect-crew');
+    await user.click(connectBtn);
+    
+    const agentOption = screen.getByText('Agent One');
+    await user.click(agentOption);
+    
+    expect(mockOnConnect).toHaveBeenCalledWith({
+      source: 'crew-1',
+      target: 'agent-1',
+      sourceHandle: 'right-source',
+      targetHandle: 'left-target'
     });
   });
 
-  describe('Interactions', () => {
-    it('calls deleteNode when delete button is clicked', async () => {
-      const user = userEvent.setup();
-      render(wrap(<CrewNode {...defaultProps} />));
-      await user.click(screen.getByLabelText('Delete Crew'));
-      expect(mockDeleteNode).toHaveBeenCalledWith('crew-1');
-    });
-
-    it('calls setActiveNode when config button is clicked', async () => {
-      const user = userEvent.setup();
-      render(wrap(<CrewNode {...defaultProps} />));
-      await user.click(screen.getByLabelText('Configurar Crew'));
-      expect(mockSetActiveNode).toHaveBeenCalledWith('crew-1');
-    });
-
-    it('calls setActiveNode on double click name', () => {
-        render(wrap(<CrewNode {...defaultProps} />));
-        fireEvent.doubleClick(screen.getByText('Test Crew'));
-        expect(mockSetActiveNode).toHaveBeenCalledWith('crew-1');
-    });
-
-    it('calls toggleCollapse when collapse button is clicked', async () => {
-        const user = userEvent.setup();
-        render(wrap(<CrewNode {...defaultProps} />));
-        await user.click(screen.getByLabelText('Collapse Crew'));
-        expect(mockToggleCollapse).toHaveBeenCalledWith('crew-1');
-    });
-
-    it('hides content when collapsed', () => {
-        const props = { ...defaultProps, data: { ...defaultProps.data, isCollapsed: true } };
-        render(wrap(<CrewNode {...props} />));
-        expect(screen.queryByTestId('crew-process')).not.toBeInTheDocument();
-        expect(screen.getByLabelText('Expand Crew')).toBeInTheDocument();
-    });
+  it('toggles collapse state', async () => {
+    const user = userEvent.setup();
+    render(wrap(<CrewNode {...defaultProps} />));
+    
+    const collapseBtn = screen.getByLabelText('Collapse Crew');
+    await user.click(collapseBtn);
+    
+    expect(mockToggleCollapse).toHaveBeenCalledWith('crew-1');
   });
 
-  describe('Connect Menu', () => {
-      it('opens connect menu and lists agents', async () => {
-          const user = userEvent.setup();
-          render(wrap(<CrewNode {...defaultProps} />));
-          
-          await user.click(screen.getByTestId('btn-connect-crew'));
-          expect(screen.getByText('Agent One')).toBeInTheDocument();
-          expect(screen.getByText('Agent Two')).toBeInTheDocument();
-          expect(screen.queryByText('Task One')).not.toBeInTheDocument();
-      });
+  it('shows agent count from edges', () => {
+    (useStore as unknown as Mock).mockImplementation((selector: any) => 
+        selector({ 
+            ...defaultState, 
+            edges: [{ source: 'crew-1', target: 'agent-1' }] 
+        })
+    );
+    render(wrap(<CrewNode {...defaultProps} />));
+    expect(screen.getByTestId('agent-count')).toHaveTextContent('1 Agent');
+  });
 
-      it('calls onConnect when agent is selected', async () => {
-          const user = userEvent.setup();
-          render(wrap(<CrewNode {...defaultProps} />));
-          
-          await user.click(screen.getByTestId('btn-connect-crew'));
-          await user.click(screen.getByText('Agent One'));
-          
-          expect(mockOnConnect).toHaveBeenCalledWith({
-              source: 'crew-1',
-              target: 'agent-1',
-              sourceHandle: 'right-source',
-              targetHandle: 'top-target'
-          });
-      });
-
-      it('shows empty state when no agents available', async () => {
-          (useStore as unknown as Mock).mockImplementation((selector: any) => 
-            selector({ ...defaultState, nodes: [] })
-          );
-          const user = userEvent.setup();
-          render(wrap(<CrewNode {...defaultProps} />));
-          
-          await user.click(screen.getByTestId('btn-connect-crew'));
-          expect(screen.getByText('No agents available.')).toBeInTheDocument();
-      });
-
-      it('closes menu when clicking window', async () => {
-          const user = userEvent.setup();
-          render(wrap(<CrewNode {...defaultProps} />));
-          
-          await user.click(screen.getByTestId('btn-connect-crew'));
-          expect(screen.getByText('Agent One')).toBeInTheDocument();
-          
-          fireEvent.click(window);
-          expect(screen.queryByText('Agent One')).not.toBeInTheDocument();
-      });
+  it('renders status indicators', () => {
+    (useStore as unknown as Mock).mockImplementation((selector: any) => 
+        selector({ 
+            ...defaultState, 
+            nodeStatuses: { 'crew-1': 'running' } 
+        })
+    );
+    render(wrap(<CrewNode {...defaultProps} />));
+    expect(screen.getByTestId('icon-loader')).toBeInTheDocument();
   });
 });

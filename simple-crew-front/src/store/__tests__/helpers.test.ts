@@ -70,7 +70,7 @@ describe('Store Helpers', () => {
       const edges = [{ id: 'e1', source: 's1', target: 't1', sourceHandle: 'right', targetHandle: 'left' }];
       const migrated = migrateEdges(edges);
       expect(migrated[0]).toMatchObject({
-        type: 'deletable',
+        type: 'smoothstep',
         sourceHandle: 'right-source',
         targetHandle: 'left-target'
       });
@@ -78,7 +78,7 @@ describe('Store Helpers', () => {
 
     it('prevents double-formatting handles and handles defaults', () => {
       const edges = [
-          { id: 'e1', source: 's1', target: 't1', sourceHandle: 'right-source', targetHandle: 'left-target' },
+          { id: 'e1', source: 's1', target: 't1', sourceHandle: 'bottom', targetHandle: undefined },
           { id: 'e2', source: 's1', target: 't1' }
       ] as unknown as AppEdge[];
       const migrated = migrateEdges(edges);

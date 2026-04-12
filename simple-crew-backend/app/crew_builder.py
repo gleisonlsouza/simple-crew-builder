@@ -344,22 +344,33 @@ def run_crew_stream(graph_data: GraphData, workspace_id: Optional[Any] = None, i
                 # Mapeia Agent ID -> Lista de Ferramentas
                 agent_tools_map = {}
                 
-                # Coletamos todos os IDs de MCP únicos que serão usados
+                # Coletamos todos os IDs de MCP únicos que serão usados verificando os Nós do Grafo
                 all_mcp_ids = set()
                 mcp_to_agents = {}
+                
+                mcp_nodes = [n for n in graph_data.nodes if n.type == 'mcp']
+                for mcp_node in mcp_nodes:
+                    server_id = getattr(mcp_node.data, 'serverId', None)
+                    if server_id:
+                        all_mcp_ids.add(server_id)
+                        connected_agents = [e.source for e in edges if e.target == mcp_node.id]
+                        if str(server_id) not in mcp_to_agents:
+                            mcp_to_agents[str(server_id)] = []
+                        mcp_to_agents[str(server_id)].extend(connected_agents)
+                
+                # Adiciona fallback para legacy data
                 for node in agent_nodes:
-                    mcp_server_ids = getattr(node.data, 'mcpServerIds', []) or []
-                    if mcp_server_ids:
-                        log_debug(f"Agent {node.data.name} has MCP Server IDs: {mcp_server_ids}")
-                    for mid in mcp_server_ids:
+                    legacy_mcp_ids = getattr(node.data, 'mcpServerIds', []) or []
+                    for mid in legacy_mcp_ids:
                         all_mcp_ids.add(mid)
                         if str(mid) not in mcp_to_agents:
                             mcp_to_agents[str(mid)] = []
-                        mcp_to_agents[str(mid)].append(node.id)
+                        if node.id not in mcp_to_agents[str(mid)]:
+                            mcp_to_agents[str(mid)].append(node.id)
                 
                 log_debug(f"Unique MCP IDs found in graph: {all_mcp_ids}")
                 if not all_mcp_ids:
-                    log_debug("No MCP Server IDs found in any agent node.")
+                    log_debug("No MCP Server IDs found in any agent/mcp node.")
                 
                 # Carregamos do banco e ativamos os Adapters
                 mcp_adapters_cache = {}
@@ -491,98 +502,225 @@ def run_crew_stream(graph_data: GraphData, workspace_id: Optional[Any] = None, i
                             mcp_adapters_cache[str(mcp_id)] = processed_tools
                         except Exception as e:
                             log_debug(f"Connection failed for {mcp_record.name}: {str(e)}")
-                def resolve_node_tools(node_data, node_name, include_mcp=True):
+                def wrap_tool_with_status_emitter(tool_instance, tool_node_id):
+                    # Wraps tool _run and _arun to emit status events to the frontend via Queue
+                    original_run = getattr(tool_instance, '_run', None)
+                    if hasattr(tool_instance, '_run') and callable(original_run):
+                        def protected_run(*args, **kwargs):
+                            print(f"DEBUG_WS: Emitting running status for tool {tool_node_id}", flush=True)
+                            tracked_statuses[tool_node_id] = "running"
+                            q.put(json.dumps({"type": "status", "nodeId": tool_node_id, "status": "running"}) + "\n")
+                            import time; time.sleep(1.5) # Force visual indication for ultra-fast local tools
+                            try:
+                                result = original_run(*args, **kwargs)
+                                print(f"DEBUG_WS: Emitting success status for tool {tool_node_id}", flush=True)
+                                tracked_statuses[tool_node_id] = "success"
+                                q.put(json.dumps({"type": "status", "nodeId": tool_node_id, "status": "success"}) + "\n")
+                                return result
+                            except Exception as e:
+                                print(f"DEBUG_WS: Emitting error status for tool {tool_node_id} - Error: {str(e)}", flush=True)
+                                tracked_statuses[tool_node_id] = "error"
+                                q.put(json.dumps({"type": "status", "nodeId": tool_node_id, "status": "error"}) + "\n")
+                                raise e
+                        try:
+                            tool_instance._run = protected_run
+                        except AttributeError:
+                            pass # Some tools might enforce read-only properties
+                            
+                    # For CrewAI/Langchain created via @tool, the execution logic resides in .func
+                    original_func = getattr(tool_instance, 'func', None)
+                    if hasattr(tool_instance, 'func') and callable(original_func):
+                        def protected_func(*args, **kwargs):
+                            tracked_statuses[tool_node_id] = "running"
+                            q.put(json.dumps({"type": "status", "nodeId": tool_node_id, "status": "running"}) + "\n")
+                            import time; time.sleep(1.5) # Force visual indication for ultra-fast local tools
+                            try:
+                                result = original_func(*args, **kwargs)
+                                tracked_statuses[tool_node_id] = "success"
+                                q.put(json.dumps({"type": "status", "nodeId": tool_node_id, "status": "success"}) + "\n")
+                                return result
+                            except Exception as e:
+                                tracked_statuses[tool_node_id] = "error"
+                                q.put(json.dumps({"type": "status", "nodeId": tool_node_id, "status": "error"}) + "\n")
+                                raise e
+                        try:
+                            tool_instance.func = protected_func
+                        except AttributeError:
+                            pass
+
+                    original_arun = getattr(tool_instance, '_arun', None)
+                    if hasattr(tool_instance, '_arun') and callable(original_arun):
+                        async def protected_arun(*args, **kwargs):
+                            tracked_statuses[tool_node_id] = "running"
+                            q.put(json.dumps({"type": "status", "nodeId": tool_node_id, "status": "running"}) + "\n")
+                            import asyncio; await asyncio.sleep(1.5)
+                            try:
+                                result = await original_arun(*args, **kwargs)
+                                tracked_statuses[tool_node_id] = "success"
+                                q.put(json.dumps({"type": "status", "nodeId": tool_node_id, "status": "success"}) + "\n")
+                                return result
+                            except Exception as e:
+                                tracked_statuses[tool_node_id] = "error"
+                                q.put(json.dumps({"type": "status", "nodeId": tool_node_id, "status": "error"}) + "\n")
+                                raise e
+                        try:
+                            tool_instance._arun = protected_arun
+                        except AttributeError:
+                            pass
+                            
+                    original_coroutine = getattr(tool_instance, 'coroutine', None)
+                    if hasattr(tool_instance, 'coroutine') and callable(original_coroutine):
+                        async def protected_coroutine(*args, **kwargs):
+                            tracked_statuses[tool_node_id] = "running"
+                            q.put(json.dumps({"type": "status", "nodeId": tool_node_id, "status": "running"}) + "\n")
+                            import asyncio; await asyncio.sleep(1.5)
+                            try:
+                                result = await original_coroutine(*args, **kwargs)
+                                tracked_statuses[tool_node_id] = "success"
+                                q.put(json.dumps({"type": "status", "nodeId": tool_node_id, "status": "success"}) + "\n")
+                                return result
+                            except Exception as e:
+                                tracked_statuses[tool_node_id] = "error"
+                                q.put(json.dumps({"type": "status", "nodeId": tool_node_id, "status": "error"}) + "\n")
+                                raise e
+                        try:
+                            tool_instance.coroutine = protected_coroutine
+                        except AttributeError:
+                            pass
+                            
+                    return tool_instance
+
+                def resolve_node_tools(owner_node_id, node_data, node_name, include_mcp=True):
                     node_tools = []
                     
-                    # 1. Default Tools (globalTools)
-                    global_ids = getattr(node_data, 'globalToolIds', []) or []
-                    global_configs = {t.id: t for t in (graph_data.globalTools or [])}
+                    edge_global_configs = {}
+                    edge_custom_ids = []
+                    edge_mcp_ids = []
                     
-                    disabled_ids = getattr(node_data, 'disabledToolIds', []) or []
+                    # 1. Resolve linked tools from edges
+                    for edge in edges:
+                        if edge.source == owner_node_id:
+                            target_node = nodes.get(edge.target)
+                            if target_node:
+                                if target_node.type == 'tool':
+                                    t_id = getattr(target_node.data, 'toolId', None)
+                                    if t_id:
+                                        t_config = getattr(target_node.data, 'config', {}) or {}
+                                        edge_global_configs[str(t_id)] = {"config": t_config, "node_id": target_node.id}
+                                elif target_node.type == 'customTool':
+                                    c_id = getattr(target_node.data, 'toolId', None)
+                                    if c_id:
+                                        if not any(c["id"] == str(c_id) for c in edge_custom_ids):
+                                            edge_custom_ids.append({"id": str(c_id), "node_id": target_node.id})
+                                elif target_node.type == 'mcp':
+                                    m_id = getattr(target_node.data, 'serverId', None)
+                                    if m_id:
+                                        if not any(str(m["id"]) == str(m_id) for m in edge_mcp_ids):
+                                            edge_mcp_ids.append({"id": str(m_id), "node_id": target_node.id})
                     
-                    for entry in global_ids:
+                    # Merge Legacy Data (from old attributes)
+                    legacy_global = getattr(node_data, 'globalToolIds', []) or []
+                    for entry in legacy_global:
                         gid = entry
                         config_data = {}
-                        
                         if isinstance(entry, dict):
                             gid = entry.get("id")
                             config_data = entry.get("config", {})
+                        if gid and str(gid) not in edge_global_configs:
+                            edge_global_configs[str(gid)] = {"config": config_data, "node_id": None}
                             
+                    legacy_custom = getattr(node_data, 'customToolIds', []) or []
+                    for c_id in legacy_custom:
+                        if c_id and not any(c["id"] == str(c_id) for c in edge_custom_ids):
+                            edge_custom_ids.append({"id": str(c_id), "node_id": None})
+                            
+                    if include_mcp:
+                        legacy_mcp = getattr(node_data, 'mcpServerIds', []) or []
+                        for m_id in legacy_mcp:
+                            if m_id and not any(m["id"] == str(m_id) for m in edge_mcp_ids):
+                                edge_mcp_ids.append({"id": str(m_id), "node_id": None})
+
+                    # Processing Global Tools
+                    global_configs = {str(t.id): t for t in (graph_data.globalTools or [])}
+                    disabled_ids = [str(x) for x in (getattr(node_data, 'disabledToolIds', []) or [])]
+                    
+                    for gid, gd in edge_global_configs.items():
+                        config_data = gd["config"]
+                        tool_node_id = gd["node_id"]
+                        
                         if gid in disabled_ids:
                             log_debug(f"Tool '{gid}' is disabled for {node_name}. Skipping.")
                             continue
 
-                        config = global_configs.get(gid)
-                        if not config or not config.isEnabled:
+                        config_def = global_configs.get(gid)
+                        if not config_def or not config_def.isEnabled:
                             continue
                             
                         try:
-                            if gid == 'serper':
-                                node_tools.append(SerperDevTool(api_key=config.apiKey))
-                            elif gid == 'scrape':
-                                node_tools.append(ScrapeWebsiteTool())
-                            elif gid == 'directory_read':
-                                node_tools.append(DirectoryReadTool(directory=workspace_path))
-                            elif gid == 'file_read':
-                                if workspace_path:
-                                    node_tools.append(WorkspaceFileReadTool(workspace_path=workspace_path))
-                                else:
-                                    node_tools.append(FileReadTool()) 
+                            t_instance = None
+                            if gid == 'serper': t_instance = SerperDevTool(api_key=config_def.apiKey)
+                            elif gid == 'scrape': t_instance = ScrapeWebsiteTool()
+                            elif gid == 'directory_read': t_instance = DirectoryReadTool(directory=workspace_path)
+                            elif gid == 'file_read': 
+                                if workspace_path: t_instance = WorkspaceFileReadTool(workspace_path=workspace_path)
+                                else: t_instance = FileReadTool()
                             elif gid == 'file_write':
-                                if workspace_path:
-                                    node_tools.append(WorkspaceFileWriterTool(workspace_path=workspace_path))
-                                else:
-                                    node_tools.append(FileWriterTool())
-                            elif gid == 'directory_search':
-                                node_tools.append(DirectorySearchTool(directory=workspace_path))
+                                if workspace_path: t_instance = WorkspaceFileWriterTool(workspace_path=workspace_path)
+                                else: t_instance = FileWriterTool()
+                            elif gid == 'directory_search': t_instance = DirectorySearchTool(directory=workspace_path)
                             elif gid == 'search_knowledge_base':
                                 kb_id = config_data.get("knowledge_base_id")
-                                if kb_id:
-                                    node_tools.append(get_search_knowledge_base_tool(kb_id=kb_id))
-                            elif gid == 'grep_search':
-                                node_tools.append(GrepSearchTool(workspace_path=workspace_path))
+                                if kb_id: t_instance = get_search_knowledge_base_tool(kb_id=kb_id)
+                            elif gid == 'grep_search': t_instance = GrepSearchTool(workspace_path=workspace_path)
                             elif gid in ['pdf_search', 'docx_search', 'json_search', 'xml_search', 'csv_search', 'mdx_search', 'txt_search']:
-                                # RAG Tools: Use provided config (like knowledge_base_id)
                                 tool_config = {'directory': workspace_path} if workspace_path else {}
-                                if config_data:
-                                    tool_config.update(config_data)
-                                
-                                if gid == 'pdf_search': node_tools.append(PDFSearchTool(config=tool_config))
-                                elif gid == 'docx_search': node_tools.append(DOCXSearchTool(config=tool_config))
-                                elif gid == 'json_search': node_tools.append(JSONSearchTool(config=tool_config))
-                                elif gid == 'xml_search': node_tools.append(XMLSearchTool(config=tool_config))
-                                elif gid == 'csv_search': node_tools.append(CSVSearchTool(config=tool_config))
-                                elif gid == 'mdx_search': node_tools.append(MDXSearchTool(config=tool_config))
-                                elif gid == 'txt_search': node_tools.append(TXTSearchTool(config=tool_config))
-                            
-                            log_debug(f"Default tool '{gid}' added to {node_name} with config: {config_data}")
+                                if config_data: tool_config.update(config_data)
+                                if gid == 'pdf_search': t_instance = PDFSearchTool(config=tool_config)
+                                elif gid == 'docx_search': t_instance = DOCXSearchTool(config=tool_config)
+                                elif gid == 'json_search': t_instance = JSONSearchTool(config=tool_config)
+                                elif gid == 'xml_search': t_instance = XMLSearchTool(config=tool_config)
+                                elif gid == 'csv_search': t_instance = CSVSearchTool(config=tool_config)
+                                elif gid == 'mdx_search': t_instance = MDXSearchTool(config=tool_config)
+                                elif gid == 'txt_search': t_instance = TXTSearchTool(config=tool_config)
+
+                            if t_instance:
+                                if tool_node_id:
+                                    t_instance = wrap_tool_with_status_emitter(t_instance, tool_node_id)
+                                node_tools.append(t_instance)
+                                log_debug(f"Global tool '{gid}' added to {node_name}.")
                         except Exception as ge:
                             log_debug(f"Failed to instantiate default tool '{gid}': {str(ge)}")
 
+                    # Processing MCP Server Tools
                     if include_mcp:
-                        mcp_ids = getattr(node_data, 'mcpServerIds', []) or []
-                        log_debug(f"Node {node_name} requesting tools for MCP IDs: {mcp_ids}")
-                        for mid in mcp_ids:
-                            mid_str = str(mid)
+                        for m_entry in edge_mcp_ids:
+                            mid_str = m_entry["id"]
+                            mcp_node_id = m_entry["node_id"]
                             if mid_str in disabled_ids:
                                 log_debug(f"MCP Server '{mid_str}' is disabled for {node_name}. Skipping.")
                                 continue
                             if mid_str in mcp_adapters_cache:
                                 tools_to_add = mcp_adapters_cache[mid_str]
                                 if isinstance(tools_to_add, list):
+                                    for t_inst in tools_to_add:
+                                        # Since MCP tools could be dynamically retrieved, we wrap them directly
+                                        if mcp_node_id:
+                                            # We need to ensure we don't permanently wrap reference tools for multiple agents
+                                            # But since we run it in threaded memory space without caching modified tools back, it's mostly ok
+                                            wrap_tool_with_status_emitter(t_inst, mcp_node_id)
                                     node_tools.extend(tools_to_add)
                                     log_debug(f"Node {node_name} received {len(tools_to_add)} tools from MCP {mid_str}")
                                 else:
                                     log_debug(f"Warning: Cached MCP item for {mid_str} is not a list: {type(tools_to_add)}")
-                            else:
-                                log_debug(f"Warning: MCP ID {mid_str} not found in mcp_adapters_cache. Cache Keys: {list(mcp_adapters_cache.keys())}")
-                    
-                    custom_ids = getattr(node_data, 'customToolIds', []) or []
-                    for cid in custom_ids:
+
+                    # Processing Custom Tools
+                    for custom_entry in edge_custom_ids:
+                        cid = custom_entry["id"]
+                        custom_node_id = custom_entry["node_id"]
                         if cid in disabled_ids:
                             log_debug(f"Custom Tool '{cid}' is disabled for {node_name}. Skipping.")
                             continue
-                        tool_def = next((t for t in (graph_data.customTools or []) if t.id == cid), None)
+                        tool_def = next((t for t in (graph_data.customTools or []) if str(t.id) == cid), None)
                         if not tool_def:
                             log_debug(f"Warning: Custom tool {cid} code not found in graph_data.")
                             continue
@@ -669,6 +807,9 @@ def run_crew_stream(graph_data: GraphData, workspace_id: Optional[Any] = None, i
                                 except Exception:
                                     pass
                                 
+                                if custom_node_id:
+                                    found_tool = wrap_tool_with_status_emitter(found_tool, custom_node_id)
+                                    
                                 node_tools.append(found_tool)
                                 log_debug(f"Custom tool '{getattr(found_tool, 'name', 'unnamed')}' successfully injected into {node_name}.")
                             else:
@@ -687,7 +828,7 @@ def run_crew_stream(graph_data: GraphData, workspace_id: Optional[Any] = None, i
                     model_id = getattr(node.data, 'modelId', None)
                     
                     # Coleta ferramentas deste agente
-                    this_agent_tools = resolve_node_tools(node.data, f"Agent {name}")
+                    this_agent_tools = resolve_node_tools(node.id, node.data, f"Agent {name}")
 
                     # LLM Setup
                     agent_llm = None
@@ -839,7 +980,7 @@ def run_crew_stream(graph_data: GraphData, workspace_id: Optional[Any] = None, i
                     log_debug(f"Task {task_name} assigned to Agent {target_agent.role if hasattr(target_agent, 'role') else source_agent_id}")
                     
                     # Resolve ferramentas da Task (Custom/Global Tools + MCP)
-                    this_task_tools = resolve_node_tools(node.data, f"Task {task_name}", include_mcp=True)
+                    this_task_tools = resolve_node_tools(node.id, node.data, f"Task {task_name}", include_mcp=True)
                         
                     # Injeção de Prompt na Task para reforçar o workspace (como restrição, não como ordem)
                     workspace_task_instruction = (

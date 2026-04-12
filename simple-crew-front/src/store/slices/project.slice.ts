@@ -4,6 +4,7 @@ import type { NodeStatus, AppState, ProjectSlice, ExportedProject } from '../../
 import type { AppNode } from '../../types/nodes.types';
 import type { MCPServer, CustomTool } from '../../types/config.types';
 import { migrateEdges, migrateNodes, validateDependencies } from '../helpers';
+import { migrateLegacyWorkflow } from '../../utils/workflowAdapter';
 import { INITIAL_CHAT_MESSAGES } from './graph.slice';
 
 const API_URL = import.meta.env.VITE_API_URL || '';
@@ -27,22 +28,26 @@ export const createProjectSlice: StateCreator<AppState, [], [], ProjectSlice> = 
     // Note: Project['canvas_data'] doesn't usually have workspaceId, 
     // but some snapshots from execution might.
     const snapshotWithWs = snapshot as { workspaceId?: string };
-    const localWorkspace = snapshotWithWs.workspaceId 
-      ? get().workspaces?.find(w => w.id === snapshotWithWs.workspaceId) 
+    const localWorkspace = snapshotWithWs.workspaceId
+      ? get().workspaces?.find(w => w.id === snapshotWithWs.workspaceId)
       : null;
     const activeWorkspaceId = localWorkspace ? localWorkspace.id : null;
 
-    console.log("Hydrating with:", snapshot.nodes?.length || 0, "nodes");
 
-    const migratedNodes = migrateNodes(snapshot.nodes || []);
-    
+    const { migratedNodes: legacyNodes, migratedEdges: legacyEdges } = migrateLegacyWorkflow(
+      snapshot.nodes || [],
+      snapshot.edges || []
+    );
+
+    const migratedNodes = migrateNodes(legacyNodes);
+
     set({
       currentProjectId: projectId,
       currentProjectWorkspaceId: activeWorkspaceId,
       currentProjectWorkspaceName: localWorkspace?.name || null,
       activeWorkspaceId: activeWorkspaceId,
       nodes: migratedNodes,
-      edges: migrateEdges(snapshot.edges || []),
+      edges: migrateEdges(legacyEdges, migratedNodes),
       isDirty: true,
       messages: INITIAL_CHAT_MESSAGES, // Clear chat
       executionResult: null,
@@ -108,7 +113,7 @@ export const createProjectSlice: StateCreator<AppState, [], [], ProjectSlice> = 
       if (!response.ok) throw new Error('Failed to save project');
       const saved = await response.json();
 
-      set({ 
+      set({
         currentProjectId: saved.id,
         currentProjectName: saved.name,
         currentProjectDescription: saved.description,
@@ -176,20 +181,25 @@ export const createProjectSlice: StateCreator<AppState, [], [], ProjectSlice> = 
         if (!mergedTools.some(m => m.id === p.id)) mergedTools.push(p);
       });
 
-      const migratedNodes = migrateNodes(canvas_data.nodes || []);
+      const { migratedNodes: legacyNodes, migratedEdges: legacyEdges } = migrateLegacyWorkflow(
+        canvas_data.nodes || [],
+        canvas_data.edges || []
+      );
+
+      const migratedNodes = migrateNodes(legacyNodes);
       const workspace = get().workspaces?.find(w => w.id === project.workspace_id);
       const { warnings } = validateDependencies(
-        migratedNodes, 
-        get().models, 
-        get().globalTools, 
-        get().customTools, 
+        migratedNodes,
+        get().models,
+        get().globalTools,
+        get().customTools,
         get().mcpServers,
         project.workspace_id || null
       );
 
       set({
         nodes: migratedNodes,
-        edges: migrateEdges(canvas_data.edges || []),
+        edges: migrateEdges(legacyEdges, migratedNodes),
         customTools: mergedTools,
         mcpServers: mergedMcp,
         currentProjectId: project.id,
@@ -300,7 +310,7 @@ export const createProjectSlice: StateCreator<AppState, [], [], ProjectSlice> = 
       return;
     }
     const nodes = state.nodes;
-    
+
     // Slim Export: Filter only used tools/servers
     const usedGlobalToolIds = new Set<string>();
     const usedCustomToolIds = new Set<string>();
@@ -340,8 +350,8 @@ export const createProjectSlice: StateCreator<AppState, [], [], ProjectSlice> = 
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    const filename = state.currentProjectName 
-      ? `${state.currentProjectName.toLowerCase().replace(/ /g, '_')}-config.json` 
+    const filename = state.currentProjectName
+      ? `${state.currentProjectName.toLowerCase().replace(/ /g, '_')}-config.json`
       : 'simple-crew-config.json';
     a.download = filename;
     document.body.appendChild(a);
@@ -364,7 +374,7 @@ export const createProjectSlice: StateCreator<AppState, [], [], ProjectSlice> = 
     try {
       state.showNotification("Preparing Python project... ⏳", "info");
       const response = await fetch(`${API_URL}/api/v1/projects/${state.currentProjectId}/export-python`);
-      
+
       if (!response.ok) {
         let errorMsg = "Failed to generate Python project";
         try {
@@ -403,7 +413,7 @@ export const createProjectSlice: StateCreator<AppState, [], [], ProjectSlice> = 
     try {
       const project = data as ExportedProject;
       if (!project || !Array.isArray(project.nodes) || !Array.isArray(project.edges)) throw new Error("Invalid format");
-      
+
       const globalMcp = get().mcpServers;
       const projectMcp: MCPServer[] = project.mcpServers || [];
       const mergedMcp = [...globalMcp];
@@ -416,17 +426,23 @@ export const createProjectSlice: StateCreator<AppState, [], [], ProjectSlice> = 
       projectTools.forEach((p) => {
         if (!mergedTools.some(m => m.id === p.id)) mergedTools.push(p);
       });
-      const migratedNodes = migrateNodes(project.nodes || []);
-      
+
+      const { migratedNodes: legacyNodes, migratedEdges: legacyEdges } = migrateLegacyWorkflow(
+        project.nodes || [],
+        project.edges || []
+      );
+
+      const migratedNodes = migrateNodes(legacyNodes);
+
       // Try to find if workspace exists locally
       const localWorkspace = get().workspaces?.find(w => w.id === project.workspaceId);
       const activeWorkspaceId = localWorkspace ? localWorkspace.id : null;
 
       const { warnings } = validateDependencies(
-        migratedNodes, 
-        get().models, 
-        get().globalTools, 
-        get().customTools, 
+        migratedNodes,
+        get().models,
+        get().globalTools,
+        get().customTools,
         get().mcpServers,
         activeWorkspaceId,
         project.workspaceName || undefined
@@ -438,7 +454,7 @@ export const createProjectSlice: StateCreator<AppState, [], [], ProjectSlice> = 
 
       set({
         nodes: migratedNodes,
-        edges: migrateEdges(project.edges || []),
+        edges: migrateEdges(legacyEdges, migratedNodes),
         customTools: mergedTools,
         mcpServers: mergedMcp,
         currentProjectName: project.name || null,
@@ -469,13 +485,17 @@ export const createProjectSlice: StateCreator<AppState, [], [], ProjectSlice> = 
         name: project.name || "Imported Workflow",
         description: project.description || "",
         workspace_id: project.workspaceId || null,
-        canvas_data: {
-          nodes: migrateNodes(project.nodes || []),
-          edges: migrateEdges(project.edges || []),
-          customTools: project.customTools || [],
-          mcpServers: project.mcpServers || [],
-          version: project.version || "1.0"
-        }
+        canvas_data: (() => {
+          const { migratedNodes, migratedEdges } = migrateLegacyWorkflow(project.nodes || [], project.edges || []);
+          const finalNodes = migrateNodes(migratedNodes);
+          return {
+            nodes: finalNodes,
+            edges: migrateEdges(migratedEdges, finalNodes),
+            customTools: project.customTools || [],
+            mcpServers: project.mcpServers || [],
+            version: project.version || "1.0"
+          };
+        })()
       };
       const response = await fetch(`${API_URL}/api/v1/projects`, {
         method: 'POST',
@@ -484,11 +504,11 @@ export const createProjectSlice: StateCreator<AppState, [], [], ProjectSlice> = 
       });
       if (!response.ok) throw new Error('Failed to create project from JSON');
       const saved = await response.json();
-      
+
       const localWorkspace = get().workspaces?.find(w => w.id === project.workspaceId);
       const activeWorkspaceId = localWorkspace ? localWorkspace.id : null;
 
-      set((state) => ({ 
+      set((state) => ({
         savedProjects: [...state.savedProjects, saved],
         activeWorkspaceId: activeWorkspaceId,
         currentProjectWorkspaceId: activeWorkspaceId,
@@ -509,10 +529,10 @@ export const createProjectSlice: StateCreator<AppState, [], [], ProjectSlice> = 
       if (node.type === 'agent' || node.type === 'task') initialStatuses[node.id] = 'waiting';
     });
     const controller = new AbortController();
-    set({ 
-      isExecuting: true, 
+    set({
+      isExecuting: true,
       abortController: controller,
-      nodeStatuses: initialStatuses, 
+      nodeStatuses: initialStatuses,
       executionResult: null,
       isConsoleOpen: true,
       isConsoleExpanded: false
@@ -569,7 +589,7 @@ export const createProjectSlice: StateCreator<AppState, [], [], ProjectSlice> = 
         for (const line of lines) {
           try {
             const event = JSON.parse(line);
-            if (event.type === 'heartbeat') continue; 
+            if (event.type === 'heartbeat') continue;
             else if (event.type === 'status') get().setNodeStatus(event.nodeId, event.status);
             else if (event.type === 'task_completed') get().setNodeStatus(event.task_id, 'success');
             else if (event.type === 'log') {
@@ -589,7 +609,7 @@ export const createProjectSlice: StateCreator<AppState, [], [], ProjectSlice> = 
                     ? rawResult
                     : JSON.stringify(rawResult, null, 2);
                 capturedResult = resultStr;
-                
+
                 const newStatuses: Record<string, NodeStatus> = { ...get().nodeStatuses };
                 state.nodes.forEach(n => { if (newStatuses[n.id] === 'running') newStatuses[n.id] = 'success'; });
                 set({ nodeStatuses: newStatuses, isConsoleExpanded: true, executionResult: resultStr });
@@ -647,7 +667,7 @@ export const createProjectSlice: StateCreator<AppState, [], [], ProjectSlice> = 
 
   updateProjectWorkspaceId: (workspaceId: string | null) => {
     const workspace = get().workspaces?.find(w => w.id === workspaceId);
-    set({ 
+    set({
       currentProjectWorkspaceId: workspaceId,
       currentProjectWorkspaceName: workspace?.name || null
     });

@@ -61,17 +61,57 @@ export const migrateNodes = (nodes: AppNode[]): AppNode[] => {
   });
 };
 
-export const migrateEdges = (edges: AppEdge[]): AppEdge[] => {
-  return edges.map(edge => ({
-    ...edge,
-    type: edge.type || 'deletable',
-    sourceHandle: edge.sourceHandle?.includes('-source') 
-      ? edge.sourceHandle 
-      : `${edge.sourceHandle || 'right'}-source`,
-    targetHandle: edge.targetHandle?.includes('-target') 
-      ? edge.targetHandle 
-      : `${edge.targetHandle || 'left'}-target`
-  }));
+
+
+export const migrateEdges = (edges: AppEdge[], nodes: AppNode[] = []): AppEdge[] => {
+  return edges.map(edge => {
+    let sourceHandle = edge.sourceHandle;
+    let targetHandle = edge.targetHandle;
+
+    const sourceNode = nodes.find(n => n.id === edge.source);
+    const targetNode = nodes.find(n => n.id === edge.target);
+
+    // 1. Resolve sourceHandle based strictly on Source Node's architecture
+    if (sourceNode) {
+      if (sourceNode.type === 'agent') {
+        if (targetNode?.type === 'task') sourceHandle = 'out-task';
+        else if (targetNode?.type === 'tool' || targetNode?.type === 'customTool') sourceHandle = 'out-tool';
+        else if (targetNode?.type === 'mcp') sourceHandle = 'out-mcp';
+        else if (sourceHandle?.startsWith('out-task')) sourceHandle = 'out-task';
+        else if (sourceHandle?.startsWith('out-tool')) sourceHandle = 'out-tool';
+        else if (sourceHandle?.startsWith('out-mcp')) sourceHandle = 'out-mcp';
+        else sourceHandle = 'out-task'; // Ultimate fallback for Agent sources
+      } else if (['crew', 'chat', 'webhook'].includes(sourceNode.type)) {
+        sourceHandle = 'right-source';
+      }
+    } else {
+       // Fallback for missing nodes/legacy edges
+       if (!sourceHandle || sourceHandle === 'bottom' || sourceHandle === 'right' || sourceHandle === 'right-source') {
+         sourceHandle = 'right-source';
+       }
+    }
+
+    // 2. Resolve targetHandle based strictly on Target Node's architecture
+    if (targetNode) {
+      if (['agent', 'task', 'crew'].includes(targetNode.type)) {
+        targetHandle = 'left-target';
+      } else {
+        targetHandle = undefined;
+      }
+    } else {
+      // If target node is unaccounted for, sanitize common corrupted handles
+      if (!targetHandle || targetHandle === 'left' || targetHandle === 'left-target' || targetHandle === 'in-crew' || targetHandle === 'undefined-target') {
+        targetHandle = 'left-target'; 
+      }
+    }
+
+    return {
+      ...edge,
+      type: edge.type || 'smoothstep',
+      sourceHandle,
+      targetHandle,
+    };
+  });
 };
 
 /**

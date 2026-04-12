@@ -138,7 +138,7 @@ export const CrewNode = memo(({ id, data }: NodeProps<Node<CrewNodeData, 'crew'>
                       source: id, 
                       target: targetNode.id, 
                       sourceHandle: 'right-source', 
-                      targetHandle: 'top-target' 
+                      targetHandle: 'left-target' 
                     });
                     setIsConnectMenuOpen(false);
                   }}
@@ -185,14 +185,29 @@ export const CrewNode = memo(({ id, data }: NodeProps<Node<CrewNodeData, 'crew'>
       </button>
 
       {/* Connection Handles */}
-      <Handle type="target" position={Position.Top} id="top-target" className="w-2 h-2 bg-gray-400 border-none hover:bg-violet-500 transition-colors" />
-      <Handle type="source" position={Position.Top} id="top-source" className="w-2 h-2 bg-gray-400 border-none hover:bg-violet-500 transition-colors" />
-      <Handle type="target" position={Position.Right} id="right-target" className="w-2 h-2 bg-gray-400 border-none hover:bg-violet-500 transition-colors" />
-      <Handle type="source" position={Position.Right} id="right-source" className="w-2 h-2 bg-gray-400 border-none hover:bg-violet-500 transition-colors" />
-      <Handle type="target" position={Position.Bottom} id="bottom-target" className="w-2 h-2 bg-gray-400 border-none hover:bg-violet-500 transition-colors" />
-      <Handle type="source" position={Position.Bottom} id="bottom-source" className="w-2 h-2 bg-gray-400 border-none hover:bg-violet-500 transition-colors" />
-      <Handle type="target" position={Position.Left} id="left-target" className="w-2 h-2 bg-gray-400 border-none hover:bg-violet-500 transition-colors" />
-      <Handle type="source" position={Position.Left} id="left-source" className="w-2 h-2 bg-gray-400 border-none hover:bg-violet-500 transition-colors" />
+      {/* Trigger Input Handle (Top) */}
+      <div className="absolute left-1/2 -top-[1px] -translate-x-1/2 flex flex-col items-center gap-2 group/h-trigger -translate-y-full pointer-events-none">
+         <span className="text-[9px] font-bold text-cyan-500 bg-white dark:bg-slate-900 px-1 rounded shadow-sm opacity-0 group-hover/h-trigger:opacity-100 transition-opacity whitespace-nowrap border border-cyan-100 dark:border-cyan-900/30">Trigger In</span>
+          <Handle 
+            type="target" 
+            position={Position.Top} 
+            id="left-target"
+            className="!w-3 !h-3 !border-2 !border-white dark:!border-slate-900 !static !translate-x-0 !cursor-crosshair pointer-events-auto shadow-sm" 
+            style={{ backgroundColor: '#06b6d4' }} 
+          />
+      </div>
+
+      {/* Exec Flow Output Handle (Bottom) */}
+      <div className="absolute left-1/2 -bottom-[1px] -translate-x-1/2 flex flex-col items-center gap-2 group/h-exec translate-y-full pointer-events-none">
+         <Handle 
+          type="source" 
+          position={Position.Bottom} 
+          id="right-source" 
+          className="!w-3 !h-3 !border-2 !border-white dark:!border-slate-900 !static !translate-x-0 !cursor-crosshair pointer-events-auto shadow-sm" 
+          style={{ backgroundColor: '#a855f7' }} 
+        />
+         <span className="text-[9px] font-bold text-purple-500 bg-white dark:bg-slate-900 px-1 rounded shadow-sm opacity-0 group-hover/h-exec:opacity-100 transition-opacity whitespace-nowrap border border-purple-100 dark:border-purple-900/30">Exec Flow</span>
+      </div>
     </div>
   );
 });

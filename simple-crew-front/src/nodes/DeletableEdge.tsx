@@ -2,7 +2,7 @@ import { useState, useMemo } from 'react';
 import {
   BaseEdge,
   EdgeLabelRenderer,
-  getBezierPath,
+  getSmoothStepPath,
   type EdgeProps,
 } from '@xyflow/react';
 import { Trash2 } from 'lucide-react';
@@ -23,7 +23,7 @@ export function DeletableEdge({
   style = {},
   markerEnd,
 }: EdgeProps) {
-  const [edgePath, labelX, labelY] = getBezierPath({
+  const [edgePath, labelX, labelY] = getSmoothStepPath({
     sourceX,
     sourceY,
     sourcePosition,
@@ -48,14 +48,14 @@ export function DeletableEdge({
     const isRunning = sourceStatus === 'running' || targetStatus === 'running';
     const isSuccess = sourceStatus === 'success' && targetStatus === 'success';
 
-    let strokeColor = '#94a3b8';
+    let strokeColor = (style.stroke as string) || '#94a3b8';
     if (isRunning) strokeColor = '#3b82f6';
     else if (isSuccess) strokeColor = '#10b981';
 
     return {
       ...style,
       stroke: strokeColor,
-      strokeWidth: isRunning ? 3 : 2,
+      strokeWidth: isRunning ? 3 : (style.strokeWidth as number || 2),
       transition: 'stroke 0.5s ease, stroke-width 0.5s ease',
     };
   }, [sourceStatus, targetStatus, style]);
