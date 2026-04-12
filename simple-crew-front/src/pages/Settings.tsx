@@ -100,20 +100,14 @@ const SettingsPage = () => {
     credentials, addCredential, updateCredential, deleteCredential, fetchCredentials,
     models: modelConfigs, addModel, updateModel, deleteModel, setDefaultModelConfig, fetchModels, duplicateModel,
     globalTools, updateToolConfig,
-    customTools, addCustomTool, updateCustomTool, deleteCustomTool,
-    mcpServers, addMCPServer, updateMCPServer, deleteMCPServer,
+    customTools, addCustomTool, updateCustomTool, deleteCustomTool, fetchCustomTools,
+    mcpServers, addMCPServer, updateMCPServer, deleteMCPServer, fetchMCPServers,
     systemAiModelId, setSystemAiModelId, embeddingModelId, setEmbeddingModelId, fetchSettings,
     workspaces, fetchWorkspaces, addWorkspace, updateWorkspace, deleteWorkspace, activeWorkspaceId, setActiveWorkspaceId
   } = useStore();
 
-  React.useEffect(() => {
-    fetchCredentials();
-    fetchModels();
-    fetchWorkspaces();
-    fetchSettings();
-  }, [fetchCredentials, fetchModels, fetchWorkspaces, fetchSettings]);
-
-  const [activeTab, setActiveTab] = useState<'credentials' | 'models' | 'tools' | 'mcp' | 'workspaces' | 'knowledge_base'>('credentials');
+  const [activeTab, setActiveTab] = useState<'credentials' | 'models' | 'tools_crewai' | 'mcp' | 'workspaces' | 'knowledge_base'>('credentials');
+  const [isToolsExpanded, setIsToolsExpanded] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isModelModalOpen, setIsModelModalOpen] = useState(false);
   const [isMCPModalOpen, setIsMCPModalOpen] = useState(false);
@@ -148,6 +142,21 @@ const SettingsPage = () => {
   const [editingCustomToolId, setEditingCustomToolId] = useState<string | null>(null);
   const [editingWorkspaceId, setEditingWorkspaceId] = useState<string | null>(null);
   const [showKeys, setShowKeys] = useState<Record<string, boolean>>({});
+
+  React.useEffect(() => {
+    fetchCredentials();
+    fetchModels();
+    fetchWorkspaces();
+    fetchSettings();
+    fetchMCPServers();
+    fetchCustomTools(); // Fetch all by default on settings load
+  }, [fetchCredentials, fetchModels, fetchWorkspaces, fetchSettings, fetchMCPServers, fetchCustomTools]);
+
+  React.useEffect(() => {
+    if (activeTab === 'tools_crewai') {
+      fetchCustomTools('crewai');
+    }
+  }, [activeTab, fetchCustomTools]);
 
   // Delete Confirmation State
   const [deleteConfirm, setDeleteConfirm] = useState<{
@@ -313,10 +322,18 @@ const SettingsPage = () => {
 
   const handleSaveCustomTool = () => {
     if (newCustomTool.name && newCustomTool.code) {
+      // Derive framework from active tab (future-proofing for LangGraph)
+      const currentFramework = activeTab === 'tools_crewai' ? 'crewai' : 'unknown';
+
+      const toolPayload = {
+        ...newCustomTool,
+        framework: currentFramework
+      };
+
       if (editingCustomToolId) {
-        updateCustomTool(editingCustomToolId, newCustomTool);
+        updateCustomTool(editingCustomToolId, toolPayload);
       } else {
-        addCustomTool(newCustomTool);
+        addCustomTool(toolPayload);
       }
       setNewCustomTool({ name: '', description: '', code: '' });
       setEditingCustomToolId(null);
@@ -383,16 +400,32 @@ const SettingsPage = () => {
             <ChevronRight className={`w-4 h-4 transition-transform ${activeTab === 'models' ? 'rotate-90' : ''}`} />
           </button>
 
-          <button 
-            onClick={() => setActiveTab('tools')}
-            className={`w-full flex items-center justify-between p-3 rounded-xl transition-all ${activeTab === 'tools' ? 'bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600' : 'text-brand-muted hover:bg-brand-bg hover:text-brand-text'}`}
-          >
-            <div className="flex items-center gap-3 text-sm font-bold">
-              <Wrench className="w-4 h-4" />
-              Tools
-            </div>
-            <ChevronRight className={`w-4 h-4 transition-transform ${activeTab === 'tools' ? 'rotate-90' : ''}`} />
-          </button>
+          {/* Tools Accordion Menu */}
+          <div className="space-y-1">
+            <button 
+              onClick={() => setIsToolsExpanded(!isToolsExpanded)}
+              className={`w-full flex items-center justify-between p-3 rounded-xl transition-all ${activeTab.startsWith('tools_') ? 'bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600' : 'text-brand-muted hover:bg-brand-bg hover:text-brand-text'}`}
+            >
+              <div className="flex items-center gap-3 text-sm font-bold">
+                <Wrench className="w-4 h-4" />
+                Tools
+              </div>
+              <ChevronRight className={`w-4 h-4 transition-transform ${isToolsExpanded ? 'rotate-90' : ''}`} />
+            </button>
+            
+            {/* Submenu Items */}
+            {isToolsExpanded && (
+              <div className="pl-11 pr-2 py-1 space-y-1 animate-in slide-in-from-top-2 duration-200">
+                <button
+                  onClick={() => setActiveTab('tools_crewai')}
+                  className={`w-full text-left px-3 py-2 rounded-lg text-xs font-bold transition-all ${activeTab === 'tools_crewai' ? 'bg-indigo-600 text-white shadow-md' : 'text-brand-muted hover:text-indigo-500 hover:bg-indigo-50 dark:hover:bg-indigo-900/20'}`}
+                >
+                  CrewAI
+                </button>
+                {/* Future frameworks (LangGraph, etc.) will be added here */}
+              </div>
+            )}
+          </div>
 
           <button 
             onClick={() => setActiveTab('mcp')}
@@ -666,12 +699,12 @@ const SettingsPage = () => {
             </div>
           )}
 
-          {activeTab === 'tools' && (
+          {activeTab === 'tools_crewai' && (
             <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
               <header className="flex items-center justify-between mb-10">
                 <div>
-                  <h1 className="text-3xl font-bold text-brand-text tracking-tight mb-2">Agent Tools</h1>
-                  <p className="text-brand-muted text-sm">Enable and create global capabilities for your crew agents.</p>
+                  <h1 className="text-3xl font-bold text-brand-text tracking-tight mb-2">CrewAI Tools</h1>
+                  <p className="text-brand-muted text-sm">Enable and create global capabilities specifically for your CrewAI agents.</p>
                 </div>
               </header>
 

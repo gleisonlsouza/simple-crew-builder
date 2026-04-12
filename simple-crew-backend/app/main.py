@@ -13,8 +13,9 @@ from fastapi import FastAPI, HTTPException, Depends, Header, Request, Background
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, StreamingResponse
 from sqlmodel import Session, select
+from sqlalchemy import text
 from .crew_builder import run_crew_stream
-from .database import init_db, get_session
+from .database import init_db, get_session, engine
 from .models import CrewProject, User, Credential, LLMModel, MCPServer, AppSettings, CustomTool, Workspace, Execution, ExecutionStatus
 from .schemas import (
     GraphData, ProjectCreate, ProjectRead, ProjectUpdate, 
@@ -40,6 +41,9 @@ from .utils import normalize_command
 async def lifespan(app: FastAPI):
     # Inicializa o banco SQL (SQLModel) e o usuário seed no startup
     init_db()
+    
+    # Safe Tool Migration
+    run_safe_migrations(engine)
     
     # Inicializa o driver do Neo4j
     neo4j_manager.init_driver()
@@ -636,6 +640,16 @@ async def delete_mcp_server(mcp_id: str, session: Session = Depends(get_session)
     
 # --- CRUD de Gerenciamento de Custom Tools ---
 
+def run_safe_migrations(engine):
+    with Session(engine) as session:
+        # Safe alter table for PostgreSQL (prevents Docker users from breaking their DBs)
+        try:
+            session.exec(text("ALTER TABLE customtool ADD COLUMN IF NOT EXISTS framework VARCHAR DEFAULT 'crewai';"))
+            session.commit()
+            print("--- Migration: framework column added to customtool! ---")
+        except Exception as e:
+            print(f"--- Migration Note: Manual alter for customtool framework skipped: {e} ---")
+
 @app.post("/api/v1/custom-tools", response_model=CustomToolRead)
 async def create_custom_tool(tool: CustomToolCreate, session: Session = Depends(get_session)):
     new_tool = CustomTool(
@@ -648,8 +662,16 @@ async def create_custom_tool(tool: CustomToolCreate, session: Session = Depends(
     return new_tool
 
 @app.get("/api/v1/custom-tools", response_model=List[CustomToolRead])
-async def list_custom_tools(session: Session = Depends(get_session)):
-    statement = select(CustomTool).where(CustomTool.user_id == ROOT_USER_ID).order_by(CustomTool.created_at.desc())
+async def list_custom_tools(
+    framework: Optional[str] = None,
+    session: Session = Depends(get_session)
+):
+    statement = select(CustomTool).where(CustomTool.user_id == ROOT_USER_ID)
+    
+    if framework:
+        statement = statement.where(CustomTool.framework == framework)
+        
+    statement = statement.order_by(CustomTool.created_at.desc())
     tools = session.exec(statement).all()
     return tools
 

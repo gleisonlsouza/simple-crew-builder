@@ -194,7 +194,7 @@ export interface ConfigSlice {
   setEmbeddingModelId: (id: string | null) => void;
   setDefaultModel: (model: string) => void;
   updateToolConfig: (id: string, config: Partial<ToolConfig>) => void;
-  fetchCustomTools: () => Promise<void>;
+  fetchCustomTools: (framework?: string) => Promise<void>;
   addCustomTool: (tool: Omit<CustomTool, 'id'>) => Promise<void>;
   updateCustomTool: (id: string, tool: Partial<CustomTool>) => Promise<void>;
   deleteCustomTool: (id: string) => Promise<void>;

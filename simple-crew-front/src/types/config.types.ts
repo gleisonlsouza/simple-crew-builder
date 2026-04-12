@@ -49,6 +49,7 @@ export interface CustomTool {
   name: string;
   description: string;
   code: string;
+  framework?: string;
 }
 
 export interface MCPServer {

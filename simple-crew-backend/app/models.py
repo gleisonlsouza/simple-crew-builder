@@ -49,6 +49,7 @@ class CustomTool(SQLModel, table=True):
     name: str
     description: Optional[str] = None
     code: str
+    framework: str = Field(default="crewai", nullable=False)
     
     # Relationship
     user_id: uuid.UUID = Field(foreign_key="user.id")
