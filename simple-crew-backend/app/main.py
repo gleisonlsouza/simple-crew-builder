@@ -645,8 +645,12 @@ def run_safe_migrations(engine):
         # Safe alter table for PostgreSQL (prevents Docker users from breaking their DBs)
         try:
             session.exec(text("ALTER TABLE customtool ADD COLUMN IF NOT EXISTS framework VARCHAR DEFAULT 'crewai';"))
+            
+            # NEW CrewProject migration
+            session.exec(text("ALTER TABLE crewproject ADD COLUMN IF NOT EXISTS framework VARCHAR DEFAULT 'crewai';"))
+            
             session.commit()
-            print("--- Migration: framework column added to customtool! ---")
+            print("--- Migration: framework column added to tables! ---")
         except Exception as e:
             print(f"--- Migration Note: Manual alter for customtool framework skipped: {e} ---")
 

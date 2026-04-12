@@ -117,6 +117,7 @@ class ProjectBase(BaseModel):
     name: str
     description: Optional[str] = None
     workspace_id: Optional[Any] = None # UUID
+    framework: Optional[str] = "crewai"  # New field for Multi-Framework support
     canvas_data: Dict[str, Any]
 
 class ProjectCreate(ProjectBase):
