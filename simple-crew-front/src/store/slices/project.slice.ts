@@ -16,6 +16,7 @@ export const createProjectSlice: StateCreator<AppState, [], [], ProjectSlice> = 
   currentProjectDescription: null,
   currentProjectWorkspaceId: null,
   currentProjectWorkspaceName: null,
+  currentProjectFramework: 'crewai',
   isSaving: false,
   isExecuting: false,
   isDirty: false,
@@ -92,7 +93,8 @@ export const createProjectSlice: StateCreator<AppState, [], [], ProjectSlice> = 
           customTools: state.customTools,
           globalTools: state.globalTools,
           version: "1.0"
-        }
+        },
+        framework: state.currentProjectFramework || 'crewai'
       };
 
       let response;
@@ -207,6 +209,7 @@ export const createProjectSlice: StateCreator<AppState, [], [], ProjectSlice> = 
         currentProjectDescription: project.description || '',
         currentProjectWorkspaceId: project.workspace_id || null,
         currentProjectWorkspaceName: workspace?.name || null,
+        currentProjectFramework: project.framework || 'crewai',
         activeWorkspaceId: project.workspace_id || null,
         nodeStatuses: {},
         nodeErrors: {},
@@ -241,10 +244,11 @@ export const createProjectSlice: StateCreator<AppState, [], [], ProjectSlice> = 
     }
   },
 
-  createNewProject: async (name: string, description: string) => {
+  createNewProject: async (name: string, description: string, framework: string = 'crewai') => {
     const payload = {
       name,
       description,
+      framework,
       canvas_data: {
         nodes: [],
         edges: [],
@@ -268,6 +272,7 @@ export const createProjectSlice: StateCreator<AppState, [], [], ProjectSlice> = 
         currentProjectName: saved.name,
         currentProjectDescription: saved.description,
         currentProjectWorkspaceId: saved.workspace_id || null,
+        currentProjectFramework: saved.framework || 'crewai',
         nodes: saved.canvas_data.nodes,
         edges: saved.canvas_data.edges,
       }));
@@ -343,6 +348,7 @@ export const createProjectSlice: StateCreator<AppState, [], [], ProjectSlice> = 
       })),
       name: state.currentProjectName || undefined,
       description: state.currentProjectDescription || undefined,
+      framework: state.currentProjectFramework || 'crewai',
       workspaceId: state.currentProjectWorkspaceId,
       workspaceName: state.currentProjectWorkspaceName
     };
@@ -461,6 +467,7 @@ export const createProjectSlice: StateCreator<AppState, [], [], ProjectSlice> = 
         currentProjectDescription: project.description || null,
         currentProjectWorkspaceId: activeWorkspaceId,
         currentProjectWorkspaceName: localWorkspace?.name || null,
+        currentProjectFramework: project.framework || 'crewai',
         activeWorkspaceId: activeWorkspaceId,
         isExecuting: false,
         activeNodeId: null,
@@ -484,6 +491,7 @@ export const createProjectSlice: StateCreator<AppState, [], [], ProjectSlice> = 
       const payload = {
         name: project.name || "Imported Workflow",
         description: project.description || "",
+        framework: project.framework || "crewai",
         workspace_id: project.workspaceId || null,
         canvas_data: (() => {
           const { migratedNodes, migratedEdges } = migrateLegacyWorkflow(project.nodes || [], project.edges || []);

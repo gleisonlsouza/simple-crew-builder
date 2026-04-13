@@ -37,7 +37,7 @@ const Dashboard = () => {
   const [isDeleteModalOpen, setIsDeleteModalOpen] = React.useState(false);
   const [projectToDelete, setProjectToDelete] = React.useState<{id: string, name: string} | null>(null);
   const [editingProject, setEditingProject] = React.useState<{id: string, name: string, description: string} | null>(null);
-  const [newProject, setNewProject] = React.useState({ name: '', description: '' });
+  const [newProject, setNewProject] = React.useState({ name: '', description: '', framework: 'crewai' });
 
   const createNewProject = useStore((state) => state.createNewProject);
   const importProjectJsonAndSave = useStore((state) => state.importProjectJsonAndSave);
@@ -57,7 +57,7 @@ const Dashboard = () => {
   }, []);
 
   const handleNewWorkflow = () => {
-    setNewProject({ name: '', description: '' });
+    setNewProject({ name: '', description: '', framework: 'crewai' });
     setIsCreateModalOpen(true);
   };
 
@@ -66,7 +66,7 @@ const Dashboard = () => {
       useStore.getState().showNotification("Please enter a name for the workflow.", "warning");
       return;
     }
-    const created = await createNewProject(newProject.name, newProject.description);
+    const created = await createNewProject(newProject.name, newProject.description, newProject.framework);
     if (created) {
       setIsCreateModalOpen(false);
       navigate(`/workflow/${created.id}`);
@@ -203,7 +203,12 @@ const Dashboard = () => {
                     </div>
                   </div>
 
-                  <h3 className="text-lg font-bold text-brand-text mb-2 truncate">{project.name}</h3>
+                  <div className="flex items-start justify-between mb-2">
+                    <h3 className="text-lg font-bold text-brand-text truncate pr-2">{project.name}</h3>
+                    <span className="shrink-0 px-2.5 py-1 rounded-md text-[10px] font-bold uppercase tracking-wider bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 border border-indigo-100 dark:border-indigo-800/50">
+                      {project.framework === 'langgraph' ? 'LangGraph' : 'CrewAI'}
+                    </span>
+                  </div>
                   <p className="text-brand-muted text-sm line-clamp-2 mb-6 flex-grow">{project.description || "Sem descrição disponível."}</p>
 
                   <div className="flex items-center justify-between pt-4 border-t border-brand-border">
@@ -375,6 +380,23 @@ const Dashboard = () => {
                   className="w-full px-4 py-2.5 bg-brand-bg border border-brand-border rounded-xl focus:border-indigo-500 outline-none text-brand-text transition-all"
                   placeholder="Marketing Strategy, Research Lab..."
                 />
+              </div>
+              <div>
+                <label htmlFor="workflowFramework" className="block text-sm font-semibold text-brand-text mb-1.5">Framework</label>
+                <div className="relative">
+                  <select 
+                    id="workflowFramework"
+                    value={newProject.framework}
+                    onChange={(e) => setNewProject({...newProject, framework: e.target.value})}
+                    className="w-full px-4 py-2.5 bg-brand-bg border border-brand-border rounded-xl focus:border-indigo-500 outline-none text-brand-text transition-all appearance-none font-medium cursor-pointer"
+                  >
+                    <option value="crewai">🤖 CrewAI (Multi-Agent Systems)</option>
+                    <option value="langgraph" disabled>⚡ LangGraph (Stateful Graphs) - Coming Soon</option>
+                  </select>
+                  <div className="absolute inset-y-0 right-4 flex items-center pointer-events-none text-brand-muted">
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path></svg>
+                  </div>
+                </div>
               </div>
               <div>
                 <label htmlFor="workflowDescription" className="block text-sm font-semibold text-brand-text mb-1.5">Description (Optional)</label>

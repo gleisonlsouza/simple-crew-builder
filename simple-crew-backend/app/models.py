@@ -49,6 +49,7 @@ class CustomTool(SQLModel, table=True):
     name: str
     description: Optional[str] = None
     code: str
+    framework: str = Field(default="crewai", nullable=False)
     
     # Relationship
     user_id: uuid.UUID = Field(foreign_key="user.id")
@@ -70,6 +71,7 @@ class CrewProject(SQLModel, table=True):
     name: str
     description: Optional[str] = None
     canvas_data: Dict[str, Any] = Field(default_factory=dict, sa_column=Column(JSON))
+    framework: str = Field(default="crewai", nullable=False)
     
     user_id: uuid.UUID = Field(foreign_key="user.id")
     user: User = Relationship(back_populates="crews")

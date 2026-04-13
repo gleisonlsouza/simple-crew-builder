@@ -19,6 +19,7 @@ export type NodeStatus = 'idle' | 'running' | 'success' | 'error' | 'waiting';
 
 export interface ExportedProject {
   version: string;
+  framework?: string;
   nodes: AppNode[];
   edges: AppEdge[];
   globalTools?: ToolConfig[];
@@ -34,6 +35,7 @@ export interface Project {
   id: string;
   name: string;
   description?: string;
+  framework?: string;
   workspace_id?: string;
   canvas_data: {
     nodes: AppNode[];
@@ -149,6 +151,7 @@ export interface ProjectSlice {
   currentProjectDescription: string | null;
   currentProjectWorkspaceId: string | null;
   currentProjectWorkspaceName: string | null;
+  currentProjectFramework: string | null;
   isSaving: boolean;
   isExecuting: boolean;
   isDirty: boolean; // Add isDirty flag
@@ -160,7 +163,7 @@ export interface ProjectSlice {
   updateProjectMetadata: (id: string, name: string, description: string) => Promise<void>;
   loadProject: (projectId: string) => Promise<void>;
   deleteProject: (projectId: string) => Promise<void>;
-  createNewProject: (name: string, description: string) => Promise<Project | null>;
+  createNewProject: (name: string, description: string, framework?: string) => Promise<Project | null>;
   duplicateProject: (id: string) => Promise<void>;
   exportProjectJson: () => void;
   exportPythonProject: () => Promise<void>;
@@ -194,7 +197,7 @@ export interface ConfigSlice {
   setEmbeddingModelId: (id: string | null) => void;
   setDefaultModel: (model: string) => void;
   updateToolConfig: (id: string, config: Partial<ToolConfig>) => void;
-  fetchCustomTools: () => Promise<void>;
+  fetchCustomTools: (framework?: string) => Promise<void>;
   addCustomTool: (tool: Omit<CustomTool, 'id'>) => Promise<void>;
   updateCustomTool: (id: string, tool: Partial<CustomTool>) => Promise<void>;
   deleteCustomTool: (id: string) => Promise<void>;

@@ -206,9 +206,10 @@ export const createConfigSlice: StateCreator<AppState, [], [], ConfigSlice> = (s
     });
   },
 
-  fetchCustomTools: async () => {
+  fetchCustomTools: async (framework?: string) => {
     try {
-      const response = await fetch(`${API_URL}/api/v1/custom-tools`);
+      const query = framework ? `?framework=${framework}` : '';
+      const response = await fetch(`${API_URL}/api/v1/custom-tools${query}`);
       if (!response.ok) throw new Error('Failed to fetch custom tools');
       set({ customTools: await response.json() });
     } catch (error) { console.error(error); }

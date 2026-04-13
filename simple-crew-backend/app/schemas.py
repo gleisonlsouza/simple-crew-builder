@@ -117,6 +117,7 @@ class ProjectBase(BaseModel):
     name: str
     description: Optional[str] = None
     workspace_id: Optional[Any] = None # UUID
+    framework: Optional[str] = "crewai"  # New field for Multi-Framework support
     canvas_data: Dict[str, Any]
 
 class ProjectCreate(ProjectBase):
@@ -276,6 +277,7 @@ class CustomToolBase(BaseModel):
     name: str
     description: Optional[str] = None
     code: str
+    framework: Optional[str] = "crewai"
 
 class CustomToolCreate(CustomToolBase):
     pass
@@ -292,6 +294,7 @@ class CustomToolUpdate(BaseModel):
     name: Optional[str] = None
     description: Optional[str] = None
     code: Optional[str] = None
+    framework: Optional[str] = None
 
 # Schemas para Gerenciamento de Workspaces
 class WorkspaceBase(BaseModel):

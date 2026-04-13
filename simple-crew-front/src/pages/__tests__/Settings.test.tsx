@@ -102,6 +102,8 @@ describe('Settings Page Smoke Test', () => {
         deleteWorkspace: vi.fn(),
         activeWorkspaceId: null,
         setActiveWorkspaceId: vi.fn(),
+        fetchCustomTools: vi.fn(),
+        fetchMCPServers: vi.fn(),
     };
 
     beforeEach(() => {
