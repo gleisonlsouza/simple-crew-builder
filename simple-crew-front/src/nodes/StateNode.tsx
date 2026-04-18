@@ -64,8 +64,16 @@ export const StateNode = memo(({ id, data }: NodeProps<Node<StateNodeData, 'stat
           
           <div className="flex flex-col gap-1.5 mt-1">
             {data.fields && data.fields.length > 0 ? (
-              data.fields.slice(0, 3).map((field) => (
-                <div key={field.id} className="flex items-center justify-between bg-slate-50 dark:bg-slate-800/50 px-2 py-1 rounded border border-slate-100 dark:border-slate-800">
+              data.fields.map((field) => (
+                <div key={field.id} className="relative flex items-center justify-between bg-slate-50 dark:bg-slate-800/50 px-2 py-1 rounded border border-slate-100 dark:border-slate-800 group/field">
+                  <Handle 
+                    type="target" 
+                    position={Position.Left} 
+                    id={`field-in-${field.key}`} 
+                    className="!w-3 !h-3 !border-2 !border-white dark:!border-slate-900 !cursor-crosshair pointer-events-auto shadow-sm !-left-[18px] hover:scale-125 transition-transform" 
+                    style={{ backgroundColor: '#a855f7' }}
+                  />
+                  <span className="absolute -left-[70px] top-1/2 -translate-y-1/2 text-[9px] font-bold text-purple-500 bg-white dark:bg-slate-900 px-1 rounded shadow-sm opacity-0 group-hover/field:opacity-100 transition-opacity border border-purple-100 dark:border-purple-900/30 whitespace-nowrap pointer-events-none z-10">Data In</span>
                   <span className="text-[10px] font-medium text-slate-700 dark:text-slate-300 truncate max-w-[80px]">
                     {field.key}
                   </span>
@@ -76,11 +84,6 @@ export const StateNode = memo(({ id, data }: NodeProps<Node<StateNodeData, 'stat
               ))
             ) : (
               <p className="text-[10px] text-slate-400 italic">No fields defined</p>
-            )}
-            {data.fields && data.fields.length > 3 && (
-              <p className="text-[9px] text-slate-400 text-center mt-1">
-                + {data.fields.length - 3} more fields
-              </p>
             )}
           </div>
         </div>

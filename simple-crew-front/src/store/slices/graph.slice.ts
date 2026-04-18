@@ -262,8 +262,9 @@ export const createGraphSlice: StateCreator<AppState, [], [], GraphSlice> = (set
       const isAgentToRouter = sourceNode.type === 'agent' && targetNode.type === 'router';
       const isCrewToRouter = sourceNode.type === 'crew' && targetNode.type === 'router';
       const isAgentToAgent = sourceNode.type === 'agent' && targetNode.type === 'agent';
+      const isAgentToState = sourceNode.type === 'agent' && targetNode.type === 'state';
 
-      if (!isCrewToAgent && !isAgentToTask && !isChatToCrew && !isWebhookToCrew && !isAgentToTool && !isTaskToTool && !isAgentToMcp && !isStateToCrew && !isSchemaToAgent && !isSchemaToState && !isRouterToAgent && !isRouterToTask && !isRouterToRouter && !isAgentToRouter && !isCrewToRouter && !isAgentToAgent) {
+      if (!isCrewToAgent && !isAgentToTask && !isChatToCrew && !isWebhookToCrew && !isAgentToTool && !isTaskToTool && !isAgentToMcp && !isStateToCrew && !isSchemaToAgent && !isSchemaToState && !isRouterToAgent && !isRouterToTask && !isRouterToRouter && !isAgentToRouter && !isCrewToRouter && !isAgentToAgent && !isAgentToState) {
         console.warn(`[Rules] Invalid connection blocked: ${sourceNode.type} -> ${targetNode.type}`);
         return state;
       }
@@ -275,7 +276,7 @@ export const createGraphSlice: StateCreator<AppState, [], [], GraphSlice> = (set
 
       let newEdges = [...state.edges];
 
-      if (targetNode.type === 'task' || targetNode.type === 'agent' || targetNode.type === 'crew') {
+      if (targetNode.type === 'task' || targetNode.type === 'agent' || targetNode.type === 'crew' || targetNode.type === 'state') {
         newEdges = newEdges.filter((edge) => {
           // Rule: An edge should only be replaced if it targets the same handle on the same node
           const isSameTarget = edge.target === connection.target;
@@ -327,6 +328,15 @@ export const createGraphSlice: StateCreator<AppState, [], [], GraphSlice> = (set
           animated: true,
           sourceHandle: 'state-out',
           targetHandle: 'state-in',
+          style: { stroke: '#a855f7', strokeWidth: 2 }
+        };
+      }
+
+      if (isAgentToState) {
+        newConnection = {
+          ...newConnection,
+          animated: true,
+          sourceHandle: connection.sourceHandle || 'data-out',
           style: { stroke: '#a855f7', strokeWidth: 2 }
         };
       }

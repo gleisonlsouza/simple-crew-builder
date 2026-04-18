@@ -156,8 +156,8 @@ describe('AgentNode', () => {
     // Check for handles using their data attributes or class names
     const handles = container.querySelectorAll('.react-flow__handle');
     
-    // We expect 6 handles: agent-in, schema-input (Top), out-task, out-tool, out-mcp, agent-out (Bottom)
-    expect(handles.length).toBe(6);
+    // We expect 7 handles: agent-in, schema-input (Top), out-task, out-tool, out-mcp, data-out, agent-out (Bottom)
+    expect(handles.length).toBe(7);
     
     const handleIds = Array.from(handles).map(h => h.getAttribute('data-handleid'));
     expect(handleIds).toContain('agent-in');
@@ -165,6 +165,7 @@ describe('AgentNode', () => {
     expect(handleIds).toContain('out-task');
     expect(handleIds).toContain('out-tool');
     expect(handleIds).toContain('out-mcp');
+    expect(handleIds).toContain('data-out');
     expect(handleIds).toContain('agent-out');
   });
 

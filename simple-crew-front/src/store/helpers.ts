@@ -94,11 +94,13 @@ export const migrateEdges = (edges: AppEdge[], nodes: AppNode[] = []): AppEdge[]
         else if (targetNode?.type === 'mcp') sourceHandle = 'out-mcp';
         // Flow handles
         else if (targetNode?.type === 'agent' || targetNode?.type === 'crew' || targetNode?.type === 'router') sourceHandle = 'agent-out';
+        else if (targetNode?.type === 'state') sourceHandle = 'data-out';
         else if (sourceHandle === 'right' || sourceHandle === 'right-source') sourceHandle = 'agent-out';
         // Fallback checks
         else if (sourceHandle?.startsWith('out-task')) sourceHandle = 'out-task';
         else if (sourceHandle?.startsWith('out-tool')) sourceHandle = 'out-tool';
         else if (sourceHandle?.startsWith('out-mcp')) sourceHandle = 'out-mcp';
+        else if (sourceHandle === 'data-out') sourceHandle = 'data-out';
         else sourceHandle = 'out-task'; 
       } else if (['crew', 'chat', 'webhook'].includes(sourceNode.type)) {
         sourceHandle = 'right-source';
@@ -138,6 +140,12 @@ export const migrateEdges = (edges: AppEdge[], nodes: AppNode[] = []): AppEdge[]
         targetHandle = 'left-target';
       } else if (targetNode.type === 'router') {
         targetHandle = 'router-in'; // Router uses router-in
+      } else if (targetNode.type === 'state') {
+        // State nodes use dynamically generated handles per field
+        if (!targetHandle || !targetHandle.startsWith('field-in-')) {
+          // If corrupted, default to first field fallback or let it clear
+          targetHandle = undefined; 
+        }
       } else {
         targetHandle = undefined;
       }

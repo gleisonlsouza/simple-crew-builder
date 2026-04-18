@@ -146,6 +146,11 @@ const FlowCanvas = () => {
       if (connection.sourceHandle === 'agent-out') {
         return ['agent', 'router'].includes(targetNode.type as string);
       }
+      
+      // Data Output Handle connects directly to a state field map
+      if (connection.sourceHandle === 'data-out') {
+        return targetNode.type === 'state' && (connection.targetHandle?.startsWith('field-in-') || false);
+      }
     }
 
     if (sourceNode.type === 'task') {

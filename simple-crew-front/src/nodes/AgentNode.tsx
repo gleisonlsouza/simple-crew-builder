@@ -81,46 +81,57 @@ export const AgentNode = memo(({ id, data }: NodeProps<Node<AgentNodeData, 'agen
 
       {/* Handles at the Bottom (Sources for Delegation & Flow) */}
       <>
-        {/* Task Handle - 20% */}
+        {/* Task Handle - 16% */}
         <Handle 
           type="source" 
           position={Position.Bottom} 
           id="out-task" 
           className="!w-3 !h-3 !border-2 !border-white dark:!border-slate-900 !cursor-crosshair pointer-events-auto group/h-task z-10" 
-          style={{ backgroundColor: '#3b82f6', left: '20%' }} 
+          style={{ backgroundColor: '#3b82f6', left: '16%' }} 
         >
            <span className="absolute top-4 left-1/2 -translate-x-1/2 text-[9px] font-bold text-blue-500 bg-white dark:bg-slate-900 px-1 rounded shadow-sm opacity-0 group-hover/h-task:opacity-100 transition-opacity whitespace-nowrap border border-blue-100 dark:border-blue-900/30 pointer-events-none">Tasks</span>
         </Handle>
         
-        {/* Tool Handle - 40% */}
+        {/* Tool Handle - 33% */}
         <Handle 
           type="source" 
           position={Position.Bottom} 
           id="out-tool" 
           className="!w-3 !h-3 !border-2 !border-white dark:!border-slate-900 !cursor-crosshair pointer-events-auto group/h-tool z-10" 
-          style={{ backgroundColor: '#f97316', left: '40%' }} 
+          style={{ backgroundColor: '#f97316', left: '33%' }} 
         >
            <span className="absolute top-4 left-1/2 -translate-x-1/2 text-[9px] font-bold text-orange-500 bg-white dark:bg-slate-900 px-1 rounded shadow-sm opacity-0 group-hover/h-tool:opacity-100 transition-opacity whitespace-nowrap border border-orange-100 dark:border-orange-900/30 pointer-events-none">Tools</span>
         </Handle>
 
-        {/* MCP Handle - 60% */}
+        {/* MCP Handle - 50% */}
         <Handle 
           type="source" 
           position={Position.Bottom} 
           id="out-mcp" 
           className="!w-3 !h-3 !border-2 !border-white dark:!border-slate-900 !cursor-crosshair pointer-events-auto group/h-mcp z-10" 
-          style={{ backgroundColor: '#ec4899', left: '60%' }} 
+          style={{ backgroundColor: '#ec4899', left: '50%' }} 
         >
            <span className="absolute top-4 left-1/2 -translate-x-1/2 text-[9px] font-bold text-pink-500 bg-white dark:bg-slate-900 px-1 rounded shadow-sm opacity-0 group-hover/h-mcp:opacity-100 transition-opacity whitespace-nowrap border border-pink-100 dark:border-pink-900/30 pointer-events-none">MCP</span>
         </Handle>
 
-        {/* Execution Output Handle - 80% */}
+        {/* Data Output Handle - 67% */}
+        <Handle 
+          type="source" 
+          position={Position.Bottom} 
+          id="data-out" 
+          className="!w-3 !h-3 !border-2 !border-white dark:!border-slate-900 !cursor-crosshair pointer-events-auto group/h-data-out z-10" 
+          style={{ backgroundColor: '#a855f7', left: '67%' }} 
+        >
+           <span className="absolute top-4 left-1/2 -translate-x-1/2 text-[9px] font-bold text-purple-600 bg-white dark:bg-slate-900 px-1 rounded shadow-sm opacity-0 group-hover/h-data-out:opacity-100 transition-opacity whitespace-nowrap border border-purple-100 dark:border-purple-900/30 pointer-events-none uppercase">Data Out</span>
+        </Handle>
+
+        {/* Execution Output Handle - 84% */}
         <Handle 
           type="source" 
           position={Position.Bottom} 
           id="agent-out" 
           className="!w-3 !h-3 !border-2 !border-white dark:!border-slate-900 !cursor-crosshair pointer-events-auto group/h-agent-out z-10 font-bold" 
-          style={{ backgroundColor: '#2563eb', left: '80%' }} 
+          style={{ backgroundColor: '#2563eb', left: '84%' }} 
         >
            <span className="absolute top-4 left-1/2 -translate-x-1/2 text-[9px] font-bold text-blue-600 bg-white dark:bg-slate-900 px-1 rounded shadow-sm opacity-0 group-hover/h-agent-out:opacity-100 transition-opacity whitespace-nowrap border border-blue-100 dark:border-blue-900/30 pointer-events-none uppercase">Execution Out</span>
         </Handle>

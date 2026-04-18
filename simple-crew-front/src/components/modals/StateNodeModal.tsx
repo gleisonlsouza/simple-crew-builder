@@ -162,6 +162,12 @@ export const StateNodeModal = () => {
                               ))}
                             </optgroup>
                           )}
+                          {/* Fallback for deleted schemas or unknown types */}
+                          {!['string', 'integer', 'boolean', 'list', 'dict'].includes(field.type?.toLowerCase()) && !schemaTypes?.includes(field.type) && (
+                            <optgroup label="Unknown Type (Missing)">
+                              <option value={field.type}>{field.type} (Not Found)</option>
+                            </optgroup>
+                          )}
                         </select>
                       </td>
                       <td className="px-4 py-3">

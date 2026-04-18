@@ -163,10 +163,29 @@ class LangGraphCompiler:
             self._emit({"type": "status", "nodeId": visual_node_id, "status": "running"})
             try:
                 # Use invoke to handle both LangChain and duck-typed tools
-                if hasattr(tool_instance, 'invoke'):
-                    result = tool_instance.invoke(*args, **kwargs)
-                elif hasattr(tool_instance, 'run'):
-                    result = tool_instance.run(*args, **kwargs)
+                # CRITICAL: For CrewAI or MCP tools, calling `.invoke(dict)` stringifies the dictionary
+                # and breaks parameters (like "missing parameter: method"). We must natively unpack kwargs!
+                is_crew_tool = ('crewai' in tool_instance.__class__.__module__ or 'mcp' in str(type(tool_instance)))
+                
+                if is_crew_tool and hasattr(tool_instance, '_run'):
+                    result = tool_instance._run(*args, **kwargs)
+                elif is_crew_tool and hasattr(tool_instance, 'run') and callable(tool_instance.run):
+                    # Some CrewAI tools only implement run
+                    try:
+                        result = tool_instance.run(*args, **kwargs)
+                    except TypeError:
+                        # Fallback if it only accepts a single dict
+                        result = tool_instance.run(args[0] if args else kwargs)
+                elif hasattr(tool_instance, 'invoke'):
+                    input_data = args[0] if args else kwargs
+                    # Try native invoke, but fallback to _run if it fails with type/missing param errors
+                    try:
+                        result = tool_instance.invoke(input_data)
+                    except Exception as invoke_err:
+                        if hasattr(tool_instance, '_run'):
+                            result = tool_instance._run(*args, **kwargs)
+                        else:
+                            raise invoke_err
                 elif hasattr(tool_instance, '_run'):
                     result = tool_instance._run(*args, **kwargs)
                 else:
@@ -174,27 +193,45 @@ class LangGraphCompiler:
                     result = tool_instance(*args, **kwargs)
                 
                 self._emit({"type": "status", "nodeId": visual_node_id, "status": "success"})
+                self._emit({"type": "log", "data": f"\n[TOOL OUTPUT] Tool {getattr(tool_instance, 'name', 'unknown')} returned: {str(result)[:1000]}\n"})
                 return result
             except Exception as e:
                 self._emit({"type": "status", "nodeId": visual_node_id, "status": "error"})
+                logger.error(f"[TOOL ERROR] Tool {getattr(tool_instance, 'name', 'unknown')} failed synchronously: {e}\n{traceback.format_exc()}")
                 raise e
 
         async def async_wrapper(*args, **kwargs):
             self._emit({"type": "status", "nodeId": visual_node_id, "status": "running"})
             try:
-                if hasattr(tool_instance, 'ainvoke'):
-                    result = await tool_instance.ainvoke(*args, **kwargs)
-                elif hasattr(tool_instance, 'arun'):
-                    result = await tool_instance.arun(*args, **kwargs)
+                is_crew_tool = ('crewai' in tool_instance.__class__.__module__ or 'mcp' in str(type(tool_instance)))
+                
+                if is_crew_tool and hasattr(tool_instance, '_arun'):
+                    result = await tool_instance._arun(*args, **kwargs)
+                elif is_crew_tool and hasattr(tool_instance, 'arun') and callable(tool_instance.arun):
+                    try:
+                        result = await tool_instance.arun(*args, **kwargs)
+                    except TypeError:
+                        result = await tool_instance.arun(args[0] if args else kwargs)
+                elif hasattr(tool_instance, 'ainvoke'):
+                    input_data = args[0] if args else kwargs
+                    try:
+                        result = await tool_instance.ainvoke(input_data)
+                    except Exception as invoke_err:
+                        if hasattr(tool_instance, '_arun'):
+                            result = await tool_instance._arun(*args, **kwargs)
+                        else:
+                            raise invoke_err
                 elif hasattr(tool_instance, '_arun'):
                     result = await tool_instance._arun(*args, **kwargs)
                 else:
                     result = await tool_instance(*args, **kwargs)
                 
                 self._emit({"type": "status", "nodeId": visual_node_id, "status": "success"})
+                self._emit({"type": "log", "data": f"\n[TOOL OUTPUT] Tool {getattr(tool_instance, 'name', 'unknown')} returned: {str(result)[:1000]}\n"})
                 return result
             except Exception as e:
                 self._emit({"type": "status", "nodeId": visual_node_id, "status": "error"})
+                logger.error(f"[TOOL ERROR] Tool {getattr(tool_instance, 'name', 'unknown')} failed asynchronously: {e}\n{traceback.format_exc()}")
                 raise e
 
         # Return a fresh StructuredTool that proxies to the original
@@ -573,7 +610,23 @@ class LangGraphCompiler:
 
         target_state_key = None
         state_node = next((n for n in self.graph_data.nodes if n.type == 'state'), None)
+        
+        # 1. OPTION A: Visual Map - check for direct data-out edge to a state field
         if state_node:
+            for edge in self.edges:
+                if edge.source == node.id and edge.sourceHandle == 'data-out':
+                    if edge.target == state_node.id and edge.targetHandle and edge.targetHandle.startswith('field-in-'):
+                        target_state_key = edge.targetHandle.replace('field-in-', '')
+                        break
+                        
+        # 2. OPTION B: Config Map - check for specific target in agent config
+        if not target_state_key and hasattr(node.data, 'outputStateKey') and node.data.outputStateKey: # Using camelCase or snake_case depending on TS to Python mapping
+            target_state_key = getattr(node.data, 'outputStateKey')
+        if not target_state_key and hasattr(node.data, 'output_state_key') and node.data.output_state_key:
+            target_state_key = node.data.output_state_key
+
+        # 3. LEGACY MAP: check for schema type matching or fallback heuristics
+        if state_node and not target_state_key:
             if model_name:
                 for field in state_node.data.fields:
                     if field.type == model_name:
@@ -669,6 +722,9 @@ class LangGraphCompiler:
             updates["messages"].append(response)
 
             # ── Phase 2: Tool Check (ReAct loop) ───────────────────────────────
+            # Log the response so we can debug infinite loops
+            tc_info = response.tool_calls if hasattr(response, 'tool_calls') else None
+            self._emit({"type": "log", "data": f"\n[LLM RESPONSE] Agent {node.id[:8]} | Content: {response.content[:1000]} | Tool Calls: {tc_info}\n"})
             if hasattr(response, 'tool_calls') and response.tool_calls:
                 for tid in visual_tool_ids:
                     self._emit({"type": "status", "nodeId": tid, "status": "running"})
@@ -701,7 +757,28 @@ class LangGraphCompiler:
                         logger.warning(f"Structured extraction failed for agent {node.id}: {e}")
                         output_update[target_state_key or "agent_output"] = final_text
                 else:
-                    output_update[target_state_key or "agent_output"] = final_text
+                    # Direct state mapping: attempt JSON parse if field type implies it
+                    parsed_val = final_text
+                    field_type = "string"
+                    if state_node and target_state_key:
+                        for field in state_node.data.fields:
+                            if field.key == target_state_key:
+                                field_type = str(field.type).lower()
+                                break
+                    
+                    if field_type in ['list', 'dict'] or (final_text.strip().startswith('[') or final_text.strip().startswith('{')):
+                        try:
+                            import json
+                            cleaned = final_text.strip()
+                            if "```json" in cleaned:
+                                cleaned = cleaned.split("```json")[1].split("```")[0].strip()
+                            elif "```" in cleaned:
+                                cleaned = cleaned.split("```")[1].split("```")[0].strip()
+                            parsed_val = json.loads(cleaned)
+                        except Exception as e:
+                            logger.warning(f"Could not parse direct output into {field_type} for agent {node.id}: {e}")
+                            
+                    output_update[target_state_key or "agent_output"] = parsed_val
 
             return {**updates, **output_update}
 
@@ -911,13 +988,33 @@ def get_nested_value(state: dict, path_string: str):
 def interpolate_prompt(text: str, state: dict) -> str:
     if not text or not isinstance(text, str):
         return text
+    
+    result = text
     try:
-        # Convert legacy {key} to Jinja {{key}} for backward compatibility
-        jinja_ready_text = re.sub(r'(?<!\{)\{([^}]+)\}(?!\})', r'{{\1}}', text)
-        template = jinja2.Template(jinja_ready_text)
-        return template.render(**state)
+        # We only interpolate top-level primitive state keys to avoid complex nested structures
+        # and safely handle literal JSON blocks that contain single braces that would otherwise 
+        # crash python's .format() or Jinja2.
+        for key, value in state.items():
+            if isinstance(value, (str, int, float, bool)) or value is None:
+                str_val = str(value) if value is not None else ""
+                
+                # Safely replace {key}
+                result = re.sub(r'(?<!\{)\{' + re.escape(key) + r'\}(?!\})', lambda _: str_val, result)
+                # Safely replace {{key}}
+                result = re.sub(r'\{\{' + re.escape(key) + r'\}\}', lambda _: str_val, result)
+                
+        # If user explicitly used valid Jinja statements (like {% if %}), we can attempt Jinja rendering
+        # ONLY if there are still variable brackets and NO raw JSON blocks that look like jinja errors.
+        if '{%' in result or '{{' in result:
+            try:
+                template = jinja2.Template(result)
+                result = template.render(**state)
+            except Exception:
+                pass # Accept it silently as Jinja might fail on raw JSON
+                
+        return result
     except Exception as e:
-        logger.error(f"[Interpolation Error] Failed to compile Jinja template: {e}")
+        logger.error(f"[Interpolation Error] Failed safe interpolation: {e}")
         return text
 
 
