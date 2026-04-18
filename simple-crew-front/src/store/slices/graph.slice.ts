@@ -251,10 +251,20 @@ export const createGraphSlice: StateCreator<AppState, [], [], GraphSlice> = (set
       const isChatToCrew = sourceNode.type === 'chat' && targetNode.type === 'crew';
       const isWebhookToCrew = sourceNode.type === 'webhook' && targetNode.type === 'crew';
       const isAgentToTool = sourceNode.type === 'agent' && ['tool', 'customTool', 'toolNode', 'customToolNode', 'globalTool'].includes(targetNode.type);
+      const isTaskToTool = sourceNode.type === 'task' && ['tool', 'customTool', 'toolNode', 'customToolNode', 'globalTool'].includes(targetNode.type);
       const isAgentToMcp = sourceNode.type === 'agent' && targetNode.type === 'mcp';
+      const isStateToCrew = sourceNode.type === 'state' && targetNode.type === 'crew';
+      const isSchemaToAgent = sourceNode.type === 'schema' && targetNode.type === 'agent';
+      const isSchemaToState = sourceNode.type === 'schema' && targetNode.type === 'state';
+      const isRouterToAgent = sourceNode.type === 'router' && targetNode.type === 'agent';
+      const isRouterToTask = sourceNode.type === 'router' && targetNode.type === 'task';
+      const isRouterToRouter = sourceNode.type === 'router' && targetNode.type === 'router';
+      const isAgentToRouter = sourceNode.type === 'agent' && targetNode.type === 'router';
+      const isCrewToRouter = sourceNode.type === 'crew' && targetNode.type === 'router';
+      const isAgentToAgent = sourceNode.type === 'agent' && targetNode.type === 'agent';
 
-      if (!isCrewToAgent && !isAgentToTask && !isChatToCrew && !isWebhookToCrew && !isAgentToTool && !isAgentToMcp) {
-        console.warn(`[CrewAI Rules] Invalid connection blocked: ${sourceNode.type} -> ${targetNode.type}`);
+      if (!isCrewToAgent && !isAgentToTask && !isChatToCrew && !isWebhookToCrew && !isAgentToTool && !isTaskToTool && !isAgentToMcp && !isStateToCrew && !isSchemaToAgent && !isSchemaToState && !isRouterToAgent && !isRouterToTask && !isRouterToRouter && !isAgentToRouter && !isCrewToRouter && !isAgentToAgent) {
+        console.warn(`[Rules] Invalid connection blocked: ${sourceNode.type} -> ${targetNode.type}`);
         return state;
       }
 
@@ -266,17 +276,35 @@ export const createGraphSlice: StateCreator<AppState, [], [], GraphSlice> = (set
       let newEdges = [...state.edges];
 
       if (targetNode.type === 'task' || targetNode.type === 'agent' || targetNode.type === 'crew') {
-        newEdges = newEdges.filter((edge) => edge.target !== connection.target);
+        newEdges = newEdges.filter((edge) => {
+          // Rule: An edge should only be replaced if it targets the same handle on the same node
+          const isSameTarget = edge.target === connection.target;
+          const isSameHandle = edge.targetHandle === connection.targetHandle;
+          
+          // LANGGRAPH EXCEPTION: agent-in can have multiple inputs (cycles/fallback)
+          if (targetNode.type === 'agent' && connection.targetHandle === 'agent-in') {
+            return true;
+          }
+
+          return !(isSameTarget && isSameHandle);
+        });
       }
 
-      let newConnection: AppEdge = { ...connection, id: uuidv4(), type: 'deletable' } as AppEdge;
+      let newConnection: AppEdge = { 
+        ...connection, 
+        id: uuidv4(), 
+        type: 'deletable',
+        // IDLE STATE: Blue Dashed
+        style: { stroke: '#3b82f6', strokeWidth: 2, strokeDasharray: '5 5' },
+        animated: false
+      } as AppEdge;
 
       if (isChatToCrew) {
         newConnection = {
           ...newConnection,
           animated: true,
           sourceHandle: 'right-source',
-          targetHandle: 'left-target',
+          targetHandle: 'trigger-in',
           style: { stroke: '#22d3ee', strokeWidth: 2, strokeDasharray: '5 5' }
         };
         // This action triggers UI change:
@@ -288,8 +316,44 @@ export const createGraphSlice: StateCreator<AppState, [], [], GraphSlice> = (set
           ...newConnection,
           animated: true,
           sourceHandle: 'right-source',
-          targetHandle: 'left-target',
+          targetHandle: 'trigger-in',
           style: { stroke: '#f97316', strokeWidth: 2, strokeDasharray: '5 5' }
+        };
+      }
+
+      if (isStateToCrew) {
+        newConnection = {
+          ...newConnection,
+          animated: true,
+          sourceHandle: 'state-out',
+          targetHandle: 'state-in',
+          style: { stroke: '#a855f7', strokeWidth: 2 }
+        };
+      }
+
+      if (isAgentToAgent) {
+        newConnection = {
+          ...newConnection,
+          animated: true,
+          sourceHandle: connection.sourceHandle || 'agent-out',
+          targetHandle: connection.targetHandle || 'agent-in',
+          style: { stroke: '#3b82f6', strokeWidth: 2 }
+        };
+      }
+
+      if (isSchemaToAgent) {
+        newConnection = {
+          ...newConnection,
+          animated: true,
+          style: { stroke: '#14b8a6', strokeWidth: 2 }
+        };
+      }
+
+      if (isSchemaToState) {
+        newConnection = {
+          ...newConnection,
+          animated: true,
+          style: { stroke: '#14b8a6', strokeWidth: 2 }
         };
       }
 
@@ -354,6 +418,14 @@ export const createGraphSlice: StateCreator<AppState, [], [], GraphSlice> = (set
           }
           return node;
         });
+      }
+
+      // Style Router Connections
+      if (sourceNode.type === 'router') {
+        newConnection.style = { stroke: '#6366f1', strokeWidth: 3 };
+        newConnection.animated = true;
+        newConnection.label = 'Condition Path';
+        newConnection.labelStyle = { fill: '#6366f1', fontWeight: 700, fontSize: '10px' };
       }
 
       return {
@@ -447,7 +519,7 @@ export const createGraphSlice: StateCreator<AppState, [], [], GraphSlice> = (set
     });
   },
 
-  addNodeWithAutoPosition: (type: 'agent' | 'task' | 'crew' | 'chat' | 'webhook' | 'tool' | 'customTool' | 'mcp', data: Partial<AppNode['data']>) => {
+  addNodeWithAutoPosition: (type: 'agent' | 'task' | 'crew' | 'chat' | 'webhook' | 'tool' | 'customTool' | 'mcp' | 'state' | 'router' | 'schema', data: Partial<AppNode['data']>) => {
     const existingNodes = get().nodes;
     const startX = 600;
     const startY = 100;
@@ -479,11 +551,11 @@ export const createGraphSlice: StateCreator<AppState, [], [], GraphSlice> = (set
   },
 
   setNodeStatus: (id: string, status: NodeStatus) => {
-    // ... (existing implementation)
     set((state: AppState) => {
       const newStatuses = { ...state.nodeStatuses, [id]: status };
       const node = state.nodes.find((n: AppNode) => n.id === id);
 
+      // 1. Symbiotic Status Updates
       if (node?.type === 'task') {
         const edgeToTask = state.edges.find((e: AppEdge) => e.target === id);
         if (edgeToTask) {
@@ -505,8 +577,48 @@ export const createGraphSlice: StateCreator<AppState, [], [], GraphSlice> = (set
             }
           }
         }
+      } 
+      // REMOVED: Agent -> Task Sync (Fixed to allow sequential task visualization)
+      /*
+      else if (node?.type === 'agent') {
+        const connectedTasks = state.edges
+          .filter(e => e.source === id && e.targetHandle === 'left-target')
+          .map(e => e.target);
+        
+        connectedTasks.forEach(taskId => {
+           newStatuses[taskId] = status;
+        });
       }
-      return { nodeStatuses: newStatuses };
+      */
+
+      // 2. Execution Visual Orchestration: Edge Animation (ACTIVE STATE)
+      let updatedEdges = state.edges;
+      if (status === 'running' || status === 'success') {
+        updatedEdges = state.edges.map(edge => {
+          if (edge.target === id) {
+            return { 
+              ...edge, 
+              animated: true, 
+              style: { ...edge.style, stroke: '#10b981', strokeWidth: 3, strokeDasharray: undefined } 
+            };
+          }
+          return edge;
+        });
+      }
+
+      // 3. Sync status to node data for full UI consistency
+      const updatedNodes = state.nodes.map(node => {
+        if (node.id === id) {
+          return { ...node, data: { ...node.data, status } };
+        }
+        return node;
+      });
+
+      return { 
+        nodeStatuses: newStatuses,
+        edges: updatedEdges,
+        nodes: updatedNodes as AppNode[]
+      };
     });
   },
 
@@ -655,6 +767,87 @@ export const createGraphSlice: StateCreator<AppState, [], [], GraphSlice> = (set
     } else {
       set({ messages: messagesOrFn });
     }
+  },
+
+  resetExecutionVisuals: () => {
+    set((state: AppState) => ({
+      nodeStatuses: {},
+      nodeErrors: {},
+      edges: state.edges.map(edge => ({
+        ...edge,
+        animated: false,
+        // IDLE STATE: Blue Dashed
+        style: { ...edge.style, stroke: '#3b82f6', strokeWidth: 2, strokeDasharray: '5 5', opacity: 1 }
+      })),
+      nodes: state.nodes.map(node => ({
+        ...node,
+        data: { 
+          ...node.data, 
+          status: undefined, 
+          executedRoute: undefined,
+          isDimmed: false
+        }
+      })) as AppNode[]
+    }));
+  },
+
+  finalizeExecutionVisuals: () => {
+    set((state: AppState) => {
+      const { nodeStatuses, edges, nodes } = state;
+      
+      // 1. Identify which nodes are part of the executed path (connected to green edges)
+      const nodesWithGreenConnections = new Set<string>();
+      edges.forEach(edge => {
+        if (edge.style?.stroke === '#10b981') {
+          nodesWithGreenConnections.add(edge.source);
+          nodesWithGreenConnections.add(edge.target);
+        }
+      });
+
+      return {
+        // FINISHED STATE: Dim unexecuted paths and nodes
+        edges: edges.map(edge => {
+           const isExecuted = edge.style?.stroke === '#10b981';
+           if (isExecuted) {
+             return {
+               ...edge,
+               animated: false,
+               style: { ...edge.style, strokeDasharray: '5 5' } // Success Trail
+             };
+           } else {
+             return {
+               ...edge,
+               animated: false,
+               style: { ...edge.style, stroke: '#cbd5e1', opacity: 0.3 } // Faded unexecuted
+             };
+           }
+        }),
+        nodes: nodes.map(node => {
+          const status = nodeStatuses[node.id];
+          const isSuccessful = 
+            status === 'success' || 
+            status === 'running' || 
+            !!node.data.executedRoute || 
+            nodesWithGreenConnections.has(node.id);
+
+          if (!isSuccessful) {
+            return { ...node, data: { ...node.data, isDimmed: true } };
+          }
+          return node;
+        }) as AppNode[]
+      };
+    });
+  },
+
+  
+
+  clearDimmedState: () => {
+    set((state: AppState) => ({
+      nodes: state.nodes.map(node => ({
+        ...node,
+        data: { ...node.data, isDimmed: false }
+      })) as AppNode[]
+    }));
   },
 
   clearChat: () => {

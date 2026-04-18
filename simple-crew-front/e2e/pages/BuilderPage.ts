@@ -133,7 +133,11 @@ export class BuilderPage {
           }
 
           // 2. Target Logic (Standardized for all receivers)
-          if (['agent', 'crew', 'task'].includes(tgtNode.type)) {
+          if (tgtNode.type === 'agent') {
+            targetHandle = 'agent-in';
+          } else if (tgtNode.type === 'crew') {
+            targetHandle = 'trigger-in';
+          } else if (tgtNode.type === 'task') {
             targetHandle = 'left-target';
           }
 

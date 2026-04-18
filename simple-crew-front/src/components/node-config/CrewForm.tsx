@@ -37,6 +37,7 @@ interface CrewFormProps {
   handleTaskDragEnd: (event: DragEndEvent) => void;
   sensors: ReturnType<typeof useSensors>;
   models: ModelConfig[];
+  framework: string;
 }
 
 export const CrewForm: React.FC<CrewFormProps> = memo(({
@@ -51,7 +52,8 @@ export const CrewForm: React.FC<CrewFormProps> = memo(({
   handleAgentDragEnd,
   handleTaskDragEnd,
   sensors,
-  models
+  models,
+  framework
 }) => {
   const [activeTab, setActiveTab] = useState<'basic' | 'orch' | 'settings' | 'llm'>('basic');
 
@@ -119,63 +121,65 @@ export const CrewForm: React.FC<CrewFormProps> = memo(({
               </p>
             </div>
 
-            <div className="flex flex-col gap-3 pt-4 border-t border-brand-border/30">
-              <div className="flex justify-between items-center">
-                <label className="text-xs font-bold text-brand-muted uppercase tracking-wider">Execution Variables</label>
-                <button 
-                  onClick={() => updateNodeData(nodeId, { inputs: { ...(data.inputs || {}), [`input_${Date.now()}`]: '' } })} 
-                  className="px-2 py-1 bg-blue-500/10 border border-blue-500/20 text-blue-600 rounded-md text-[10px] font-bold uppercase hover:bg-blue-500/20 transition-colors"
-                  data-testid="btn-add-variable"
-                >
-                  <Plus className="w-3 h-3 inline mr-1" />
-                  Add Variable
-                </button>
-              </div>
-              <p className="text-[10px] text-brand-muted px-1 italic">Use {'{variable}'} syntax in agent goals or task descriptions.</p>
-              
-              {Object.entries(data.inputs || {}).map(([key, value], idx) => (
-                <div key={idx} className="flex gap-2 items-center min-w-0">
-                  <input
-                    className="bg-brand-bg/50 border border-brand-border rounded-lg px-2.5 py-1.5 text-xs text-brand-text flex-1 min-w-0 focus:border-blue-500 outline-none transition-colors"
-                    value={key.startsWith('input_') ? '' : key}
-                    placeholder="Key"
-                    data-testid="input-variable-key"
-                    onChange={(e) => {
-                      const newInputs: Record<string, string> = { ...(data.inputs as Record<string, string>) };
-                      delete newInputs[key];
-                      newInputs[e.target.value || `input_${idx}`] = value as string;
-                      updateNodeData(nodeId, { inputs: newInputs });
-                    }}
-                  />
-                  <input
-                    className="bg-brand-bg/50 border border-brand-border rounded-lg px-2.5 py-1.5 text-xs text-secondary flex-1 min-w-0 focus:border-blue-500 outline-none transition-colors"
-                    value={value as string}
-                    placeholder="Default Value"
-                    data-testid="input-variable-value"
-                    onChange={(e) => {
-                      const newInputs: Record<string, string> = { ...(data.inputs as Record<string, string>) };
-                      newInputs[key] = e.target.value;
-                      updateNodeData(nodeId, { inputs: newInputs });
-                    }}
-                  />
-                  <button
-                    onClick={() => {
-                      const newInputs: Record<string, string> = { ...(data.inputs as Record<string, string>) };
-                      delete newInputs[key];
-                      updateNodeData(nodeId, { inputs: newInputs });
-                    }}
-                    className="flex-shrink-0 p-1.5 text-brand-muted hover:text-rose-500 transition-colors"
+            {framework !== 'langgraph' && (
+              <div className="flex flex-col gap-3 pt-4 border-t border-brand-border/30">
+                <div className="flex justify-between items-center">
+                  <label className="text-xs font-bold text-brand-muted uppercase tracking-wider">Execution Variables</label>
+                  <button 
+                    onClick={() => updateNodeData(nodeId, { inputs: { ...(data.inputs || {}), [`input_${Date.now()}`]: '' } })} 
+                    className="px-2 py-1 bg-blue-500/10 border border-blue-500/20 text-blue-600 rounded-md text-[10px] font-bold uppercase hover:bg-blue-500/20 transition-colors"
+                    data-testid="btn-add-variable"
                   >
-                    <Trash2 className="w-3.5 h-3.5" />
+                    <Plus className="w-3 h-3 inline mr-1" />
+                    Add Variable
                   </button>
                 </div>
-              ))}
-              {Object.entries(data.inputs || {}).length === 0 && (
-                <div className="text-center py-4 border border-dashed border-brand-border rounded-xl">
-                   <p className="text-[10px] text-brand-muted italic uppercase tracking-widest">No variables defined.</p>
-                </div>
-              )}
-            </div>
+                <p className="text-[10px] text-brand-muted px-1 italic">Use {'{variable}'} syntax in agent goals or task descriptions.</p>
+                
+                {Object.entries(data.inputs || {}).map(([key, value], idx) => (
+                  <div key={idx} className="flex gap-2 items-center min-w-0">
+                    <input
+                      className="bg-brand-bg/50 border border-brand-border rounded-lg px-2.5 py-1.5 text-xs text-brand-text flex-1 min-w-0 focus:border-blue-500 outline-none transition-colors"
+                      value={key.startsWith('input_') ? '' : key}
+                      placeholder="Key"
+                      data-testid="input-variable-key"
+                      onChange={(e) => {
+                        const newInputs: Record<string, string> = { ...(data.inputs as Record<string, string>) };
+                        delete newInputs[key];
+                        newInputs[e.target.value || `input_${idx}`] = value as string;
+                        updateNodeData(nodeId, { inputs: newInputs });
+                      }}
+                    />
+                    <input
+                      className="bg-brand-bg/50 border border-brand-border rounded-lg px-2.5 py-1.5 text-xs text-secondary flex-1 min-w-0 focus:border-blue-500 outline-none transition-colors"
+                      value={value as string}
+                      placeholder="Default Value"
+                      data-testid="input-variable-value"
+                      onChange={(e) => {
+                        const newInputs: Record<string, string> = { ...(data.inputs as Record<string, string>) };
+                        newInputs[key] = e.target.value;
+                        updateNodeData(nodeId, { inputs: newInputs });
+                      }}
+                    />
+                    <button
+                      onClick={() => {
+                        const newInputs: Record<string, string> = { ...(data.inputs as Record<string, string>) };
+                        delete newInputs[key];
+                        updateNodeData(nodeId, { inputs: newInputs });
+                      }}
+                      className="flex-shrink-0 p-1.5 text-brand-muted hover:text-rose-500 transition-colors"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                ))}
+                {Object.entries(data.inputs || {}).length === 0 && (
+                  <div className="text-center py-4 border border-dashed border-brand-border rounded-xl">
+                    <p className="text-[10px] text-brand-muted italic uppercase tracking-widest">No variables defined.</p>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         )}
 

@@ -3,16 +3,18 @@ import { Handle, Position, type NodeProps, type Node } from '@xyflow/react';
 import { useShallow } from 'zustand/shallow';
 import { Users, Trash2, ChevronDown, ChevronUp, Loader2, CheckCircle2, Link, Settings, Clock, AlertCircle } from 'lucide-react';
 import { useStore } from '../store/index';
+import { FRAMEWORK_CONFIG } from '../config/frameworks.config';
 import type { CrewNodeData, AgentNodeData } from '../types/nodes.types';
 
 export const CrewNode = memo(({ id, data }: NodeProps<Node<CrewNodeData, 'crew'>>) => {
-  const { deleteNode, toggleCollapse, nodes, onConnect, setActiveNode } = useStore(
+  const { deleteNode, toggleCollapse, nodes, onConnect, setActiveNode, currentProjectFramework } = useStore(
     useShallow((state) => ({
       deleteNode: state.deleteNode,
       toggleCollapse: state.toggleCollapse,
       nodes: state.nodes,
       onConnect: state.onConnect,
       setActiveNode: state.setActiveNode,
+      currentProjectFramework: state.currentProjectFramework,
     }))
   );
 
@@ -45,7 +47,11 @@ export const CrewNode = memo(({ id, data }: NodeProps<Node<CrewNodeData, 'crew'>
     <div 
       data-testid="node-crew"
       onClick={(e) => { e.stopPropagation(); setActiveNode(id); }}
-      className={`group relative bg-white dark:bg-slate-900 rounded-xl shadow-sm hover:shadow-md dark:shadow-none border border-slate-200 dark:border-slate-700 w-56 overflow-visible transition-colors transition-shadow duration-300 cursor-pointer ${statusClasses} ${status === 'running' ? 'running' : ''}`}
+      className={`group relative bg-white dark:bg-slate-900 rounded-xl shadow-sm hover:shadow-md dark:shadow-none border border-slate-200 dark:border-slate-700 w-64 overflow-visible cursor-pointer ${statusClasses} ${status === 'running' ? 'running' : ''} ${
+        data.isDimmed 
+          ? 'opacity-40 grayscale pointer-events-none transition-all duration-700 scale-95' 
+          : 'opacity-100 transition-all duration-500 scale-100'
+      }`}
       style={{ 
         '--node-color': '#8b5cf6',
         backfaceVisibility: 'hidden',
@@ -83,7 +89,7 @@ export const CrewNode = memo(({ id, data }: NodeProps<Node<CrewNodeData, 'crew'>
           className="text-white text-sm font-medium truncate flex-1 cursor-text"
           onDoubleClick={(e) => { e.stopPropagation(); setActiveNode(id); }}
         >
-          {data.name || 'New Crew'}
+          {data.name || FRAMEWORK_CONFIG[currentProjectFramework || 'crewai']?.labels.crew || 'New Crew'}
         </h3>
 
         {errors?.length > 0 && (
@@ -138,7 +144,7 @@ export const CrewNode = memo(({ id, data }: NodeProps<Node<CrewNodeData, 'crew'>
                       source: id, 
                       target: targetNode.id, 
                       sourceHandle: 'right-source', 
-                      targetHandle: 'left-target' 
+                      targetHandle: 'trigger-in' 
                     });
                     setIsConnectMenuOpen(false);
                   }}
@@ -158,12 +164,14 @@ export const CrewNode = memo(({ id, data }: NodeProps<Node<CrewNodeData, 'crew'>
 
       {!data.isCollapsed && (
         <div className="p-3">
-          <div className="flex justify-between items-center bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 px-2 py-1.5 rounded-md shadow-sm">
-            <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-tight">Process:</span>
-            <span className="text-xs text-slate-800 dark:text-slate-200 capitalize font-bold" data-testid="crew-process">
-              {data.process || 'sequential'}
-            </span>
-          </div>
+          {currentProjectFramework !== 'langgraph' && (
+            <div className="flex justify-between items-center bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 px-2 py-1.5 rounded-md shadow-sm">
+              <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-tight">Process:</span>
+              <span className="text-xs text-slate-800 dark:text-slate-200 capitalize font-bold" data-testid="crew-process">
+                {data.process || 'sequential'}
+              </span>
+            </div>
+          )}
 
           {childCount > 0 && (
             <div className="mt-3 flex flex-col gap-1.5">
@@ -186,14 +194,26 @@ export const CrewNode = memo(({ id, data }: NodeProps<Node<CrewNodeData, 'crew'>
 
       {/* Connection Handles */}
       {/* Trigger Input Handle (Top) */}
-      <div className="absolute left-1/2 -top-[1px] -translate-x-1/2 flex flex-col items-center gap-2 group/h-trigger -translate-y-full pointer-events-none">
+      <div className="absolute left-[40%] -top-[1px] -translate-x-1/2 flex flex-col items-center gap-2 group/h-trigger -translate-y-full pointer-events-none">
          <span className="text-[9px] font-bold text-cyan-500 bg-white dark:bg-slate-900 px-1 rounded shadow-sm opacity-0 group-hover/h-trigger:opacity-100 transition-opacity whitespace-nowrap border border-cyan-100 dark:border-cyan-900/30">Trigger In</span>
           <Handle 
             type="target" 
             position={Position.Top} 
-            id="left-target"
+            id="trigger-in"
             className="!w-3 !h-3 !border-2 !border-white dark:!border-slate-900 !static !translate-x-0 !cursor-crosshair pointer-events-auto shadow-sm" 
             style={{ backgroundColor: '#06b6d4' }} 
+          />
+      </div>
+
+      {/* State Input Handle (Top) */}
+      <div className="absolute left-[60%] -top-[1px] -translate-x-1/2 flex flex-col items-center gap-2 group/h-state -translate-y-full pointer-events-none">
+         <span className="text-[9px] font-bold text-purple-500 bg-white dark:bg-slate-900 px-1 rounded shadow-sm opacity-0 group-hover/h-state:opacity-100 transition-opacity whitespace-nowrap border border-purple-100 dark:border-purple-900/30">State In</span>
+          <Handle 
+            type="target" 
+            position={Position.Top} 
+            id="state-in"
+            className="!w-3 !h-3 !border-2 !border-white dark:!border-slate-900 !static !translate-x-0 !cursor-crosshair pointer-events-auto shadow-sm" 
+            style={{ backgroundColor: '#a855f7' }} 
           />
       </div>
 

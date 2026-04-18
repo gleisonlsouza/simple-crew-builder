@@ -15,6 +15,7 @@ from fastapi.responses import FileResponse, StreamingResponse
 from sqlmodel import Session, select
 from sqlalchemy import text
 from .crew_builder import run_crew_stream
+from .services.langgraph_engine import run_langgraph_stream
 from .database import init_db, get_session, engine
 from .models import CrewProject, User, Credential, LLMModel, MCPServer, AppSettings, CustomTool, Workspace, Execution, ExecutionStatus
 from .schemas import (
@@ -150,22 +151,62 @@ async def execute_crew(
             crew_inputs = {k: v for k, v in crew_inputs.items() if not k.startswith('input_')}
             execution_inputs.update(crew_inputs)
             
-        # Se mesmo após tudo estiver vazio, para chat o histórico ficaria vazio, mas tentamos nosso melhor
-        # 3. Create Execution record
-        execution = Execution(
-            project_id=uuid.UUID(project_id) if project_id else uuid.UUID(ROOT_USER_ID),
-            status=ExecutionStatus.RUNNING,
-            trigger_type="chat",
-            input_data=execution_inputs,
-            graph_snapshot=graph_data.model_dump()
-        )
-        session.add(execution)
-        session.commit()
-        session.refresh(execution)
+        # --- Framework Detection Logic (Strict Order) ---
+        framework = "crewai" # Default
+        
+        # 1. Primary: Explicit choice from frontend payload
+        if graph_data.framework:
+            framework = graph_data.framework
+            print(f"--- Routing: Framework from Payload: {framework} ---")
+            
+        # 2. Secondary: If project_id exists, check DB record (if not already set by payload)
+        elif project_id:
+            try:
+                db_project = session.get(CrewProject, project_id)
+                if db_project and db_project.framework:
+                    framework = db_project.framework
+                    print(f"--- Routing: Framework from DB: {framework} ---")
+            except Exception:
+                pass
+        
+        # 3. Fallback: Structural check (if 'state' node exists, it's likely LangGraph)
+        if framework == 'crewai' and any(n.type == 'state' for n in graph_data.nodes):
+            framework = 'langgraph'
+            print(f"--- Routing: Framework fallback to LangGraph (State node detected) ---")
 
-        # Despacha as dependências e payload JSON para a magia do nosso Parser local CrewAI Stream
+        is_langgraph = (framework == 'langgraph')
+
+        # --- DB Bypass: Create Execution record ONLY if project_id is valid ---
+        execution_id = None
+        if project_id:
+            try:
+                # Validate project_id is a real UUID and exists in DB
+                pid_uuid = uuid.UUID(project_id)
+                db_p = session.get(CrewProject, pid_uuid)
+                
+                if db_p:
+                    execution = Execution(
+                        project_id=pid_uuid,
+                        status=ExecutionStatus.RUNNING,
+                        trigger_type="chat",
+                        input_data=execution_inputs,
+                        graph_snapshot=graph_data.model_dump()
+                    )
+                    session.add(execution)
+                    session.commit()
+                    session.refresh(execution)
+                    execution_id = execution.id
+                    print(f"--- Execution {execution_id} recorded for project {project_id} ---")
+            except (ValueError, Exception) as db_err:
+                print(f"--- WARNING: Skipping Execution Record (Project ID invalid or not found): {db_err} ---")
+        else:
+            print("--- Execution started without project_id (Unsaved project). Skipping DB record. ---")
+
+        # Despacha as dependências e payload JSON para o engine correto
+        engine_func = run_langgraph_stream if is_langgraph else run_crew_stream
+        
         return StreamingResponse(
-            run_crew_stream(graph_data, workspace_id=active_workspace_id, inputs=execution_inputs, execution_id=execution.id), 
+            engine_func(graph_data, workspace_id=active_workspace_id, inputs=execution_inputs, execution_id=execution_id), 
             media_type="text/event-stream"
         )
     except ValueError as ve:
@@ -1027,12 +1068,16 @@ async def handle_webhook(
         import concurrent.futures
         
         def _run_sync():
-            """Cria um event loop dedicado para a execução síncrona do crew."""
+            """Cria um event loop dedicado para a execução síncrona."""
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
             final_result = ""
             try:
-                stream = run_crew_stream(graph_data, workspace_id=workspace_id, inputs=mapped_inputs, execution_id=execution.id)
+                # Resolve Engine
+                is_langgraph = target_project.framework == 'langgraph' or any(n.get("type") == "state" for n in target_project.canvas_data.get("nodes", []))
+                engine_func = run_langgraph_stream if is_langgraph else run_crew_stream
+                
+                stream = engine_func(graph_data, workspace_id=workspace_id, inputs=mapped_inputs, execution_id=execution.id)
                 for event_str in stream:
                     if not event_str.strip():
                         continue
@@ -1067,7 +1112,10 @@ async def handle_webhook(
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
             try:
-                for _ in run_crew_stream(graph_data, workspace_id=workspace_id, inputs=mapped_inputs, execution_id=execution.id):
+                is_langgraph = target_project.framework == 'langgraph' or any(n.get("type") == "state" for n in target_project.canvas_data.get("nodes", []))
+                engine_func = run_langgraph_stream if is_langgraph else run_crew_stream
+                
+                for _ in engine_func(graph_data, workspace_id=workspace_id, inputs=mapped_inputs, execution_id=execution.id):
                     pass
             finally:
                 loop.close()

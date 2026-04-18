@@ -32,7 +32,11 @@ export const WebhookNode = memo(({ id, data }: NodeProps<Node<WebhookNodeData, '
 
   return (
     <div
-      className={`group relative bg-white dark:bg-slate-900 rounded-xl shadow-sm hover:shadow-md dark:shadow-none border border-slate-200 dark:border-slate-700 w-56 overflow-visible transition-colors transition-shadow duration-300 cursor-pointer ${statusClasses}`}
+      className={`group relative bg-white dark:bg-slate-900 rounded-xl shadow-sm hover:shadow-md dark:shadow-none border border-slate-200 dark:border-slate-700 w-56 overflow-visible cursor-pointer ${statusClasses} ${
+        data.isDimmed 
+          ? 'opacity-40 grayscale pointer-events-none transition-all duration-700 scale-95' 
+          : 'opacity-100 transition-all duration-500 scale-100'
+      }`}
       style={{
         '--node-color': '#f97316',
       } as React.CSSProperties}

@@ -41,7 +41,11 @@ export const ToolNode = memo(({ id, data }: NodeProps<Node<ToolNodeData, 'tool'>
     <>
       <div
         onClick={(e) => { e.stopPropagation(); setActiveNode(id); }}
-        className={`group relative bg-white dark:bg-slate-900 rounded-xl shadow-sm hover:shadow-md dark:shadow-none border border-slate-200 dark:border-slate-700 w-52 overflow-visible transition-all duration-300 cursor-pointer ${statusClasses} ${status === 'running' ? 'running' : ''}`}
+        className={`group relative bg-white dark:bg-slate-900 rounded-xl shadow-sm hover:shadow-md dark:shadow-none border border-slate-200 dark:border-slate-700 w-52 overflow-visible cursor-pointer ${statusClasses} ${status === 'running' ? 'running' : ''} ${
+          data.isDimmed 
+            ? 'opacity-40 grayscale pointer-events-none transition-all duration-700 scale-95' 
+            : 'opacity-100 transition-all duration-500 scale-100'
+        }`}
       >
         {status === 'waiting' && (
           <div className="absolute -top-2 -right-2 bg-white dark:bg-slate-900 rounded-full p-0.5 shadow-md z-20 border border-slate-100 dark:border-slate-800 animate-in zoom-in duration-200">

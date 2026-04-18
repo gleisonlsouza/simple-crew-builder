@@ -47,6 +47,7 @@ describe('ChatForm', () => {
     setIsChatMappingSelectorOpen: mockSetIsChatMappingSelectorOpen,
     onFieldKeyDown: mockOnFieldKeyDown,
     onFieldChange: mockOnFieldChange,
+    framework: 'crewai',
   };
 
   beforeEach(() => {
@@ -88,8 +89,8 @@ describe('ChatForm', () => {
     expect(mockSetIsChatMappingSelectorOpen).toHaveBeenCalledWith(true);
   });
 
-  it('displays "Connect to a Crew Node first" when isChatConnected is false', () => {
-    render(<ChatForm {...defaultProps} isChatConnected={false} />);
+  it('displays "Connect to a Crew Node first" when disconnected', () => {
+    render(<ChatForm {...defaultProps} connectedCrewInputs={[]} />);
     expect(screen.getByText(/Connect to a Crew Node first/i)).toBeInTheDocument();
   });
 

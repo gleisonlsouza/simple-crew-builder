@@ -153,18 +153,19 @@ describe('AgentNode', () => {
   it('contains the expected handles for the vertical architecture', () => {
     const { container } = render(wrap(<AgentNode {...defaultProps} />));
     
-    // Check for handles using their data attributes or class names if possible, 
-    // but React Flow handles are usually div.react-flow__handle
+    // Check for handles using their data attributes or class names
     const handles = container.querySelectorAll('.react-flow__handle');
     
-    // We expect 4 handles: left-target (top), out-task (bottom 25%), out-tool (bottom 50%), out-mcp (bottom 75%)
-    expect(handles.length).toBe(4);
+    // We expect 6 handles: agent-in, schema-input (Top), out-task, out-tool, out-mcp, agent-out (Bottom)
+    expect(handles.length).toBe(6);
     
     const handleIds = Array.from(handles).map(h => h.getAttribute('data-handleid'));
-    expect(handleIds).toContain('left-target');
+    expect(handleIds).toContain('agent-in');
+    expect(handleIds).toContain('schema-input');
     expect(handleIds).toContain('out-task');
     expect(handleIds).toContain('out-tool');
     expect(handleIds).toContain('out-mcp');
+    expect(handleIds).toContain('agent-out');
   });
 
   it('opens config drawer on settings button click', async () => {

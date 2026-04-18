@@ -6,6 +6,7 @@ import { useStore } from '../store/index';
 import type { AppState } from '../types/store.types';
 import type { AppNode } from '../types/nodes.types';
 import type { ToolConfig } from '../types/config.types';
+import { useGraphVariables } from './useGraphVariables';
 
 export const useNodeConfig = () => {
   const activeNodeId = useStore((state: AppState) => state.activeNodeId);
@@ -25,6 +26,8 @@ export const useNodeConfig = () => {
   const customTools = useStore((state: AppState) => state.customTools);
   const globalTools = useStore((state: AppState) => state.globalTools);
   const nodeWarningsStore = useStore((state: AppState) => state.nodeWarnings);
+
+  const { variables, framework } = useGraphVariables();
 
   const [localName, setLocalName] = useState('');
   const [nameError, setNameError] = useState(false);
@@ -252,42 +255,68 @@ export const useNodeConfig = () => {
     const currentValue = currentData[field] || '';
     const textBeforeCursor = currentValue.slice(0, cursorPos);
     const lastBraceIndex = textBeforeCursor.lastIndexOf('{');
+    
     if (lastBraceIndex !== -1) {
+      // Use double braces and $json syntax for LangGraph variables if it contains dots or if we want to standardize
+      const isLangGraph = framework === 'langgraph';
+      const formattedSuggestion = isLangGraph ? `${suggestion}` : suggestion;
+      
       const newValue = 
         currentValue.slice(0, lastBraceIndex) + 
-        `{${suggestion}}` + 
+        `{${formattedSuggestion}}` + 
         currentValue.slice(cursorPos);
       updateNodeData(activeNodeId, { [field]: newValue });
     }
     setSuggestionState(prev => ({ ...prev, isOpen: false }));
-  }, [activeNodeId, activeNode, suggestionState, updateNodeData]);
+  }, [activeNodeId, activeNode, suggestionState, updateNodeData, framework]);
+
+  const filteredSuggestions = useMemo(() => {
+    if (!suggestionState.isOpen) return [];
+    
+    const parts = suggestionState.filter.split('.');
+    let currentTree = variables;
+    let pathPrefix = '';
+
+    for (let i = 0; i < parts.length - 1; i++) {
+        const part = parts[i];
+        if (currentTree[part] && currentTree[part].children) {
+            currentTree = currentTree[part].children!;
+            pathPrefix += part + '.';
+        } else {
+            break;
+        }
+    }
+
+    const lastPart = parts[parts.length - 1].toLowerCase();
+    return Object.entries(currentTree)
+      .filter(([key]) => key.toLowerCase().includes(lastPart))
+      .map(([key]) => pathPrefix + key);
+  }, [suggestionState.isOpen, suggestionState.filter, variables]);
 
   const handleFieldKeyDown = useCallback((e: React.KeyboardEvent<HTMLTextAreaElement | HTMLInputElement>) => {
     if (suggestionState.isOpen) {
-      const crewNode = nodes.find(n => n.type === 'crew');
-      const inputs = Object.keys((crewNode?.data as { inputs?: Record<string, string> })?.inputs || {}).filter(k => !k.startsWith('input_'));
-      const filtered = inputs.filter(k => k.toLowerCase().includes(suggestionState.filter.toLowerCase()));
-
       if (e.key === 'ArrowDown') {
         e.preventDefault();
         setSuggestionState(prev => ({ 
           ...prev, 
-          selectedIndex: (prev.selectedIndex + 1) % (filtered.length || 1) 
+          selectedIndex: (prev.selectedIndex + 1) % (filteredSuggestions.length || 1) 
         }));
       } else if (e.key === 'ArrowUp') {
         e.preventDefault();
         setSuggestionState(prev => ({ 
           ...prev, 
-          selectedIndex: (prev.selectedIndex - 1 + (filtered.length || 1)) % (filtered.length || 1) 
+          selectedIndex: (prev.selectedIndex - 1 + (filteredSuggestions.length || 1)) % (filteredSuggestions.length || 1) 
         }));
-      } else if (e.key === 'Enter' && filtered.length > 0) {
-        e.preventDefault();
-        handleSelectSuggestion(filtered[suggestionState.selectedIndex]);
+      } else if (e.key === 'Enter' || e.key === 'Tab') {
+        if (filteredSuggestions.length > 0) {
+            e.preventDefault();
+            handleSelectSuggestion(filteredSuggestions[suggestionState.selectedIndex]);
+        }
       } else if (e.key === 'Escape') {
         setSuggestionState(prev => ({ ...prev, isOpen: false }));
       }
     }
-  }, [suggestionState, nodes, handleSelectSuggestion]);
+  }, [suggestionState, filteredSuggestions, handleSelectSuggestion]);
 
   const handleFieldChange = useCallback((
     e: React.ChangeEvent<HTMLTextAreaElement | HTMLInputElement> | { target: { value: string, selectionStart?: number, cursorRect?: { top: number, left: number, height: number } } }, 
@@ -369,6 +398,31 @@ export const useNodeConfig = () => {
       }
     }
   }
+  
+  const currentProjectFramework = useStore((state: AppState) => state.currentProjectFramework);
+
+  // Maintain backward compatibility for state nodes/fields
+  const stateNodesRaw = nodes.filter(n => n.type === 'state');
+  const stateNodes = useMemo(() => stateNodesRaw.map(n => ({
+    id: n.id,
+    name: (n.data as { name?: string }).name || 'State',
+    fields: ((n.data as { fields?: { key: string; type: string }[] }).fields || []).map(f => {
+      // Find corresponding schema children from our new tree
+      const treeField = variables[f.key];
+      const childrenKeys = treeField?.children ? Object.keys(treeField.children) : undefined;
+      return {
+        key: f.key,
+        type: f.type,
+        subKeys: childrenKeys ? childrenKeys.map(sk => `${f.key}.${sk}`) : undefined,
+      };
+    }),
+  })), [stateNodesRaw, variables]);
+
+  const stateFields = useMemo(() =>
+    stateNodes.flatMap(s =>
+      s.fields.flatMap(f => (f.subKeys ? f.subKeys : [f.key]))
+    ),
+  [stateNodes]);
 
   return {
     activeNodeId,
@@ -421,6 +475,10 @@ export const useNodeConfig = () => {
     connectedCrewInputs,
     isChatConnected,
     allProjectVariables,
+    stateFields,
+    stateNodes,
+    variables,
+    currentProjectFramework,
     nodeWarnings: activeNodeId ? (nodeWarningsStore[activeNodeId] || []) : []
   };
 };

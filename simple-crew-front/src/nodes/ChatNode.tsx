@@ -15,7 +15,11 @@ export const ChatNode = memo(({ id, data }: NodeProps<Node<ChatNodeData, 'chat'>
 
   return (
     <div 
-      className="group relative bg-white dark:bg-slate-900 rounded-xl shadow-sm hover:shadow-md dark:shadow-none border border-slate-200 dark:border-slate-700 w-48 overflow-visible transition-colors transition-shadow duration-300 cursor-pointer hover:ring-2 hover:ring-cyan-400"
+      className={`group relative bg-white dark:bg-slate-900 rounded-xl shadow-sm hover:shadow-md dark:shadow-none border border-slate-200 dark:border-slate-700 w-48 overflow-visible cursor-pointer ${
+        data.isDimmed 
+          ? 'opacity-40 grayscale pointer-events-none transition-all duration-700 scale-95' 
+          : 'opacity-100 transition-all duration-500 scale-100 hover:ring-2 hover:ring-cyan-400'
+      }`}
       onClick={() => setActiveNode(id)}
     >
       {/* Header */}

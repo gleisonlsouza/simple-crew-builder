@@ -7,11 +7,12 @@ import type { TaskNodeData } from '../types/nodes.types';
 
 
 export const TaskNode = memo(({ id, data }: NodeProps<Node<TaskNodeData, 'task'>>) => {
-  const { deleteNode, toggleCollapse, setActiveNode } = useStore(
+  const { deleteNode, toggleCollapse, setActiveNode, framework } = useStore(
     useShallow((state) => ({
       deleteNode: state.deleteNode,
       toggleCollapse: state.toggleCollapse,
       setActiveNode: state.setActiveNode,
+      framework: state.currentProjectFramework,
     }))
   );
 
@@ -23,18 +24,22 @@ export const TaskNode = memo(({ id, data }: NodeProps<Node<TaskNodeData, 'task'>
     : status === 'waiting'
       ? 'ring-2 ring-amber-400/50 ring-offset-1'
       : status === 'running'
-        ? 'ring-2 ring-blue-500 ring-offset-2 animate-pulse'
+        ? 'ring-2 ring-blue-500 ring-offset-4 animate-pulse shadow-[0_0_15px_rgba(59,130,246,0.5)]'
         : status === 'success'
-          ? 'ring-2 ring-green-500 ring-offset-2'
+          ? 'ring-2 ring-green-500 ring-offset-2 shadow-[0_0_10px_rgba(34,197,94,0.3)]'
           : status === 'error'
-            ? 'ring-2 ring-red-500 ring-offset-2'
+            ? 'ring-2 ring-red-500 ring-offset-2 shadow-[0_0_10px_rgba(239,68,68,0.3)]'
             : 'hover:ring-2 hover:ring-emerald-400';
 
   return (
     <div
       data-testid="node-task"
       onClick={(e) => { e.stopPropagation(); setActiveNode(id); }}
-      className={`group relative bg-white dark:bg-slate-900 rounded-xl shadow-sm hover:shadow-md dark:shadow-none border border-slate-200 dark:border-slate-700 w-56 overflow-visible transition-all duration-300 cursor-pointer ${statusClasses} ${status === 'running' ? 'running' : ''}`}
+      className={`group relative bg-white dark:bg-slate-900 rounded-xl shadow-sm hover:shadow-md dark:shadow-none border border-slate-200 dark:border-slate-700 w-56 overflow-visible cursor-pointer ${statusClasses} ${status === 'running' ? 'running' : ''} ${
+        data.isDimmed 
+          ? 'opacity-40 grayscale pointer-events-none transition-all duration-700 scale-95' 
+          : 'opacity-100 transition-all duration-500 scale-100'
+      }`}
       style={{
         '--node-color': '#10b981',
         backfaceVisibility: 'hidden',
@@ -113,6 +118,19 @@ export const TaskNode = memo(({ id, data }: NodeProps<Node<TaskNodeData, 'task'>
       >
         {data.isCollapsed ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronUp className="w-3.5 h-3.5" />}
       </button>
+
+      {/* Connection Handle - Task receives Tools (Orange) - CrewAI Only */}
+      {framework === 'crewai' && (
+        <Handle 
+          type="source" 
+          position={Position.Bottom} 
+          id="out-tool" 
+          className="!w-3 !h-3 !border-2 !border-white dark:!border-slate-900 !cursor-crosshair pointer-events-auto group/h-tool z-10" 
+          style={{ backgroundColor: '#f97316', left: '40%' }} 
+        >
+           <span className="absolute top-4 left-1/2 -translate-x-1/2 text-[9px] font-bold text-orange-500 bg-white dark:bg-slate-900 px-1 rounded shadow-sm opacity-0 group-hover/h-tool:opacity-100 transition-opacity whitespace-nowrap border border-orange-100 dark:border-orange-900/30 pointer-events-none">Tools</span>
+        </Handle>
+      )}
 
       {/* Connection Handle - Task connects to Agent (Purple) */}
       {/* Connection Handle - Task receives from Agent (Blue) */}

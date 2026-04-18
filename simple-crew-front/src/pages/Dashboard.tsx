@@ -391,7 +391,7 @@ const Dashboard = () => {
                     className="w-full px-4 py-2.5 bg-brand-bg border border-brand-border rounded-xl focus:border-indigo-500 outline-none text-brand-text transition-all appearance-none font-medium cursor-pointer"
                   >
                     <option value="crewai">🤖 CrewAI (Multi-Agent Systems)</option>
-                    <option value="langgraph" disabled>⚡ LangGraph (Stateful Graphs) - Coming Soon</option>
+                    <option value="langgraph">⚡ LangGraph (Stateful Graphs)</option>
                   </select>
                   <div className="absolute inset-y-0 right-4 flex items-center pointer-events-none text-brand-muted">
                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path></svg>

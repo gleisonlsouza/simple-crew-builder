@@ -1,75 +1,135 @@
-import dagre from '@dagrejs/dagre';
-import { Position } from '@xyflow/react';
-import type { AppNode, AppEdge } from '../types/nodes.types';
+import { type AppNode, type AppEdge } from '../types/nodes.types';
 
-// Standard dimensions for nodes in SimpleCrew to ensure proper Dagre bounding box calculations
-const NODE_WIDTH = 350; 
-const NODE_HEIGHT = 250; 
+export const getLayoutedElements = (nodes: AppNode[], edges: AppEdge[]) => {
+  const newNodes: AppNode[] = JSON.parse(JSON.stringify(nodes));
+  const processed = new Set();
 
-/**
- * Automatically calculates positions for nodes to create a Top-to-Bottom flow.
- */
-export const getLayoutedElements = (nodes: AppNode[], edges: AppEdge[], direction = 'TB') => {
-  const dagreGraph = new dagre.graphlib.Graph().setDefaultEdgeLabel(() => ({}));
+  const topTypes = ['state']; // Schemas removed from globals
+  const spineTypes = ['crew', 'agent', 'router'];
+  const toolTypes = ['tool', 'customTool', 'mcp'];
+  const taskTypes = ['task'];
 
-  // Set rank direction: 'TB' is top to bottom
-  dagreGraph.setGraph({ 
-    rankdir: direction, 
-    nodesep: 50, // horizontal gap between sibling nodes
-    ranksep: 100, // vertical gap between parent/child
+  // 1. Top Shelf (Globals like State)
+  let topX = 100;
+  newNodes.forEach((node: AppNode) => {
+    if (topTypes.includes(node.type)) {
+      node.position = { x: topX, y: 50 };
+      topX += (node.measured?.width || 300) + 50;
+      processed.add(node.id);
+    }
   });
 
-  const nodeMap = new Map(nodes.map(n => [n.id, n]));
-
-  // Left-to-Right order definition
-  const getWeight = (nodeType?: string) => {
-    if (!nodeType) return 10;
-    if (['task', 'taskNode'].includes(nodeType)) return 1;
-    if (['tool', 'customTool', 'globalTool'].includes(nodeType)) return 2;
-    if (nodeType === 'mcp') return 3;
-    return 10;
+  // Helper to position Schemas exactly to the RIGHT of the node they configure
+  const positionConnectedSchemas = (targetId: string, baseX: number, baseY: number) => {
+    const inEdges = edges.filter((e: AppEdge) => e.target === targetId);
+    const schemas = inEdges
+      .map((e: AppEdge) => newNodes.find((n: AppNode) => n.id === e.source && n.type === 'schema'))
+      .filter(Boolean) as AppNode[];
+    
+    let schemaY = baseY;
+    schemas.forEach((schema: AppNode) => {
+      if (processed.has(schema.id)) return;
+      // Place right of the target node (since target's schema handle is on its right)
+      schema.position = { x: baseX + 400, y: schemaY };
+      schemaY -= (schema.measured?.height || 150) + 20; // Stack upwards if multiple
+      processed.add(schema.id);
+    });
   };
 
-  // 1. Sort nodes descending to counter Dagre's internal insertion inversion
-  const sortedNodes = [...nodes].sort((a, b) => getWeight(b.type) - getWeight(a.type));
+  // 2. Find Root for the Spine
+  let root: AppNode | undefined = newNodes.find((n: AppNode) => n.type === 'crew');
+  if (!root) {
+    root = newNodes.find((n: AppNode) =>
+      n.type === 'agent' &&
+      !edges.some((e: AppEdge) => e.target === n.id && spineTypes.includes(newNodes.find((src: AppNode) => src.id === e.source)?.type || ''))
+    );
+  }
 
-  sortedNodes.forEach((node) => {
-    const width = node.measured?.width ?? NODE_WIDTH;
-    const height = node.measured?.height ?? NODE_HEIGHT;
-    dagreGraph.setNode(node.id, { width, height });
-  });
+  // 3. Spine and Ribs Layout (Handle-Aware)
+  const CENTER_X = 800;
+  let currentY = 250;
 
-  // 2. Sort edges descending so the visual Left-to-Right matches Task -> Tool -> MCP
-  const sortedEdges = [...edges].sort((a, b) => {
-    const typeA = nodeMap.get(a.target)?.type;
-    const typeB = nodeMap.get(b.target)?.type;
-    return getWeight(typeB) - getWeight(typeA);
-  });
-
-  sortedEdges.forEach((edge) => {
-    dagreGraph.setEdge(edge.source, edge.target); // Removed the weight property which incorrectly pulls vertical tightness
-  });
-
-  dagre.layout(dagreGraph);
-
-  const newNodes = nodes.map((node) => {
-    const nodeWithPosition = dagreGraph.node(node.id);
-    const width = node.measured?.width ?? NODE_WIDTH;
-    const height = node.measured?.height ?? NODE_HEIGHT;
+  if (root) {
+    let queue: AppNode[] = [root];
     
-    // Dagre positions nodes by their center, React Flow uses top-left
-    return {
-      ...node,
-      targetPosition: 'top' as Position,
-      sourcePosition: 'bottom' as Position,
-      position: {
-        x: nodeWithPosition.x - width / 2,
-        y: nodeWithPosition.y - height / 2,
-      },
-    };
+    while (queue.length > 0) {
+      const levelNodes = [...queue];
+      queue = [];
+      
+      let maxLevelY = currentY;
+
+      // Fan out multiple spine nodes on the same level
+      const startX = CENTER_X - ((levelNodes.length - 1) * 450) / 2;
+
+      levelNodes.forEach((node, index) => {
+        if (processed.has(node.id)) return;
+        
+        const nodeX = startX + (index * 450);
+        node.position = { x: nodeX, y: currentY };
+        processed.add(node.id);
+
+        // POSITION SCHEMAS FOR THE SPINE NODE
+        positionConnectedSchemas(node.id, nodeX, currentY);
+
+        const outEdges = edges.filter((e: AppEdge) => e.source === node.id);
+        const children = outEdges
+          .map((e: AppEdge) => newNodes.find((n: AppNode) => n.id === e.target))
+          .filter(Boolean) as AppNode[];
+
+        const taskChildren = children.filter((c: AppNode) => taskTypes.includes(c.type));
+        const toolChildren = children.filter((c: AppNode) => toolTypes.includes(c.type));
+        const spineChildren = children.filter((c: AppNode) => spineTypes.includes(c.type));
+
+        const currentChildY = currentY + (node.measured?.height || 200) + 80;
+
+        // MATCHING LEFT-MOST HANDLE: Place Tasks Far-Left
+        taskChildren.forEach((child: AppNode, i: number) => {
+          if (processed.has(child.id)) return;
+          const childX = nodeX - 700;
+          const childY = currentChildY + (i * 250);
+          child.position = { x: childX, y: childY };
+          processed.add(child.id);
+          // POSITION SCHEMAS FOR THE TASK
+          positionConnectedSchemas(child.id, childX, childY);
+        });
+
+        // MATCHING CENTER-LEFT HANDLE: Place Tools Center-Left
+        toolChildren.forEach((child: AppNode, i: number) => {
+          if (processed.has(child.id)) return;
+          const childX = nodeX - 350;
+          const childY = currentChildY + (i * 250);
+          child.position = { x: childX, y: childY };
+          processed.add(child.id);
+          // POSITION SCHEMAS FOR THE TOOL (if applicable)
+          positionConnectedSchemas(child.id, childX, childY);
+        });
+
+        // Queue Spine children
+        spineChildren.forEach((child: AppNode) => {
+          queue.push(child);
+        });
+
+        const tasksMaxY = currentChildY + (taskChildren.length * 250);
+        const toolsMaxY = currentChildY + (toolChildren.length * 250);
+        const thisLevelMaxY = Math.max(currentChildY, tasksMaxY, toolsMaxY);
+        
+        if (thisLevelMaxY > maxLevelY) maxLevelY = thisLevelMaxY;
+      });
+
+      currentY = maxLevelY + 50; 
+    }
+  }
+
+  // 4. Fallback for orphans (including unconnected schemas)
+  let fallbackX = 100;
+  const fallbackY = currentY + 100;
+  newNodes.forEach((node: AppNode) => {
+    if (!processed.has(node.id)) {
+      node.position = { x: fallbackX, y: fallbackY };
+      fallbackX += (node.measured?.width || 300) + 50;
+      processed.add(node.id);
+    }
   });
 
-  const newEdges = edges.map(edge => ({ ...edge, type: 'deletable' }));
-
-  return { nodes: newNodes as AppNode[], edges: newEdges as AppEdge[] };
+  return { nodes: newNodes, edges };
 };

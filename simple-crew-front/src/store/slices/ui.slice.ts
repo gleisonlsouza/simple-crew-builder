@@ -10,6 +10,12 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set) => (
   isChatVisible: false,
   isAboutModalOpen: false,
   isSidebarCollapsed: false,
+  isStateModalOpen: false,
+  activeStateNodeId: null,
+  isSchemaModalOpen: false,
+  activeSchemaNodeId: null,
+  isRouterModalOpen: false,
+  activeRouterNodeId: null,
   notification: null,
 
   toggleTheme: () => {
@@ -27,6 +33,12 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set) => (
   setIsChatVisible: (visible) => set({ isChatVisible: visible }),
   setIsAboutModalOpen: (open) => set({ isAboutModalOpen: open }),
   setIsSidebarCollapsed: (collapsed) => set({ isSidebarCollapsed: collapsed }),
+  openStateModal: (nodeId) => set({ isStateModalOpen: true, activeStateNodeId: nodeId, activeNodeId: null }),
+  closeStateModal: () => set({ isStateModalOpen: false, activeStateNodeId: null }),
+  openSchemaModal: (nodeId) => set({ isSchemaModalOpen: true, activeSchemaNodeId: nodeId, activeNodeId: null }),
+  closeSchemaModal: () => set({ isSchemaModalOpen: false, activeSchemaNodeId: null }),
+  openRouterModal: (nodeId) => set({ isRouterModalOpen: true, activeRouterNodeId: nodeId, activeNodeId: null }),
+  closeRouterModal: () => set({ isRouterModalOpen: false, activeRouterNodeId: null }),
   resetUIState: () => set({ 
     isChatVisible: false, 
     isConsoleOpen: false, 
@@ -34,7 +46,13 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set) => (
     isSettingsOpen: false, 
     isUsabilityDrawerOpen: false,
     isAboutModalOpen: false,
-    isSidebarCollapsed: false
+    isSidebarCollapsed: false,
+    isStateModalOpen: false,
+    activeStateNodeId: null,
+    isSchemaModalOpen: false,
+    activeSchemaNodeId: null,
+    isRouterModalOpen: false,
+    activeRouterNodeId: null
   }),
 
   showNotification: (message, type) => {

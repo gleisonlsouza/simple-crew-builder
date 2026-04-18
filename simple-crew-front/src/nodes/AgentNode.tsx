@@ -30,18 +30,22 @@ export const AgentNode = memo(({ id, data }: NodeProps<Node<AgentNodeData, 'agen
     : status === 'waiting'
       ? 'ring-2 ring-amber-400/50 ring-offset-1'
       : status === 'running'
-        ? 'ring-2 ring-blue-500 ring-offset-2 animate-pulse'
+        ? 'ring-2 ring-blue-500 ring-offset-4 animate-pulse shadow-[0_0_15px_rgba(59,130,246,0.5)]'
         : status === 'success'
-          ? 'ring-2 ring-green-500 ring-offset-2'
+          ? 'ring-2 ring-green-500 ring-offset-2 shadow-[0_0_10px_rgba(34,197,94,0.3)]'
           : status === 'error'
-            ? 'ring-2 ring-red-500 ring-offset-2'
+            ? 'ring-2 ring-red-500 ring-offset-2 shadow-[0_0_10px_rgba(239,68,68,0.3)]'
             : 'hover:ring-2 hover:ring-blue-400';
 
   return (
     <div
       data-testid="node-agent"
       onClick={(e) => { e.stopPropagation(); setActiveNode(id); }}
-      className={`group relative bg-white dark:bg-slate-900 rounded-xl shadow-sm hover:shadow-md dark:shadow-none border border-slate-200 dark:border-slate-700 w-64 overflow-visible transition-colors transition-shadow duration-300 cursor-pointer ${statusClasses} ${status === 'running' ? 'running' : ''}`}
+      className={`group relative bg-white dark:bg-slate-900 rounded-xl shadow-sm hover:shadow-md dark:shadow-none border border-slate-200 dark:border-slate-700 w-64 overflow-visible cursor-pointer ${statusClasses} ${status === 'running' ? 'running' : ''} ${
+        data.isDimmed 
+          ? 'opacity-40 grayscale pointer-events-none transition-all duration-700 scale-95' 
+          : 'opacity-100 transition-all duration-500 scale-100'
+      }`}
       style={{
         '--node-color': '#3b82f6',
         backfaceVisibility: 'hidden',
@@ -52,50 +56,73 @@ export const AgentNode = memo(({ id, data }: NodeProps<Node<AgentNodeData, 'agen
       } as React.CSSProperties}
     >
       {/* Main Execution Flow Handle (Top) */}
-      <div className="absolute left-1/2 -top-[1px] -translate-x-1/2 flex flex-col items-center gap-2 group/h-crew -translate-y-full pointer-events-none">
-         <span className="text-[9px] font-bold text-purple-500 bg-white dark:bg-slate-900 px-1 rounded shadow-sm opacity-0 group-hover/h-crew:opacity-100 transition-opacity whitespace-nowrap border border-purple-100 dark:border-purple-900/30">Crew In</span>
+      <div className="absolute left-[40%] -top-[1px] -translate-x-1/2 flex flex-col items-center gap-2 group/h-crew -translate-y-full pointer-events-none">
+         <span className="text-[9px] font-bold text-blue-500 bg-white dark:bg-slate-900 px-1 rounded shadow-sm opacity-0 group-hover/h-crew:opacity-100 transition-opacity whitespace-nowrap border border-blue-100 dark:border-blue-900/30">Execution In</span>
          <Handle 
            type="target" 
            position={Position.Top} 
-           id="left-target" 
+           id="agent-in" 
            className="!w-3 !h-3 !border-2 !border-white dark:!border-slate-900 !static !translate-x-0 !cursor-crosshair pointer-events-auto shadow-sm" 
-           style={{ backgroundColor: '#a855f7' }} 
+           style={{ backgroundColor: '#2563eb' }} 
          />
       </div>
 
-      {/* Handles at the Bottom (Sources for Delegation) */}
+      {/* Structured Output Schema Handle (Top) */}
+      <div className="absolute left-[60%] -top-[1px] -translate-x-1/2 flex flex-col items-center gap-2 group/h-schema -translate-y-full pointer-events-none">
+         <span className="text-[9px] font-bold text-teal-500 bg-white dark:bg-slate-900 px-1 rounded shadow-sm opacity-0 group-hover/h-schema:opacity-100 transition-opacity whitespace-nowrap border border-teal-100 dark:border-teal-900/30">Schema In</span>
+         <Handle 
+           type="target" 
+           position={Position.Top} 
+           id="schema-input" 
+           className="!w-3 !h-3 !border-2 !border-white dark:!border-slate-900 !static !translate-x-0 !cursor-crosshair pointer-events-auto shadow-sm" 
+           style={{ backgroundColor: '#14b8a6' }} 
+         />
+      </div>
+
+      {/* Handles at the Bottom (Sources for Delegation & Flow) */}
       <>
-        {/* Task Handle - 25% */}
+        {/* Task Handle - 20% */}
         <Handle 
           type="source" 
           position={Position.Bottom} 
           id="out-task" 
           className="!w-3 !h-3 !border-2 !border-white dark:!border-slate-900 !cursor-crosshair pointer-events-auto group/h-task z-10" 
-          style={{ backgroundColor: '#3b82f6', left: '25%' }} 
+          style={{ backgroundColor: '#3b82f6', left: '20%' }} 
         >
            <span className="absolute top-4 left-1/2 -translate-x-1/2 text-[9px] font-bold text-blue-500 bg-white dark:bg-slate-900 px-1 rounded shadow-sm opacity-0 group-hover/h-task:opacity-100 transition-opacity whitespace-nowrap border border-blue-100 dark:border-blue-900/30 pointer-events-none">Tasks</span>
         </Handle>
         
-        {/* Tool Handle - 50% */}
+        {/* Tool Handle - 40% */}
         <Handle 
           type="source" 
           position={Position.Bottom} 
           id="out-tool" 
           className="!w-3 !h-3 !border-2 !border-white dark:!border-slate-900 !cursor-crosshair pointer-events-auto group/h-tool z-10" 
-          style={{ backgroundColor: '#f97316', left: '50%' }} 
+          style={{ backgroundColor: '#f97316', left: '40%' }} 
         >
            <span className="absolute top-4 left-1/2 -translate-x-1/2 text-[9px] font-bold text-orange-500 bg-white dark:bg-slate-900 px-1 rounded shadow-sm opacity-0 group-hover/h-tool:opacity-100 transition-opacity whitespace-nowrap border border-orange-100 dark:border-orange-900/30 pointer-events-none">Tools</span>
         </Handle>
 
-        {/* MCP Handle - 75% */}
+        {/* MCP Handle - 60% */}
         <Handle 
           type="source" 
           position={Position.Bottom} 
           id="out-mcp" 
           className="!w-3 !h-3 !border-2 !border-white dark:!border-slate-900 !cursor-crosshair pointer-events-auto group/h-mcp z-10" 
-          style={{ backgroundColor: '#ec4899', left: '75%' }} 
+          style={{ backgroundColor: '#ec4899', left: '60%' }} 
         >
            <span className="absolute top-4 left-1/2 -translate-x-1/2 text-[9px] font-bold text-pink-500 bg-white dark:bg-slate-900 px-1 rounded shadow-sm opacity-0 group-hover/h-mcp:opacity-100 transition-opacity whitespace-nowrap border border-pink-100 dark:border-pink-900/30 pointer-events-none">MCP</span>
+        </Handle>
+
+        {/* Execution Output Handle - 80% */}
+        <Handle 
+          type="source" 
+          position={Position.Bottom} 
+          id="agent-out" 
+          className="!w-3 !h-3 !border-2 !border-white dark:!border-slate-900 !cursor-crosshair pointer-events-auto group/h-agent-out z-10 font-bold" 
+          style={{ backgroundColor: '#2563eb', left: '80%' }} 
+        >
+           <span className="absolute top-4 left-1/2 -translate-x-1/2 text-[9px] font-bold text-blue-600 bg-white dark:bg-slate-900 px-1 rounded shadow-sm opacity-0 group-hover/h-agent-out:opacity-100 transition-opacity whitespace-nowrap border border-blue-100 dark:border-blue-900/30 pointer-events-none uppercase">Execution Out</span>
         </Handle>
       </>
 

@@ -1,7 +1,7 @@
 import { memo } from 'react';
 import { Handle, Position, type NodeProps, type Node } from '@xyflow/react';
 import { useShallow } from 'zustand/shallow';
-import { Terminal, Trash2 } from 'lucide-react';
+import { Terminal, Trash2, Loader2, CheckCircle2, AlertCircle, Clock } from 'lucide-react';
 import { useStore } from '../store/index';
 import type { CustomToolNodeData } from '../types/nodes.types';
 import type { NodeStatus } from '../types/store.types';
@@ -38,6 +38,27 @@ export const CustomToolNode = memo(({ id, data }: NodeProps<Node<CustomToolNodeD
       onClick={(e) => { e.stopPropagation(); setActiveNode(id); }}
       className={`group relative bg-white dark:bg-slate-900 rounded-xl shadow-sm hover:shadow-md dark:shadow-none border border-slate-200 dark:border-slate-700 w-52 overflow-visible transition-all duration-300 cursor-pointer ${statusClasses} ${status === 'running' ? 'running' : ''}`}
     >
+      {status === 'waiting' && (
+        <div className="absolute -top-2 -right-2 bg-white dark:bg-slate-900 rounded-full p-0.5 shadow-md z-20 border border-slate-100 dark:border-slate-800 animate-in zoom-in duration-200">
+          <Clock className="w-5 h-5 text-amber-500" />
+        </div>
+      )}
+      {status === 'running' && (
+        <div className="absolute -top-2 -right-2 bg-white dark:bg-slate-900 rounded-full p-0.5 shadow-md z-20 border border-slate-100 dark:border-slate-800">
+          <Loader2 className="w-5 h-5 text-blue-500 animate-spin" />
+        </div>
+      )}
+      {status === 'success' && (
+        <div className="absolute -top-2 -right-2 bg-white dark:bg-slate-900 rounded-full p-0.5 shadow-md z-20 border border-slate-100 dark:border-slate-800">
+          <CheckCircle2 className="w-5 h-5 text-green-500" />
+        </div>
+      )}
+      {status === 'error' && (
+        <div className="absolute -top-2 -right-2 bg-white dark:bg-slate-900 rounded-full p-0.5 shadow-md z-20 border border-slate-100 dark:border-slate-800 animate-in zoom-in duration-200">
+          <AlertCircle className="w-5 h-5 text-red-500" />
+        </div>
+      )}
+
       <div className="bg-gradient-to-r from-orange-500 to-amber-600 px-3 py-2 flex items-center gap-2 rounded-t-xl relative">
         <Terminal className="w-4 h-4 text-white" />
         <h3 className="text-white text-[11px] font-bold truncate flex-1 uppercase tracking-wider">Custom Tool</h3>

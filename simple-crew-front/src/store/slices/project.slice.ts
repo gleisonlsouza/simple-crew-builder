@@ -221,6 +221,8 @@ export const createProjectSlice: StateCreator<AppState, [], [], ProjectSlice> = 
         isChatVisible: false
       });
       toast.success(`Project "${project.name}" loaded!`);
+      // Ensure a clean slate (UI-only) right after load
+      get().resetExecutionVisuals();
     } catch (error) {
       toast.error((error as Error).message);
     }
@@ -531,6 +533,9 @@ export const createProjectSlice: StateCreator<AppState, [], [], ProjectSlice> = 
   },
 
   startRealExecution: async () => {
+    // 1. Reset visual state for a clean slate
+    get().resetExecutionVisuals();
+
     const state = get();
     const initialStatuses: Record<string, NodeStatus> = {};
     state.nodes.forEach((node: AppNode) => {
@@ -545,12 +550,26 @@ export const createProjectSlice: StateCreator<AppState, [], [], ProjectSlice> = 
       isConsoleOpen: true,
       isConsoleExpanded: false
     });
+    // Identify active custom tools (LangGraph nodes + CrewAI agent/task data)
+    const activeToolIds = new Set<string>();
+    state.nodes.forEach(node => {
+      const data = node.data as { toolId?: string; customToolIds?: string[] };
+      if (node.type === 'customTool' && data?.toolId) {
+        activeToolIds.add(data.toolId);
+      }
+      if (data?.customToolIds && Array.isArray(data.customToolIds)) {
+        data.customToolIds.forEach((id: string) => activeToolIds.add(id));
+      }
+    });
+
+    const activeCustomToolsFull = state.customTools.filter(tool => activeToolIds.has(tool.id));
+
     const payload = {
       version: "1.0",
       nodes: state.nodes,
       edges: state.edges,
       globalTools: state.globalTools,
-      customTools: state.customTools
+      customTools: activeCustomToolsFull
     };
 
     let capturedResult: string | null = null;
@@ -583,11 +602,14 @@ export const createProjectSlice: StateCreator<AppState, [], [], ProjectSlice> = 
       while (true) {
         const result = await reader.read();
         if (result.done) {
-          if (get().isExecuting && !hasError) {
-            const newStatuses: Record<string, NodeStatus> = { ...get().nodeStatuses };
-            state.nodes.forEach(n => { if (newStatuses[n.id] === 'running') newStatuses[n.id] = 'success'; });
-            set({ nodeStatuses: newStatuses, isExecuting: false });
-          } else {
+            if (get().isExecuting && !hasError) {
+              const newStatuses: Record<string, NodeStatus> = { ...get().nodeStatuses };
+              state.nodes.forEach(n => { if (newStatuses[n.id] === 'running') newStatuses[n.id] = 'success'; });
+              set({ nodeStatuses: newStatuses, isExecuting: false });
+              
+              // 2. Finalize visuals (Post-Execution state)
+              get().finalizeExecutionVisuals();
+            } else {
             set({ isExecuting: false });
           }
           break;
@@ -600,6 +622,31 @@ export const createProjectSlice: StateCreator<AppState, [], [], ProjectSlice> = 
             if (event.type === 'heartbeat') continue;
             else if (event.type === 'status') get().setNodeStatus(event.nodeId, event.status);
             else if (event.type === 'task_completed') get().setNodeStatus(event.task_id, 'success');
+            else if (event.type === 'route_taken') {
+              // 1. Highlight the specific edge taken by the router (STRICT MATCH)
+              // 2. Update the Router node data with the winning handle for internal UI highlight
+              set((state) => ({
+                edges: state.edges.map(edge => {
+                  if (edge.source === event.nodeId && edge.sourceHandle === event.sourceHandle) {
+                    return {
+                      ...edge,
+                      animated: true,
+                      style: { ...edge.style, stroke: '#10b981', strokeWidth: 4 } // Success Green
+                    };
+                  }
+                  return edge;
+                }),
+                nodes: state.nodes.map(node => {
+                  if (node.id === event.nodeId) {
+                    return {
+                      ...node,
+                      data: { ...node.data, executedRoute: event.sourceHandle }
+                    };
+                  }
+                  return node;
+                }) as AppNode[]
+              }));
+            }
             else if (event.type === 'log') {
               // eslint-disable-next-line no-control-regex
               const stripAnsi = (str: string) => str.replace(/[\u001b\u009b][[()#;?]*(?:[0-9]{1,4}(?:;[0-9]{0,4})*)?[0-9A-ORZcf-nqry=><]/g, '');

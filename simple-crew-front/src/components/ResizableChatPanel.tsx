@@ -75,70 +75,96 @@ export function ResizableChatPanel() {
 
     setMessages(prev => [...prev, userMessage]);
 
-    // Locating the Chat Node and its target Crew to map exactly
+    // Find the Chat node
     const chatNode = nodes.find(n => n.type === 'chat');
     if (!chatNode) {
       setMessages(prev => [...prev, { id: Date.now().toString(), role: 'assistant', content: 'No Chat Trigger found on the canvas.' }]);
       return;
     }
 
+    // Find the connected Crew/Graph node
+    const edgeToCrew = edges.find(e => e.source === chatNode.id);
+    if (!edgeToCrew) {
+      setMessages(prev => [...prev, { id: Date.now().toString(), role: 'assistant', content: 'Chat Trigger is disconnected. Connect it to a Crew or Graph node.' }]);
+      return;
+    }
+    const crewNode = nodes.find(n => n.id === edgeToCrew.target);
+    if (!crewNode || crewNode.type !== 'crew') {
+      setMessages(prev => [...prev, { id: Date.now().toString(), role: 'assistant', content: 'Chat Trigger is not connected to a valid Crew/Graph node.' }]);
+      return;
+    }
+
     const chatData = chatNode.data as Record<string, unknown>;
-    const inputMapping = chatData.inputMapping as string;
+    const inputMapping = chatData.inputMapping as string | undefined;
+    const isLangGraph = (nodes.some(n => n.type === 'state')); // LangGraph has a State node
+
+    // ── LangGraph path ────────────────────────────────────────────────────────
+    if (isLangGraph) {
+      // inputMapping is the stateKey where the user message goes (optional).
+      // If not configured, we still run — the graph may handle the input differently.
+      if (inputMapping) {
+        // Inject user text into the crew inputs under the mapped state key
+        const crewData = crewNode.data as Record<string, unknown>;
+        const currentInputs = (crewData.inputs as Record<string, unknown>) || {};
+        updateNodeData(crewNode.id, {
+          inputs: { ...currentInputs, [inputMapping]: text }
+        });
+      }
+
+      setIsLoading(true);
+      try {
+        // startRealExecution returns the final_result string which is already
+        // the correct extracted value (based on outputKey configured on the Graph node).
+        const finalResult = await startRealExecution();
+
+        // Display the result. If outputKey was a single field, this is already
+        // a clean string (e.g. the poem text). If it was the full state, it's JSON.
+        const displayContent = finalResult
+          ? finalResult
+          : 'Graph execution finished with no output.';
+
+        setMessages(prev => [...prev, {
+          id: Date.now().toString(),
+          role: 'assistant',
+          content: displayContent
+        }]);
+      } catch (err: unknown) {
+        const errorMessage = err instanceof Error ? err.message : String(err);
+        setMessages(prev => [...prev, {
+          id: Date.now().toString(),
+          role: 'assistant',
+          content: `Execution failed: ${errorMessage}`
+        }]);
+      } finally {
+        setIsLoading(false);
+      }
+      return;
+    }
+
+    // ── CrewAI path (original behaviour) ─────────────────────────────────────
     if (!inputMapping) {
       setMessages(prev => [...prev, { id: Date.now().toString(), role: 'assistant', content: 'Chat Trigger is not mapped to any Crew variable. Please configure it in node settings.' }]);
       return;
     }
 
-    const edgeToCrew = edges.find(e => e.source === chatNode.id);
-    if (!edgeToCrew) {
-      setMessages(prev => [...prev, { id: Date.now().toString(), role: 'assistant', content: 'Chat Trigger is disconnected. Connect it to a Crew.' }]);
-      return;
-    }
-
-    const crewNode = nodes.find(n => n.id === edgeToCrew.target);
-    if (!crewNode || crewNode.type !== 'crew') {
-      setMessages(prev => [...prev, { id: Date.now().toString(), role: 'assistant', content: 'Chat Trigger is not connected to a valid Crew Node.' }]);
-      return;
-    }
-
-    // Build the OpenAI-format payload: system → history → current
     const includeHistory = (chatData.includeHistory as boolean) ?? false;
     const systemMessage = (chatData.systemMessage as string)?.trim() || null;
-    const currentMessage = { role: 'user' as const, content: userMessage.content };
 
-    // Build ordered payload
     const payload: { role: string; content: string }[] = [];
-
-    // 1. System message at the top (if present)
-    if (systemMessage) {
-      payload.push({ role: 'system', content: systemMessage });
-    }
-
-    // 2. Conversation history (up to last 8 messages, excluding the one just added)
+    if (systemMessage) payload.push({ role: 'system', content: systemMessage });
     if (includeHistory) {
-      const history = messages.slice(-8)
-        .map(m => ({ role: m.role as string, content: m.content }));
+      const history = messages.slice(-8).map(m => ({ role: m.role as string, content: m.content }));
       payload.push(...history);
     }
+    payload.push({ role: 'user', content: userMessage.content });
 
-    // 3. Current user message
-    payload.push(currentMessage);
-
-    // Update Crew's inputs dict globally before executing
     const crewData = crewNode.data as Record<string, unknown>;
     const currentInputs = (crewData.inputs as Record<string, unknown>) || {};
-    updateNodeData(crewNode.id, {
-      inputs: {
-        ...currentInputs,
-        [inputMapping]: payload
-      }
-    });
+    updateNodeData(crewNode.id, { inputs: { ...currentInputs, [inputMapping]: payload } });
 
-    // Run the Crew
     setIsLoading(true);
     try {
       const finalResult = await startRealExecution();
-      
       setMessages(prev => [...prev, {
         id: Date.now().toString(),
         role: 'assistant',

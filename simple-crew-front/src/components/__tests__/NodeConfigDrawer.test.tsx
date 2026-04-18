@@ -9,7 +9,14 @@ vi.mock('../../hooks/useNodeConfig', () => ({
   useNodeConfig: vi.fn(),
 }));
 
-// 2. Mock child components (Node Config Forms)
+vi.mock('../node-config/VariableAutocomplete', () => ({
+  VariableAutocomplete: ({ onSelect, isOpen }: any) => isOpen ? (
+    <div data-testid="mock-variable-autocomplete">
+      <span data-testid="autocomplete-title">Available Variables</span>
+      <button onClick={() => onSelect('var_1')}>var_1</button>
+    </div>
+  ) : null
+}));
 vi.mock('../node-config/AgentForm', () => ({
   AgentForm: () => <div data-testid="mock-agent-form" />
 }));
@@ -27,6 +34,15 @@ vi.mock('../node-config/WebhookForm', () => ({
 }));
 vi.mock('../ToolConfigurationModal', () => ({
   ToolConfigurationModal: () => <div data-testid="mock-tool-config-modal" />
+}));
+vi.mock('../node-config/LangGraphAgentForm', () => ({
+  LangGraphAgentForm: () => <div data-testid="mock-langgraph-agent-form" />
+}));
+vi.mock('../node-config/LangGraphTaskForm', () => ({
+  LangGraphTaskForm: () => <div data-testid="mock-langgraph-task-form" />
+}));
+vi.mock('../node-config/GraphForm', () => ({
+  GraphForm: () => <div data-testid="mock-graph-form" />
 }));
 
 // Mock lucide-react icons
@@ -74,6 +90,11 @@ describe('NodeConfigDrawer', () => {
     handleNameChange: vi.fn(),
     handleBulkAiSuggest: mockHandleBulkAiSuggest,
     handleSelectSuggestion: mockHandleSelectSuggestion,
+    allProjectVariables: [],
+    stateFields: [],
+    stateNodes: [],
+    variables: {},
+    currentProjectFramework: 'crewai',
     nodeWarnings: [],
   };
 
@@ -160,11 +181,12 @@ describe('NodeConfigDrawer', () => {
     });
 
     render(<NodeConfigDrawer />);
-    expect(screen.getByText('Crew Input Variables')).toBeInTheDocument();
+    expect(screen.getByTestId('mock-variable-autocomplete')).toBeInTheDocument();
+    expect(screen.getByTestId('autocomplete-title')).toHaveTextContent('Available Variables');
     
     // Suggestion button
-    const suggestionBtn = screen.getByText('var_1').closest('button')!;
-    fireEvent.mouseDown(suggestionBtn);
+    const suggestionBtn = screen.getByText('var_1');
+    fireEvent.click(suggestionBtn);
     expect(mockHandleSelectSuggestion).toHaveBeenCalledWith('var_1');
   });
 

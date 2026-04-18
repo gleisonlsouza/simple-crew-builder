@@ -87,6 +87,10 @@ describe('projectSlice - Elite Coverage Max', () => {
             currentExecution: null,
 
             // Functions
+            resetExecutionVisuals: vi.fn(),
+            finalizeExecutionVisuals: vi.fn(),
+            clearDimmedState: vi.fn(),
+            applyAutoLayout: vi.fn(),
             setDirty: vi.fn(),
             validateGraph: vi.fn(() => true),
             fetchProjects: vi.fn().mockResolvedValue(undefined),
@@ -181,7 +185,13 @@ describe('projectSlice - Elite Coverage Max', () => {
         slice = createProjectSlice(set, get, {} as unknown as StoreApi<AppState>);
         vi.stubGlobal('URL', { createObjectURL: vi.fn(() => 'blob:url'), revokeObjectURL: vi.fn() });
         vi.stubGlobal('window', { URL: { createObjectURL: vi.fn(() => 'blob:url'), revokeObjectURL: vi.fn() } });
-        vi.stubGlobal('TextDecoder', class { decode(val: Uint8Array) { return val.toString(); } });
+        // Use native TextDecoder to avoid recursion and handle polyfill if needed
+        const RealDecoder = globalThis.TextDecoder;
+        vi.stubGlobal('TextDecoder', class { 
+            decode(val: any, options?: any) { 
+                return new RealDecoder().decode(val, options); 
+            } 
+        });
         vi.stubGlobal('document', {
             createElement: vi.fn(() => ({
                 click: vi.fn(),
@@ -242,7 +252,7 @@ describe('projectSlice - Elite Coverage Max', () => {
         mockState.nodes = [{ id: 'n1', type: 'agent', data: MOCK_AGENT_DATA, position: { x: 0, y: 0 } } as AppNode];
         const mockReader = {
             read: vi.fn()
-                .mockResolvedValueOnce({ value: JSON.stringify({ type: 'final_result', final_output: 'CrewAI Response' }), done: false })
+                .mockResolvedValueOnce({ value: new TextEncoder().encode(JSON.stringify({ type: 'final_result', final_output: 'CrewAI Response' }) + '\n'), done: false })
                 .mockResolvedValueOnce({ value: null, done: true }),
         };
         vi.mocked(fetch).mockResolvedValueOnce({ ok: true, body: { getReader: () => mockReader } } as unknown as Response);
@@ -256,7 +266,7 @@ describe('projectSlice - Elite Coverage Max', () => {
         mockState.nodes = [{ id: 'n2', type: 'task', data: MOCK_TASK_DATA, position: { x: 0, y: 0 } } as AppNode];
         const mockReader = {
             read: vi.fn()
-                .mockResolvedValueOnce({ value: JSON.stringify({ type: 'final_result', output: 'Generic Output' }), done: false })
+                .mockResolvedValueOnce({ value: new TextEncoder().encode(JSON.stringify({ type: 'final_result', output: 'Generic Output' }) + '\n'), done: false })
                 .mockResolvedValueOnce({ value: null, done: true }),
         };
         vi.mocked(fetch).mockResolvedValueOnce({ ok: true, body: { getReader: () => mockReader } } as unknown as Response);
@@ -269,7 +279,7 @@ describe('projectSlice - Elite Coverage Max', () => {
         // Test Error Event
         const mockReaderError = {
             read: vi.fn()
-                .mockResolvedValueOnce({ value: JSON.stringify({ type: 'error', error: 'Internal Error' }), done: false })
+                .mockResolvedValueOnce({ value: new TextEncoder().encode(JSON.stringify({ type: 'error', error: 'Internal Error' }) + '\n'), done: false })
                 .mockResolvedValueOnce({ value: null, done: true }),
         };
         vi.mocked(fetch).mockResolvedValueOnce({ ok: true, body: { getReader: () => mockReaderError } } as unknown as Response);
@@ -342,7 +352,7 @@ describe('projectSlice - Elite Coverage Max', () => {
         mockState.nodes = [{ id: 'n1', type: 'agent', data: MOCK_AGENT_DATA, position: { x: 0, y: 0 } } as AppNode];
         const mockReader = {
             read: vi.fn()
-                .mockResolvedValueOnce({ value: '{"type": "log", "data": "Valid Log"}\n{invalid-json}', done: false })
+                .mockResolvedValueOnce({ value: new TextEncoder().encode('{"type": "log", "data": "Valid Log"}\n{invalid-json}'), done: false })
                 .mockResolvedValueOnce({ value: null, done: true }),
         };
         vi.mocked(fetch).mockResolvedValueOnce({ ok: true, body: { getReader: () => mockReader } } as unknown as Response);
@@ -360,7 +370,7 @@ describe('projectSlice - Elite Coverage Max', () => {
 
         const mockReader = {
             read: vi.fn()
-                .mockResolvedValueOnce({ value: JSON.stringify({ type: 'status', nodeId: 'n1', status: 'running' }), done: false })
+                .mockResolvedValueOnce({ value: new TextEncoder().encode(JSON.stringify({ type: 'status', nodeId: 'n1', status: 'running' }) + '\n'), done: false })
                 .mockResolvedValueOnce({ value: null, done: true }),
         };
         vi.mocked(fetch).mockResolvedValueOnce({ ok: true, body: { getReader: () => mockReader } } as unknown as Response);
@@ -375,8 +385,8 @@ describe('projectSlice - Elite Coverage Max', () => {
 
         const mockReader = {
             read: vi.fn()
-                .mockResolvedValueOnce({ value: JSON.stringify({ type: 'status', nodeId: 'n1', status: 'running' }), done: false })
-                .mockResolvedValueOnce({ value: JSON.stringify({ type: 'final_result', result: 'Success Output' }), done: false })
+                .mockResolvedValueOnce({ value: new TextEncoder().encode(JSON.stringify({ type: 'status', nodeId: 'n1', status: 'running' }) + '\n'), done: false })
+                .mockResolvedValueOnce({ value: new TextEncoder().encode(JSON.stringify({ type: 'final_result', result: 'Success Output' }) + '\n'), done: false })
                 .mockResolvedValueOnce({ value: null, done: true }),
         };
         vi.mocked(fetch).mockResolvedValueOnce({ ok: true, body: { getReader: () => mockReader } } as unknown as Response);
@@ -391,8 +401,8 @@ describe('projectSlice - Elite Coverage Max', () => {
 
         const mockReader = {
             read: vi.fn()
-                .mockResolvedValueOnce({ value: JSON.stringify({ type: 'status', nodeId: 'n1', status: 'running' }), done: false })
-                .mockResolvedValueOnce({ value: JSON.stringify({ type: 'done' }), done: false })
+                .mockResolvedValueOnce({ value: new TextEncoder().encode(JSON.stringify({ type: 'status', nodeId: 'n1', status: 'running' }) + '\n'), done: false })
+                .mockResolvedValueOnce({ value: new TextEncoder().encode(JSON.stringify({ type: 'done' }) + '\n'), done: false })
                 .mockResolvedValueOnce({ value: null, done: true }),
         };
         vi.mocked(fetch).mockResolvedValueOnce({ ok: true, body: { getReader: () => mockReader } } as unknown as Response);
@@ -406,8 +416,8 @@ describe('projectSlice - Elite Coverage Max', () => {
 
         const mockReader = {
             read: vi.fn()
-                .mockResolvedValueOnce({ value: JSON.stringify({ type: 'status', nodeId: 'n1', status: 'running' }), done: false })
-                .mockResolvedValueOnce({ value: JSON.stringify({ type: 'error', error: 'Backend Crash' }), done: false })
+                .mockResolvedValueOnce({ value: new TextEncoder().encode(JSON.stringify({ type: 'status', nodeId: 'n1', status: 'running' }) + '\n'), done: false })
+                .mockResolvedValueOnce({ value: new TextEncoder().encode(JSON.stringify({ type: 'error', error: 'Backend Crash' }) + '\n'), done: false })
                 .mockResolvedValueOnce({ value: null, done: true }),
         };
         vi.mocked(fetch).mockResolvedValueOnce({ ok: true, body: { getReader: () => mockReader } } as unknown as Response);
@@ -525,8 +535,8 @@ describe('projectSlice - Elite Coverage Max', () => {
 
         const mockReader = {
             read: vi.fn()
-                .mockResolvedValueOnce({ value: JSON.stringify({ type: 'status', nodeId: 'n1', status: 'running' }), done: false })
-                .mockResolvedValueOnce({ value: JSON.stringify({ type: 'final_result', result: 'Success' }), done: false })
+                .mockResolvedValueOnce({ value: new TextEncoder().encode(JSON.stringify({ type: 'status', nodeId: 'n1', status: 'running' }) + '\n'), done: false })
+                .mockResolvedValueOnce({ value: new TextEncoder().encode(JSON.stringify({ type: 'final_result', result: 'Success' }) + '\n'), done: false })
                 .mockResolvedValueOnce({ value: null, done: true }),
         };
         vi.mocked(fetch).mockResolvedValueOnce({ ok: true, body: { getReader: () => mockReader } } as unknown as Response);
@@ -680,9 +690,9 @@ describe('projectSlice - Elite Coverage Max', () => {
         const ansiLog = '\u001b[31mRed Error\u001b[0m';
         const mockReader = {
             read: vi.fn()
-                .mockResolvedValueOnce({ value: JSON.stringify({ type: 'heartbeat' }) + '\n', done: false })
-                .mockResolvedValueOnce({ value: JSON.stringify({ type: 'log', data: ansiLog }) + '\n', done: false })
-                .mockResolvedValueOnce({ value: JSON.stringify({ type: 'log', data: ' - Plain Text' }) + '\n', done: false })
+                .mockResolvedValueOnce({ value: new TextEncoder().encode(JSON.stringify({ type: 'heartbeat' }) + '\n'), done: false })
+                .mockResolvedValueOnce({ value: new TextEncoder().encode(JSON.stringify({ type: 'log', data: ansiLog }) + '\n'), done: false })
+                .mockResolvedValueOnce({ value: new TextEncoder().encode(JSON.stringify({ type: 'log', data: ' - Plain Text' }) + '\n'), done: false })
                 .mockResolvedValueOnce({ value: null, done: true }),
         };
         vi.mocked(fetch).mockResolvedValueOnce({ ok: true, body: { getReader: () => mockReader } } as unknown as Response);
@@ -702,7 +712,7 @@ describe('projectSlice - Elite Coverage Max', () => {
         const jsonResult = { status: 'complete', id: 123 };
         const mockReader1 = {
             read: vi.fn()
-                .mockResolvedValueOnce({ value: JSON.stringify({ type: 'final_result', result: jsonResult }) + '\n', done: false })
+                .mockResolvedValueOnce({ value: new TextEncoder().encode(JSON.stringify({ type: 'final_result', result: jsonResult }) + '\n'), done: false })
                 .mockResolvedValueOnce({ value: null, done: true }),
         };
         vi.mocked(fetch).mockResolvedValueOnce({ ok: true, body: { getReader: () => mockReader1 } } as unknown as Response);
@@ -712,7 +722,7 @@ describe('projectSlice - Elite Coverage Max', () => {
         // Test Case 2: Null/Undefined Result
         const mockReader2 = {
             read: vi.fn()
-                .mockResolvedValueOnce({ value: JSON.stringify({ type: 'final_result', result: null }) + '\n', done: false })
+                .mockResolvedValueOnce({ value: new TextEncoder().encode(JSON.stringify({ type: 'final_result', result: null }) + '\n'), done: false })
                 .mockResolvedValueOnce({ value: null, done: true }),
         };
         vi.mocked(fetch).mockResolvedValueOnce({ ok: true, body: { getReader: () => mockReader2 } } as unknown as Response);
@@ -735,8 +745,8 @@ describe('projectSlice - Elite Coverage Max', () => {
         mockState.nodes = [{ id: 'n1', type: 'agent', data: MOCK_AGENT_DATA, position: { x: 0, y: 0 } } as AppNode];
         const mockReader = {
             read: vi.fn()
-                .mockResolvedValueOnce({ value: JSON.stringify({ type: 'status', nodeId: 'n1', status: 'running' }) + '\n', done: false })
-                .mockResolvedValueOnce({ value: JSON.stringify({ type: 'error', error: 'Stream Crash' }) + '\n', done: false })
+                .mockResolvedValueOnce({ value: new TextEncoder().encode(JSON.stringify({ type: 'status', nodeId: 'n1', status: 'running' }) + '\n'), done: false })
+                .mockResolvedValueOnce({ value: new TextEncoder().encode(JSON.stringify({ type: 'error', error: 'Stream Crash' }) + '\n'), done: false })
                 .mockResolvedValueOnce({ value: null, done: true }),
         };
         vi.mocked(fetch).mockResolvedValueOnce({ ok: true, body: { getReader: () => mockReader } } as unknown as Response);

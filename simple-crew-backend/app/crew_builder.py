@@ -33,7 +33,7 @@ from crewai_tools import (
     MCPServerAdapter
 )
 from .tools.knowledge_base_search import get_search_knowledge_base_tool
-from .tools.grep_search import GrepSearchTool
+from .tools.grep_search import get_grep_search_tool
 from .database import engine
 from sqlmodel import Session, select
 from dotenv import load_dotenv
@@ -671,7 +671,7 @@ def run_crew_stream(graph_data: GraphData, workspace_id: Optional[Any] = None, i
                             elif gid == 'search_knowledge_base':
                                 kb_id = config_data.get("knowledge_base_id")
                                 if kb_id: t_instance = get_search_knowledge_base_tool(kb_id=kb_id)
-                            elif gid == 'grep_search': t_instance = GrepSearchTool(workspace_path=workspace_path)
+                            elif gid == 'grep_search': t_instance = get_grep_search_tool(workspace_path=workspace_path)
                             elif gid in ['pdf_search', 'docx_search', 'json_search', 'xml_search', 'csv_search', 'mdx_search', 'txt_search']:
                                 tool_config = {'directory': workspace_path} if workspace_path else {}
                                 if config_data: tool_config.update(config_data)

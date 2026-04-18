@@ -30,10 +30,16 @@ import { WebhookNode } from '../nodes/WebhookNode';
 import { ToolNode } from '../nodes/ToolNode';
 import { CustomToolNode } from '../nodes/CustomToolNode';
 import { McpNode } from '../nodes/McpNode';
+import { StateNode } from '../nodes/StateNode';
+import { SchemaNode } from '../nodes/SchemaNode';
+import { RouterNode } from '../nodes/RouterNode';
 import { Sidebar } from '../components/Sidebar';
 
 
 import { NodeConfigDrawer } from '../components/NodeConfigDrawer';
+import { StateNodeModal } from '../components/modals/StateNodeModal';
+import { SchemaNodeModal } from '../components/modals/SchemaNodeModal';
+import { RouterNodeModal } from '../components/modals/RouterNodeModal';
 import { DeletableEdge } from '../nodes/DeletableEdge';
 import { ExportDropdown } from '../components/ExportDropdown';
 import { Toast } from '../components/Toast';
@@ -53,6 +59,9 @@ const nodeTypes = {
   tool: ToolNode,
   customTool: CustomToolNode,
   mcp: McpNode,
+  state: StateNode,
+  schema: SchemaNode,
+  router: RouterNode,
 };
 
 const edgeTypes = {
@@ -99,16 +108,65 @@ const FlowCanvas = () => {
 
     if (!sourceNode || !targetNode || !sourceNode.type || !targetNode.type) return false;
 
+    // RULE: State Node connection to Graph (Crew) State Input
+    if (targetNode.type === 'crew' && connection.targetHandle === 'state-in') {
+      // 1. Only state nodes can connect here
+      if (sourceNode.type !== 'state') return false;
+      
+      // 2. Only ONE state connection allowed per Graph
+      const hasStateConnected = edges.some(e => e.target === connection.target && e.targetHandle === 'state-in');
+      if (hasStateConnected) return false;
+
+      return true;
+    }
+
+    // RULE: Schema Node connection to Agent Input
+    if (connection.targetHandle === 'schema-input') {
+      // 1. Only schema nodes can connect here
+      if (sourceNode.type !== 'schema') return false;
+      // 2. Only one schema per agent allowed
+      if (targetNode.type === 'agent') {
+        const hasSchemaConnected = edges.some(e => e.target === connection.target && e.targetHandle === 'schema-input');
+        if (hasSchemaConnected) return false;
+        return true;
+      }
+      // State nodes no longer accept schema edges (schemas are discovered from canvas)
+      return false;
+    }
+
     if (['chat', 'webhook'].includes(sourceNode.type) && targetNode.type === 'crew') return true;
-    if (sourceNode.type === 'crew' && targetNode.type === 'agent') return connection.targetHandle === 'left-target';
+    if (sourceNode.type === 'crew' && targetNode.type === 'agent') return connection.targetHandle === 'agent-in';
 
     if (sourceNode.type === 'agent') {
       if (['task', 'taskNode', 'agentTask'].includes(targetNode.type)) return connection.sourceHandle === 'out-task';
       if (['tool', 'customTool'].includes(targetNode.type)) return connection.sourceHandle === 'out-tool';
       if (targetNode.type === 'mcp') return connection.sourceHandle === 'out-mcp';
+      
+      // Execution Output Handle connects to other Agents or Routers
+      if (connection.sourceHandle === 'agent-out') {
+        return ['agent', 'router'].includes(targetNode.type as string);
+      }
     }
+
+    if (sourceNode.type === 'task') {
+      if (['tool', 'customTool'].includes(targetNode.type)) return connection.sourceHandle === 'out-tool';
+    }
+
+    // RULE: Router Connections (Source)
+    if (sourceNode.type === 'router') {
+      // Routers can connect to any agent, task, or other router via their path handles
+      if (targetNode.type === 'agent') return connection.targetHandle === 'agent-in';
+      return ['task', 'router'].includes(targetNode.type as string);
+    }
+
+    // RULE: Execution Flow into Router
+    if (targetNode.type === 'router' && connection.targetHandle === 'router-in') {
+      // Agents or Crew can trigger a router
+      return ['agent', 'crew'].includes(sourceNode.type as string);
+    }
+
     return false;
-  }, [getNode]);
+  }, [getNode, edges]);
 
   useEffect(() => {
     if (isDirty && nodes.length > 0) {
@@ -138,6 +196,9 @@ const FlowCanvas = () => {
     else if (type === 'tool') data = { name: 'New Tool', toolId: '' };
     else if (type === 'customTool') data = { name: 'New Custom Tool', toolId: '' };
     else if (type === 'mcp') data = { name: 'New MCP Server', serverId: '' };
+    else if (type === 'state') data = { name: 'State', fields: [] };
+    else if (type === 'schema') data = { name: 'Schema', fields: [] };
+    else if (type === 'router') data = { name: 'Conditional Router', conditions: [], defaultRouteLabel: 'Default' };
     else return;
 
     addNode({ id: getId(), type: type as AppNode['type'], position, data } as AppNode);
@@ -145,16 +206,20 @@ const FlowCanvas = () => {
     useStore.getState().setIsUsabilityDrawerOpen(false);
   }, [screenToFlowPosition, addNode, validateGraph]);
 
-  return (
-    <ReactFlow
-      nodes={nodes} edges={edges} onNodesChange={onNodesChange} onEdgesChange={onEdgesChange} onConnect={onConnect}
-      nodeTypes={nodeTypes} edgeTypes={edgeTypes} isValidConnection={isValidConnection}
-      onDragOver={onDragOver} onDrop={onDrop}
-      fitViewOptions={FIT_VIEW_OPTIONS}
-      minZoom={0.2} maxZoom={4}
-      defaultEdgeOptions={defaultEdgeOptions}
-      connectionLineType={ConnectionLineType.SmoothStep}
-    >
+    const clearDimmedState = useStore((state) => state.clearDimmedState);
+  
+    return (
+      <ReactFlow
+        nodes={nodes} edges={edges} onNodesChange={onNodesChange} onEdgesChange={onEdgesChange} onConnect={onConnect}
+        onPaneClick={() => clearDimmedState()}
+        onNodeClick={() => clearDimmedState()}
+        nodeTypes={nodeTypes} edgeTypes={edgeTypes} isValidConnection={isValidConnection}
+        onDragOver={onDragOver} onDrop={onDrop}
+        fitViewOptions={FIT_VIEW_OPTIONS}
+        minZoom={0.2} maxZoom={4}
+        defaultEdgeOptions={defaultEdgeOptions}
+        connectionLineType={ConnectionLineType.SmoothStep}
+      >
       <Background gap={16} size={1} color="var(--canvas-dots)" style={{ backgroundColor: 'var(--bg-main)' }} variant={BackgroundVariant.Dots} />
       <Controls className="!bg-brand-card !border-brand-border !text-brand-muted hover:!bg-brand-bg !shadow-md !rounded-lg mb-4 ml-4" />
       <MiniMap className="!bg-brand-card !border-brand-border !shadow-md !rounded-lg overflow-hidden mb-4 mr-4" zoomable pannable nodeColor={getMiniMapNodeColor} />
@@ -421,6 +486,9 @@ function FlowBuilder() {
         <NodeConfigDrawer />
         {activeView === 'editor' && !isChatVisible && <ConsoleDrawer />}
         <SettingsDrawer />
+        <StateNodeModal />
+        <SchemaNodeModal />
+        <RouterNodeModal />
         <Toast />
         <Toaster position="bottom-right" />
         <ResizableChatPanel />

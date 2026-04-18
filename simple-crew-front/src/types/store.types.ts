@@ -105,7 +105,7 @@ export interface GraphSlice {
   deleteNode: (nodeId: string) => void;
   updateNodeData: (nodeId: string, data: Partial<AppNode['data']>) => void;
   addNode: (node: AppNode) => void;
-  addNodeWithAutoPosition: (type: 'agent' | 'task' | 'crew' | 'chat' | 'webhook' | 'tool' | 'customTool' | 'mcp', data: Partial<AppNode['data']>) => void;
+  addNodeWithAutoPosition: (type: 'agent' | 'task' | 'crew' | 'chat' | 'webhook' | 'tool' | 'customTool' | 'mcp' | 'state' | 'router' | 'schema', data: Partial<AppNode['data']>) => void;
   setNodeStatus: (id: string, status: NodeStatus) => void;
   setNodeWarnings: (warnings: Record<string, string[]>) => void;
   setActiveNode: (id: string | null) => void;
@@ -118,6 +118,9 @@ export interface GraphSlice {
   setMessages: (messages: ChatMessage[] | ((prev: ChatMessage[]) => ChatMessage[])) => void;
   clearChat: () => void;
   resetProject: () => void;
+  resetExecutionVisuals: () => void;
+  finalizeExecutionVisuals: () => void;
+  clearDimmedState: () => void;
   applyAutoLayout: () => void;
 }
 
@@ -130,6 +133,12 @@ export interface UISlice {
   isChatVisible: boolean;
   isAboutModalOpen: boolean;
   isSidebarCollapsed: boolean;
+  isStateModalOpen: boolean;
+  activeStateNodeId: string | null;
+  isSchemaModalOpen: boolean;
+  activeSchemaNodeId: string | null;
+  isRouterModalOpen: boolean;
+  activeRouterNodeId: string | null;
   notification: AppNotification | null;
   toggleTheme: () => void;
   setIsSettingsOpen: (open: boolean) => void;
@@ -139,6 +148,12 @@ export interface UISlice {
   setIsChatVisible: (visible: boolean) => void;
   setIsAboutModalOpen: (open: boolean) => void;
   setIsSidebarCollapsed: (collapsed: boolean) => void;
+  openStateModal: (nodeId: string) => void;
+  closeStateModal: () => void;
+  openSchemaModal: (nodeId: string) => void;
+  closeSchemaModal: () => void;
+  openRouterModal: (nodeId: string) => void;
+  closeRouterModal: () => void;
   resetUIState: () => void;
   showNotification: (message: string, type: 'success' | 'error' | 'warning' | 'info') => void;
   clearNotification: () => void;

@@ -107,14 +107,18 @@ describe('CrewNode', () => {
     expect(screen.getByTestId('crew-process')).toHaveTextContent('sequential');
   });
 
-  it('contains target handle on top and source handle on right-source', () => {
+  it('contains target handles on top and source handle on right-source', () => {
     const { container } = render(wrap(<CrewNode {...defaultProps} />));
     
-    const target = container.querySelector('.react-flow__handle-target');
+    const targets = container.querySelectorAll('.react-flow__handle-target');
     const source = container.querySelector('.react-flow__handle-source');
     
-    expect(target).toBeInTheDocument();
+    expect(targets.length).toBe(2);
     expect(source).toBeInTheDocument();
+    
+    const targetIds = Array.from(targets).map(t => t.getAttribute('data-handleid'));
+    expect(targetIds).toContain('trigger-in');
+    expect(targetIds).toContain('state-in');
     
     // Source handle is now at the right-source
     expect(source).toHaveAttribute('data-handleid', 'right-source');
@@ -134,7 +138,7 @@ describe('CrewNode', () => {
       source: 'crew-1',
       target: 'agent-1',
       sourceHandle: 'right-source',
-      targetHandle: 'left-target'
+      targetHandle: 'trigger-in'
     });
   });
 
