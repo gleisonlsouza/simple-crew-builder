@@ -469,20 +469,33 @@ class LangGraphCompiler:
             gt_config = next((t for t in self.graph_data.globalTools if t.id == tool_id), None)
             if gt_config:
                 t_instance = None
-                if 'search_knowledge_base' in gt_config.name.lower() or 'search' in gt_config.name.lower():
-                    kb_id = None
-                    if visual_node_id:
-                        v_node = self.nodes_map.get(visual_node_id)
-                        if v_node:
-                            kb_id = getattr(v_node.data, 'config', {}).get('knowledge_base_id')
-                    
+                gid = getattr(gt_config, 'id', '')
+                if not gid: continue
+                
+                # Retrieve workspace path if needed
+                ws_path = None
+                if self.workspace_id:
+                    from app.models import Workspace
+                    ws_record = self.session.get(Workspace, self.workspace_id)
+                    if ws_record:
+                        ws_path = ws_record.path
+
+                # Retrieve stored config
+                config_data = {}
+                if visual_node_id:
+                    v_node = self.nodes_map.get(visual_node_id)
+                    if v_node:
+                        config_data = getattr(v_node.data, 'config', None) or {}
+
+                if gid == 'search_knowledge_base':
+                    kb_id = config_data.get('knowledge_base_id')
                     if not kb_id:
-                        # Fallback: scan edges if node data didn't have it
                         for edge in self.edges:
                             if edge.source == node.id and edge.sourceHandle in ['out-tool', 'tools']:
                                 target_node = self.nodes_map.get(edge.target)
                                 if target_node and target_node.type == 'tool' and 'search' in target_node.data.name.lower():
-                                    kb_id = getattr(target_node.data, 'config', {}).get('knowledge_base_id')
+                                    t_config = getattr(target_node.data, 'config', None) or {}
+                                    kb_id = t_config.get('knowledge_base_id')
                                     break
                     
                     if kb_id:
@@ -491,21 +504,58 @@ class LangGraphCompiler:
                     else:
                         logger.warning(f"Knowledge Base ID not found for tool: {gt_config.name}")
 
-                elif 'grep_search' in gt_config.name.lower():
-                    from app.tools.grep_search import get_grep_search_tool
-                    from app.models import Workspace
+                elif gid == 'grep_search':
                     import os as _os
-
-                    ws_path = None
-                    if self.workspace_id:
-                        ws_record = self.session.get(Workspace, self.workspace_id)
-                        if ws_record:
-                            ws_path = ws_record.path
-
                     if ws_path and _os.path.exists(ws_path):
+                        from app.tools.grep_search import get_grep_search_tool
                         t_instance = get_grep_search_tool(workspace_path=ws_path, framework='langgraph')
                     else:
                         logger.warning(f"Workspace path not found or invalid for grep_search. ID: {self.workspace_id}")
+
+                elif gid in ['file_read', 'directory_read', 'file_write']:
+                    from app.tools.fs_tools import get_file_read_tool, get_directory_read_tool, get_file_write_tool
+                    if gid == 'file_read':
+                        t_instance = get_file_read_tool(workspace_path=ws_path or "./", framework='langgraph')
+                    elif gid == 'directory_read':
+                        t_instance = get_directory_read_tool(workspace_path=ws_path or "./", framework='langgraph')
+                    elif gid == 'file_write':
+                        t_instance = get_file_write_tool(workspace_path=ws_path or "./", framework='langgraph')
+                        
+                elif gid == 'directory_search':
+                    # Rout directory_search to native grep_search to avoid OpenAI DB requirements
+                    import os as _os
+                    from app.tools.grep_search import get_grep_search_tool
+                    t_instance = get_grep_search_tool(workspace_path=ws_path or "./", framework='langgraph')
+                        
+                elif gid in ['serper', 'scrape']:
+                    try:
+                        import crewai_tools as ct
+                        if gid == 'serper': 
+                            api_key = getattr(gt_config, 'apiKey', None)
+                            if api_key: t_instance = ct.SerperDevTool(api_key=api_key)
+                        elif gid == 'scrape': t_instance = ct.ScrapeWebsiteTool()
+                    except ImportError:
+                        logger.warning("crewai_tools not installed, skipping CrewAI global tools.")
+                    except Exception as e:
+                        logger.error(f"Failed to instantiate global tool '{gid}': {e}")
+
+                elif gid in ['pdf_search', 'docx_search', 'json_search', 'xml_search', 'csv_search', 'mdx_search', 'txt_search']:
+                    try:
+                        import crewai_tools as ct
+                        tool_config = {'directory': ws_path} if ws_path else {}
+                        if config_data: tool_config.update(config_data)
+                        
+                        if gid == 'pdf_search': t_instance = ct.PDFSearchTool(config=tool_config)
+                        elif gid == 'docx_search': t_instance = ct.DOCXSearchTool(config=tool_config)
+                        elif gid == 'json_search': t_instance = ct.JSONSearchTool(config=tool_config)
+                        elif gid == 'xml_search': t_instance = ct.XMLSearchTool(config=tool_config)
+                        elif gid == 'csv_search': t_instance = ct.CSVSearchTool(config=tool_config)
+                        elif gid == 'mdx_search': t_instance = ct.MDXSearchTool(config=tool_config)
+                        elif gid == 'txt_search': t_instance = ct.TXTSearchTool(config=tool_config)
+                    except ImportError:
+                        logger.warning("crewai_tools not installed, skipping CrewAI global tools.")
+                    except Exception as e:
+                        logger.error(f"Failed to instantiate global tool '{gid}': {e}")
 
                 if t_instance:
                     if self.emit and visual_node_id:

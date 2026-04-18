@@ -660,14 +660,16 @@ def run_crew_stream(graph_data: GraphData, workspace_id: Optional[Any] = None, i
                             t_instance = None
                             if gid == 'serper': t_instance = SerperDevTool(api_key=config_def.apiKey)
                             elif gid == 'scrape': t_instance = ScrapeWebsiteTool()
-                            elif gid == 'directory_read': t_instance = DirectoryReadTool(directory=workspace_path)
-                            elif gid == 'file_read': 
-                                if workspace_path: t_instance = WorkspaceFileReadTool(workspace_path=workspace_path)
-                                else: t_instance = FileReadTool()
-                            elif gid == 'file_write':
-                                if workspace_path: t_instance = WorkspaceFileWriterTool(workspace_path=workspace_path)
-                                else: t_instance = FileWriterTool()
-                            elif gid == 'directory_search': t_instance = DirectorySearchTool(directory=workspace_path)
+                            elif gid in ['file_read', 'directory_read', 'file_write']:
+                                from app.tools.fs_tools import get_file_read_tool, get_directory_read_tool, get_file_write_tool
+                                if gid == 'file_read':
+                                    t_instance = get_file_read_tool(workspace_path=workspace_path or "./", framework='crewai')
+                                elif gid == 'directory_read':
+                                    t_instance = get_directory_read_tool(workspace_path=workspace_path or "./", framework='crewai')
+                                elif gid == 'file_write':
+                                    t_instance = get_file_write_tool(workspace_path=workspace_path or "./", framework='crewai')
+                            elif gid == 'directory_search': 
+                                t_instance = get_grep_search_tool(workspace_path=workspace_path or "./", framework='crewai')
                             elif gid == 'search_knowledge_base':
                                 kb_id = config_data.get("knowledge_base_id")
                                 if kb_id: t_instance = get_search_knowledge_base_tool(kb_id=kb_id)
