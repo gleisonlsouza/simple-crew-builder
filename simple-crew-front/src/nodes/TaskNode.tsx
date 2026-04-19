@@ -98,7 +98,7 @@ export const TaskNode = memo(({ id, data }: NodeProps<Node<TaskNodeData, 'task'>
         </div>
       </div>
 
-      {!data.isCollapsed && (
+      {(!data.isCollapsed || framework === 'langgraph') && (
         <div className="p-3">
           <div className="space-y-1 mb-1">
              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Description</span>
@@ -109,12 +109,14 @@ export const TaskNode = memo(({ id, data }: NodeProps<Node<TaskNodeData, 'task'>
         </div>
       )}
 
-      <button
-        onClick={(e) => { e.stopPropagation(); toggleCollapse(id); }}
-        className="absolute -bottom-3 right-4 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-full p-0.5 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-700 shadow-sm z-10 transition-colors text-slate-400 dark:text-slate-500 hover:text-emerald-500 dark:hover:text-emerald-400"
-      >
-        {data.isCollapsed ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronUp className="w-3.5 h-3.5" />}
-      </button>
+      {framework !== 'langgraph' && (
+        <button
+          onClick={(e) => { e.stopPropagation(); toggleCollapse(id); }}
+          className="absolute -bottom-3 right-4 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-full p-0.5 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-700 shadow-sm z-10 transition-colors text-slate-400 dark:text-slate-500 hover:text-emerald-500 dark:hover:text-emerald-400"
+        >
+          {data.isCollapsed ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronUp className="w-3.5 h-3.5" />}
+        </button>
+      )}
 
       {/* Connection Handle - Task receives Tools (Orange) - CrewAI Only */}
       {framework === 'crewai' && (

@@ -175,7 +175,7 @@ export const CrewNode = memo(({ id, data }: NodeProps<Node<CrewNodeData, 'crew'>
         )}
       </div>
 
-      {!data.isCollapsed && (
+      {(!data.isCollapsed || currentProjectFramework === 'langgraph') && (
         <div className="p-3">
           {currentProjectFramework !== 'langgraph' && (
             <div className="flex justify-between items-center bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 px-2 py-1.5 rounded-md shadow-sm">
@@ -236,13 +236,15 @@ export const CrewNode = memo(({ id, data }: NodeProps<Node<CrewNodeData, 'crew'>
         </div>
       )}
 
-      <button
-        onClick={(e) => { e.stopPropagation(); toggleCollapse(id); }}
-        className="absolute -bottom-3 right-4 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-full p-0.5 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-700 shadow-sm z-10 transition-colors text-slate-400 dark:text-slate-500 hover:text-purple-500 dark:hover:text-purple-400"
-        aria-label={data.isCollapsed ? 'Expand Crew' : 'Collapse Crew'}
-      >
-        {data.isCollapsed ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronUp className="w-3.5 h-3.5" />}
-      </button>
+      {currentProjectFramework !== 'langgraph' && (
+        <button
+          onClick={(e) => { e.stopPropagation(); toggleCollapse(id); }}
+          className="absolute -bottom-3 right-4 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-full p-0.5 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-700 shadow-sm z-10 transition-colors text-slate-400 dark:text-slate-500 hover:text-purple-500 dark:hover:text-purple-400"
+          aria-label={data.isCollapsed ? 'Expand Crew' : 'Collapse Crew'}
+        >
+          {data.isCollapsed ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronUp className="w-3.5 h-3.5" />}
+        </button>
+      )}
 
       {/* Connection Handles */}
       {/* Trigger Input Handle (Top) */}

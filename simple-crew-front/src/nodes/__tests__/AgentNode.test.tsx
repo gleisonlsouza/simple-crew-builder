@@ -129,7 +129,7 @@ describe('AgentNode', () => {
     
     if (actualCollapseBtn) {
         await user.click(actualCollapseBtn);
-        expect(mockToggleCollapse).toHaveBeenCalledWith('agent-1');
+        expect(mockToggleCollapse).toHaveBeenCalledWith('agent-1', undefined);
     } else {
         throw new Error('Collapse button not found');
     }

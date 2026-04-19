@@ -22,7 +22,7 @@ import { getLayoutedElements } from '../../utils/layoutUtils';
 
 
 // Helper functions for collapsing logic
-function getDescendantsToHide(nodeId: string, edges: AppEdge[]): string[] {
+function getDescendantsToHide(nodeId: string, edges: AppEdge[], allowedHandles?: string[]): string[] {
   const descendants: string[] = [];
   const queue = [nodeId];
   const visited = new Set<string>();
@@ -33,7 +33,13 @@ function getDescendantsToHide(nodeId: string, edges: AppEdge[]): string[] {
     visited.add(currentId);
 
     const children = edges
-      .filter((edge) => edge.source === currentId)
+      .filter((edge) => {
+        if (edge.source !== currentId) return false;
+        if (currentId === nodeId && allowedHandles) {
+          return allowedHandles.includes(edge.sourceHandle || '');
+        }
+        return true;
+      })
       .map((edge) => edge.target);
 
     for (const childId of children) {
@@ -46,7 +52,7 @@ function getDescendantsToHide(nodeId: string, edges: AppEdge[]): string[] {
   return descendants;
 }
 
-function getDescendantsToShow(nodeId: string, nodes: AppNode[], edges: AppEdge[]): string[] {
+function getDescendantsToShow(nodeId: string, nodes: AppNode[], edges: AppEdge[], allowedHandles?: string[]): string[] {
   const descendants: string[] = [];
   const queue = [nodeId];
   const visited = new Set<string>();
@@ -57,7 +63,13 @@ function getDescendantsToShow(nodeId: string, nodes: AppNode[], edges: AppEdge[]
     visited.add(currentId);
 
     const childrenIds = edges
-      .filter((edge) => edge.source === currentId)
+      .filter((edge) => {
+        if (edge.source !== currentId) return false;
+        if (currentId === nodeId && allowedHandles) {
+          return allowedHandles.includes(edge.sourceHandle || '');
+        }
+        return true;
+      })
       .map((edge) => edge.target);
 
     for (const childId of childrenIds) {
@@ -690,7 +702,7 @@ export const createGraphSlice: StateCreator<AppState, [], [], GraphSlice> = (set
     set({ activeNodeId: id });
   },
 
-  toggleCollapse: (nodeId: string) => {
+  toggleCollapse: (nodeId: string, allowedHandles?: string[]) => {
     set((state: AppState) => {
       const node = state.nodes.find((n: AppNode) => n.id === nodeId);
       if (!node) return {};
@@ -701,9 +713,9 @@ export const createGraphSlice: StateCreator<AppState, [], [], GraphSlice> = (set
       let descendantIds: string[] = [];
 
       if (willCollapse) {
-        descendantIds = getDescendantsToHide(nodeId, state.edges);
+        descendantIds = getDescendantsToHide(nodeId, state.edges, allowedHandles);
       } else {
-        descendantIds = getDescendantsToShow(nodeId, state.nodes, state.edges);
+        descendantIds = getDescendantsToShow(nodeId, state.nodes, state.edges, allowedHandles);
       }
 
       const descendantSet = new Set(descendantIds);
@@ -719,10 +731,36 @@ export const createGraphSlice: StateCreator<AppState, [], [], GraphSlice> = (set
       });
 
       const updatedEdges = state.edges.map((edge: AppEdge) => {
-        const isAffectedEdge = edge.source === nodeId || descendantSet.has(edge.source) || descendantSet.has(edge.target);
-        if (isAffectedEdge) {
-          return { ...edge, hidden: willCollapse };
+        // If it's an edge from the root node, check if its handle is in allowedHandles
+        const isFromRoot = edge.source === nodeId;
+        const isToDescendant = descendantSet.has(edge.target);
+        const isFromDescendant = descendantSet.has(edge.source);
+
+        let shouldBeHidden = false;
+        if (isFromRoot) {
+          // Only hide if the handle is allowed to be collapsed
+          const isAllowedHandle = !allowedHandles || allowedHandles.includes(edge.sourceHandle || '');
+          shouldBeHidden = willCollapse && isAllowedHandle;
+        } else if (isFromDescendant || isToDescendant) {
+          shouldBeHidden = willCollapse;
         }
+
+        if (shouldBeHidden) {
+          return { ...edge, hidden: true };
+        }
+        
+        // If uncollapsing, we should only show edges that connect visible nodes
+        if (!willCollapse) {
+           // If it's an edge from/to the subtree we are showing, unhide it
+           // EXCEPT if it's from the root and its handle was NOT in the original allowedHandles
+           if (isFromRoot) {
+             const isAllowedHandle = !allowedHandles || allowedHandles.includes(edge.sourceHandle || '');
+             if (isAllowedHandle) return { ...edge, hidden: false };
+           } else if (isFromDescendant || isToDescendant) {
+             return { ...edge, hidden: false };
+           }
+        }
+
         return edge;
       });
 

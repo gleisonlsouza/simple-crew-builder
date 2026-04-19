@@ -110,7 +110,7 @@ export interface GraphSlice {
   setNodeStatus: (id: string, status: NodeStatus) => void;
   setNodeWarnings: (warnings: Record<string, string[]>) => void;
   setActiveNode: (id: string | null) => void;
-  toggleCollapse: (nodeId: string) => void;
+  toggleCollapse: (nodeId: string, allowedHandles?: string[]) => void;
   updateCrewAgentOrder: (crewId: string, newOrder: string[]) => void;
   updateCrewTaskOrder: (crewId: string, newOrder: string[]) => void;
   updateAgentTaskOrder: (agentId: string, newOrder: string[]) => void;

@@ -1,7 +1,7 @@
 import { memo, useEffect } from 'react';
 import { Handle, Position, type NodeProps, type Node } from '@xyflow/react';
 import { useShallow } from 'zustand/shallow';
-import { User, Trash2, ChevronDown, ChevronUp, Loader2, CheckCircle2, AlertCircle, Clock, Cpu, Settings, Server } from 'lucide-react';
+import { User, Trash2, ChevronDown, ChevronUp, Loader2, CheckCircle2, AlertCircle, Clock, Cpu, Settings, Server, CheckSquare, Wrench } from 'lucide-react';
 import { useStore } from '../store/index';
 import type { AgentNodeData, StateNodeData, StateField } from '../types/nodes.types';
 import type { NodeStatus } from '../types/store.types';
@@ -27,6 +27,10 @@ export const AgentNode = memo(({ id, data }: NodeProps<Node<AgentNodeData, 'agen
   const nodes = useStore((state) => state.nodes);
   const edges = useStore((state) => state.edges);
   const currentProjectFramework = useStore((state) => state.currentProjectFramework);
+  
+  const tasksCount = edges.filter(e => e.source === id && e.sourceHandle === 'out-task').length;
+  const toolsCount = edges.filter(e => e.source === id && e.sourceHandle === 'out-tool').length;
+  const mcpCount = edges.filter(e => e.source === id && e.sourceHandle === 'out-mcp').length;
 
   // Sync selectedStateId with existing edges if not already set
   useEffect(() => {
@@ -285,14 +289,45 @@ export const AgentNode = memo(({ id, data }: NodeProps<Node<AgentNodeData, 'agen
                   Show Connection Line
                 </span>
               </label>
-            </div>
-          </div>
 
+          {data.isCollapsed && currentProjectFramework === 'langgraph' && (tasksCount > 0 || toolsCount > 0 || mcpCount > 0) && (
+            <div className="pt-3 mt-3 border-t border-slate-100 dark:border-slate-800 animate-in fade-in slide-in-from-top-1 duration-200">
+              <div className="flex items-center gap-3">
+                {tasksCount > 0 && (
+                  <div className="flex items-center gap-1.5" title={`${tasksCount} tasks recolhidas`}>
+                    <CheckSquare className="w-3.5 h-3.5 text-blue-500" />
+                    <span className="text-[11px] font-bold text-slate-600 dark:text-slate-400">{tasksCount}</span>
+                  </div>
+                )}
+                {toolsCount > 0 && (
+                  <div className="flex items-center gap-1.5" title={`${toolsCount} ferramentas recolhidas`}>
+                    <Wrench className="w-3.5 h-3.5 text-orange-500" />
+                    <span className="text-[11px] font-bold text-slate-600 dark:text-slate-400">{toolsCount}</span>
+                  </div>
+                )}
+                {mcpCount > 0 && (
+                  <div className="flex items-center gap-1.5" title={`${mcpCount} servidores MCP recolhidos`}>
+                    <Server className="w-3.5 h-3.5 text-pink-500" />
+                    <span className="text-[11px] font-bold text-slate-600 dark:text-slate-400">{mcpCount}</span>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
+    </div>
+  </div>
+
       <button
-        onClick={(e) => { e.stopPropagation(); toggleCollapse(id); }}
+        onClick={(e) => { 
+          e.stopPropagation(); 
+          const allowedHandles = currentProjectFramework === 'langgraph' 
+            ? ['out-task', 'out-tool', 'out-mcp'] 
+            : undefined;
+          toggleCollapse(id, allowedHandles); 
+        }}
         className="absolute -bottom-3 right-4 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-full p-0.5 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-700 shadow-sm z-10 transition-colors text-slate-400 dark:text-slate-500 hover:text-blue-500 dark:hover:text-blue-400"
       >
         {data.isCollapsed ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronUp className="w-3.5 h-3.5" />}
