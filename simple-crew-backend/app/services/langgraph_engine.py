@@ -769,6 +769,13 @@ class LangGraphCompiler:
 
             messages_for_llm = [sys_msg] + history
             response = llm_to_use.invoke(messages_for_llm)
+            
+            # Label the AI message with the name of the Agent so subsequent agents know who output it
+            agent_name = getattr(node.data, 'name', None) or getattr(node.data, 'role', 'Agent')
+            safe_name = re.sub(r'[^a-zA-Z0-9_-]', '_', agent_name.replace(' ', '_'))
+            if hasattr(response, 'name'):
+                response.name = safe_name
+                
             updates["messages"].append(response)
 
             # ── Phase 2: Tool Check (ReAct loop) ───────────────────────────────
@@ -934,7 +941,7 @@ class LangGraphCompiler:
                 functional_nodes.add(node.id)
             elif node.type == 'router':
                 # Router node acts as an identity node that transitions via conditional edges
-                builder.add_node(node.id, lambda x: x)
+                builder.add_node(node.id, lambda x: {})
                 functional_nodes.add(node.id)
 
         # 2. Build edges and identify targets
@@ -1045,9 +1052,19 @@ def interpolate_prompt(text: str, state: dict) -> str:
         # and safely handle literal JSON blocks that contain single braces that would otherwise 
         # crash python's .format() or Jinja2.
         for key, value in state.items():
+            str_val = None
             if isinstance(value, (str, int, float, bool)) or value is None:
                 str_val = str(value) if value is not None else ""
-                
+            elif isinstance(value, (list, tuple)) and key == 'messages':
+                history_texts = []
+                for m in value:
+                    v_type = getattr(m, 'type', type(m).__name__).upper()
+                    v_name = getattr(m, 'name', v_type)
+                    v_content = getattr(m, 'content', str(m))
+                    history_texts.append(f"{v_name}: {v_content}")
+                str_val = "\n".join(history_texts)
+            
+            if str_val is not None:
                 # Safely replace {key}
                 result = re.sub(r'(?<!\{)\{' + re.escape(key) + r'\}(?!\})', lambda _: str_val, result)
                 # Safely replace {{key}}
