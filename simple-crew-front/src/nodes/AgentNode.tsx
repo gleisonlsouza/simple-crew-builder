@@ -28,6 +28,10 @@ export const AgentNode = memo(({ id, data }: NodeProps<Node<AgentNodeData, 'agen
   const edges = useStore((state) => state.edges);
   const currentProjectFramework = useStore((state) => state.currentProjectFramework);
   
+  const isAnyNodeRunning = useStore((state) => 
+    Object.values(state.nodeStatuses || {}).some(s => s === 'running')
+  );
+
   const tasksCount = edges.filter(e => e.source === id && e.sourceHandle === 'out-task').length;
   const toolsCount = edges.filter(e => e.source === id && e.sourceHandle === 'out-tool').length;
   const mcpCount = edges.filter(e => e.source === id && e.sourceHandle === 'out-mcp').length;
@@ -68,9 +72,9 @@ export const AgentNode = memo(({ id, data }: NodeProps<Node<AgentNodeData, 'agen
     <div
       data-testid="node-agent"
       onClick={(e) => { e.stopPropagation(); focusNodeTree(id); }}
-      className={`group relative bg-white dark:bg-slate-900 rounded-xl shadow-sm hover:shadow-md dark:shadow-none border border-slate-200 dark:border-slate-700 w-64 overflow-visible cursor-pointer ${statusClasses} ${status === 'running' ? 'running' : ''} ${
-        data.isDimmed 
-          ? 'opacity-40 pointer-events-none transition-opacity duration-300' 
+      className={`group relative bg-white dark:bg-slate-900 rounded-xl shadow-sm hover:shadow-md dark:shadow-none border border-slate-200 dark:border-slate-700 w-64 overflow-visible cursor-pointer ${statusClasses} ${status === 'running' ? 'running node-running-active' : ''} ${
+        (data.isDimmed || (isAnyNodeRunning && status !== 'running'))
+          ? 'node-dimmed' 
           : 'opacity-100 transition-opacity duration-300'
       } ${data.isTreeRoot ? 'is-tree-root' : ''}`}
       style={{

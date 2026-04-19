@@ -16,6 +16,10 @@ export const McpNode = memo(({ id, data }: NodeProps<Node<McpNodeData, 'mcp'>>) 
     }))
   );
 
+  const isAnyNodeRunning = useStore((state) => 
+    Object.values(state.nodeStatuses || {}).some(s => s === 'running')
+  );
+
   const selectedServer = mcpServers.find(s => s.id === data.serverId);
 
   const status = useStore((state) => (state.nodeStatuses[id] as NodeStatus) || 'idle');
@@ -36,9 +40,9 @@ export const McpNode = memo(({ id, data }: NodeProps<Node<McpNodeData, 'mcp'>>) 
   return (
     <div
       onClick={(e) => { e.stopPropagation(); setActiveNode(id); }}
-      className={`group relative bg-white dark:bg-slate-900 rounded-xl shadow-sm hover:shadow-md dark:shadow-none border border-slate-200 dark:border-slate-700 w-52 overflow-visible cursor-pointer ${statusClasses} ${status === 'running' ? 'running' : ''} ${
-        data.isDimmed 
-          ? 'opacity-40 pointer-events-none transition-opacity duration-300' 
+      className={`group relative bg-white dark:bg-slate-900 rounded-xl shadow-sm hover:shadow-md dark:shadow-none border border-slate-200 dark:border-slate-700 w-52 overflow-visible cursor-pointer ${statusClasses} ${status === 'running' ? 'node-running-active' : ''} ${
+        (data.isDimmed || (isAnyNodeRunning && status !== 'running'))
+          ? 'node-dimmed' 
           : 'opacity-100 transition-opacity duration-300'
       }`}
     >

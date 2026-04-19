@@ -20,6 +20,10 @@ export const TaskNode = memo(({ id, data }: NodeProps<Node<TaskNodeData, 'task'>
   const status = useStore((state) => state.nodeStatuses[id] || 'idle');
   const errors = useStore((state) => state.nodeErrors[id]);
 
+  const isAnyNodeRunning = useStore((state) => 
+    Object.values(state.nodeStatuses || {}).some(s => s === 'running')
+  );
+
   const statusClasses = errors?.length
     ? 'ring-2 ring-red-400 ring-offset-2'
     : status === 'waiting'
@@ -36,9 +40,9 @@ export const TaskNode = memo(({ id, data }: NodeProps<Node<TaskNodeData, 'task'>
     <div
       data-testid="node-task"
       onClick={(e) => { e.stopPropagation(); focusNodeTree(id); }}
-      className={`group relative bg-white dark:bg-slate-900 rounded-xl shadow-sm hover:shadow-md dark:shadow-none border border-slate-200 dark:border-slate-700 w-56 overflow-visible cursor-pointer ${statusClasses} ${status === 'running' ? 'running' : ''} ${
-        data.isDimmed 
-          ? 'opacity-40 pointer-events-none transition-opacity duration-300' 
+      className={`group relative bg-white dark:bg-slate-900 rounded-xl shadow-sm hover:shadow-md dark:shadow-none border border-slate-200 dark:border-slate-700 w-56 overflow-visible cursor-pointer ${statusClasses} ${status === 'running' ? 'running node-running-active' : ''} ${
+        (data.isDimmed || (isAnyNodeRunning && status !== 'running'))
+          ? 'node-dimmed' 
           : 'opacity-100 transition-opacity duration-300'
       } ${data.isTreeRoot ? 'is-tree-root' : ''}`}
       style={{

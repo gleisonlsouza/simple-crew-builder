@@ -106,6 +106,54 @@ body,
   }
 }
 
+@keyframes active-node-pulse {
+  0% {
+    box-shadow: 0 0 0 0px var(--node-color, #3b82f6);
+    transform: scale(1);
+  }
+  50% {
+    box-shadow: 0 0 30px 5px var(--node-color, #3b82f6);
+    transform: scale(1.02);
+  }
+  100% {
+    box-shadow: 0 0 0 0px var(--node-color, #3b82f6);
+    transform: scale(1);
+  }
+}
+
+@keyframes active-node-pulse-dark {
+  0% {
+    box-shadow: 0 0 0 0px rgba(59, 130, 246, 0.2);
+    transform: scale(1);
+  }
+  50% {
+    box-shadow: 0 0 40px 10px rgba(59, 130, 246, 0.5);
+    transform: scale(1.03);
+  }
+  100% {
+    box-shadow: 0 0 0 0px rgba(59, 130, 246, 0.2);
+    transform: scale(1);
+  }
+}
+
+.node-running-active {
+  animation: active-node-pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite !important;
+  z-index: 100 !important;
+  border-width: 2px !important;
+  border-color: var(--node-color, #3b82f6) !important;
+}
+
+.dark .node-running-active {
+  animation: active-node-pulse-dark 2s cubic-bezier(0.4, 0, 0.6, 1) infinite !important;
+}
+
+.node-dimmed {
+  opacity: 0.2 !important;
+  filter: grayscale(0.8) blur(0.5px) !important;
+  pointer-events: none !important;
+  transition: all 0.5s ease-in-out !important;
+}
+
 /* Marker Styling */
 .react-flow__arrowhead path {
   fill: currentColor;

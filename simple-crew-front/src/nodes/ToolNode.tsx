@@ -17,6 +17,10 @@ export const ToolNode = memo(({ id, data }: NodeProps<Node<ToolNodeData, 'tool'>
     }))
   );
 
+  const isAnyNodeRunning = useStore((state) => 
+    Object.values(state.nodeStatuses || {}).some(s => s === 'running')
+  );
+
   const [isConfigOpen, setIsConfigOpen] = useState(false);
 
   const selectedTool = globalTools.find(t => t.id === data.toolId);
@@ -41,9 +45,9 @@ export const ToolNode = memo(({ id, data }: NodeProps<Node<ToolNodeData, 'tool'>
     <>
       <div
         onClick={(e) => { e.stopPropagation(); setActiveNode(id); }}
-        className={`group relative bg-white dark:bg-slate-900 rounded-xl shadow-sm hover:shadow-md dark:shadow-none border border-slate-200 dark:border-slate-700 w-52 overflow-visible cursor-pointer ${statusClasses} ${status === 'running' ? 'running' : ''} ${
-          data.isDimmed 
-            ? 'opacity-40 pointer-events-none transition-opacity duration-300' 
+        className={`group relative bg-white dark:bg-slate-900 rounded-xl shadow-sm hover:shadow-md dark:shadow-none border border-slate-200 dark:border-slate-700 w-52 overflow-visible cursor-pointer ${statusClasses} ${status === 'running' ? 'node-running-active' : ''} ${
+          (data.isDimmed || (isAnyNodeRunning && status !== 'running'))
+            ? 'node-dimmed' 
             : 'opacity-100 transition-opacity duration-300'
         }`}
       >

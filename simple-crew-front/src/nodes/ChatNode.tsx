@@ -13,11 +13,15 @@ export const ChatNode = memo(({ id, data }: NodeProps<Node<ChatNodeData, 'chat'>
     }))
   );
 
+  const isAnyNodeRunning = useStore((state) => 
+    Object.values(state.nodeStatuses || {}).some(s => s === 'running')
+  );
+
   return (
     <div 
       className={`group relative bg-white dark:bg-slate-900 rounded-xl shadow-sm hover:shadow-md dark:shadow-none border border-slate-200 dark:border-slate-700 w-48 overflow-visible cursor-pointer ${
-        data.isDimmed 
-          ? 'opacity-40 pointer-events-none transition-opacity duration-300' 
+        (data.isDimmed || isAnyNodeRunning)
+          ? 'node-dimmed' 
           : 'opacity-100 transition-opacity duration-300 hover:ring-2 hover:ring-cyan-400'
       }`}
       onClick={() => setActiveNode(id)}

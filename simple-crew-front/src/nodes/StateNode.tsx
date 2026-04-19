@@ -13,13 +13,17 @@ export const StateNode = memo(({ id, data }: NodeProps<Node<StateNodeData, 'stat
     }))
   );
 
+  const isAnyNodeRunning = useStore((state) => 
+    Object.values(state.nodeStatuses || {}).some(s => s === 'running')
+  );
+
   return (
     <div
       data-testid="node-state"
       onClick={(e) => { e.stopPropagation(); openStateModal(id); }}
       className={`group relative bg-white dark:bg-slate-900 rounded-xl shadow-sm hover:shadow-md dark:shadow-none border border-slate-200 dark:border-slate-700 w-60 overflow-visible cursor-pointer ${
-        data.isDimmed 
-          ? 'opacity-40 pointer-events-none transition-opacity duration-300' 
+        (data.isDimmed || isAnyNodeRunning)
+          ? 'node-dimmed' 
           : 'opacity-100 transition-opacity duration-300 hover:ring-2 hover:ring-purple-400'
       }`}
       style={{

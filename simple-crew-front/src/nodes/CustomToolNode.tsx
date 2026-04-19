@@ -16,6 +16,10 @@ export const CustomToolNode = memo(({ id, data }: NodeProps<Node<CustomToolNodeD
     }))
   );
 
+  const isAnyNodeRunning = useStore((state) => 
+    Object.values(state.nodeStatuses || {}).some(s => s === 'running')
+  );
+
   const selectedTool = customTools.find(t => t.id === data.toolId);
 
   const status = useStore((state) => (state.nodeStatuses[id] as NodeStatus) || 'idle');
@@ -36,7 +40,11 @@ export const CustomToolNode = memo(({ id, data }: NodeProps<Node<CustomToolNodeD
   return (
     <div
       onClick={(e) => { e.stopPropagation(); setActiveNode(id); }}
-      className={`group relative bg-white dark:bg-slate-900 rounded-xl shadow-sm hover:shadow-md dark:shadow-none border border-slate-200 dark:border-slate-700 w-52 overflow-visible transition-opacity duration-300 cursor-pointer ${statusClasses} ${status === 'running' ? 'running' : ''}`}
+      className={`group relative bg-white dark:bg-slate-900 rounded-xl shadow-sm hover:shadow-md dark:shadow-none border border-slate-200 dark:border-slate-700 w-52 overflow-visible transition-opacity duration-300 cursor-pointer ${statusClasses} ${status === 'running' ? 'node-running-active' : ''} ${
+        (data.isDimmed || (isAnyNodeRunning && status !== 'running'))
+          ? 'node-dimmed' 
+          : 'opacity-100'
+      }`}
     >
       {status === 'waiting' && (
         <div className="absolute -top-2 -right-2 bg-white dark:bg-slate-900 rounded-full p-0.5 shadow-md z-20 border border-slate-100 dark:border-slate-800 animate-in zoom-in duration-200">

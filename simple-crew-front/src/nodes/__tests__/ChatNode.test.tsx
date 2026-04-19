@@ -49,6 +49,7 @@ describe('ChatNode', () => {
   const defaultState = {
     deleteNode: mockDeleteNode,
     setActiveNode: mockSetActiveNode,
+    nodeStatuses: {},
   };
 
   beforeEach(() => {
