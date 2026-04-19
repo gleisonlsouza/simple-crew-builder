@@ -98,6 +98,7 @@ export interface GraphSlice {
   executionResult: string | null;
   messages: ChatMessage[];
   activeNodeId: string | null;
+  focusedTreeRootId: string | null;
   onNodesChange: (changes: NodeChange<AppNode>[]) => void;
   onEdgesChange: (changes: EdgeChange[]) => void;
   onConnect: (connection: Connection) => void;
@@ -113,6 +114,7 @@ export interface GraphSlice {
   updateCrewAgentOrder: (crewId: string, newOrder: string[]) => void;
   updateCrewTaskOrder: (crewId: string, newOrder: string[]) => void;
   updateAgentTaskOrder: (agentId: string, newOrder: string[]) => void;
+  updateStateConnection: (nodeId: string, stateId: string | null, showLine: boolean, fieldKey?: string | null) => void;
   validateGraph: () => boolean;
   setExecutionResult: (result: string | null) => void;
   setMessages: (messages: ChatMessage[] | ((prev: ChatMessage[]) => ChatMessage[])) => void;
@@ -120,6 +122,8 @@ export interface GraphSlice {
   resetProject: () => void;
   resetExecutionVisuals: () => void;
   finalizeExecutionVisuals: () => void;
+  focusEdge: (edgeId: string | null) => void;
+  focusNodeTree: (nodeId: string | null) => void;
   clearDimmedState: () => void;
   applyAutoLayout: () => void;
 }

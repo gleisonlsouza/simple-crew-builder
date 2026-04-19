@@ -42,10 +42,18 @@ const HighlightedTextField: React.FC<HighlightedTextFieldProps> = ({
   'data-testid': dataTestId
 }) => {
   const [isFocused, setIsFocused] = React.useState(false);
+  const [localValue, setLocalValue] = React.useState(value);
   const containerRef = React.useRef<HTMLDivElement>(null);
   const inputRef = React.useRef<HTMLInputElement>(null);
 
+  React.useEffect(() => {
+    if (!isFocused) {
+      setLocalValue(value);
+    }
+  }, [value, isFocused]);
+
   const handleValueChange = (code: string) => {
+    setLocalValue(code);
     let textarea: HTMLTextAreaElement | HTMLInputElement | null = null;
     
     if (type === 'textarea' && containerRef.current) {
@@ -112,7 +120,7 @@ const HighlightedTextField: React.FC<HighlightedTextFieldProps> = ({
       {type === 'textarea' ? (
         <div ref={containerRef} className="min-h-full">
           <Editor
-            value={value}
+            value={localValue}
             onValueChange={handleValueChange}
             highlight={(code: string) => highlightWithPrism(code)}
           padding={16}
@@ -134,7 +142,7 @@ const HighlightedTextField: React.FC<HighlightedTextFieldProps> = ({
         <div className="relative">
              <input
                 ref={inputRef}
-                value={value}
+                value={localValue}
                 onChange={(e) => handleValueChange(e.target.value)}
                 onKeyDown={onKeyDown as React.KeyboardEventHandler<HTMLInputElement>}
                 onFocus={() => setIsFocused(true)}

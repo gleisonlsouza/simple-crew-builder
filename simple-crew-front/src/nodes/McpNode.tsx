@@ -38,8 +38,8 @@ export const McpNode = memo(({ id, data }: NodeProps<Node<McpNodeData, 'mcp'>>) 
       onClick={(e) => { e.stopPropagation(); setActiveNode(id); }}
       className={`group relative bg-white dark:bg-slate-900 rounded-xl shadow-sm hover:shadow-md dark:shadow-none border border-slate-200 dark:border-slate-700 w-52 overflow-visible cursor-pointer ${statusClasses} ${status === 'running' ? 'running' : ''} ${
         data.isDimmed 
-          ? 'opacity-40 grayscale pointer-events-none transition-all duration-700 scale-95' 
-          : 'opacity-100 transition-all duration-500 scale-100'
+          ? 'opacity-40 pointer-events-none transition-opacity duration-300' 
+          : 'opacity-100 transition-opacity duration-300'
       }`}
     >
       {status === 'waiting' && (
@@ -85,7 +85,7 @@ export const McpNode = memo(({ id, data }: NodeProps<Node<McpNodeData, 'mcp'>>) 
                 updateNodeData(id, { serverId: e.target.value, name: server?.name || 'MCP Server' });
               }}
               onClick={(e) => e.stopPropagation()}
-              className="w-full bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-lg px-2 py-1.5 text-[11px] font-medium transition-all focus:ring-1 focus:ring-orange-500 outline-none shadow-sm text-slate-700 dark:text-slate-300"
+              className="w-full bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-lg px-2 py-1.5 text-[11px] font-medium transition-[opacity,filter,color,background-color,border-color] focus:ring-1 focus:ring-orange-500 outline-none shadow-sm text-slate-700 dark:text-slate-300"
             >
               <option value="">Select Server...</option>
               {mcpServers.map(server => (

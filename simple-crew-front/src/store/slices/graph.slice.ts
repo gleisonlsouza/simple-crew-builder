@@ -6,7 +6,8 @@ import {
   type NodeChange, 
   addEdge, 
   applyNodeChanges, 
-  applyEdgeChanges 
+  applyEdgeChanges,
+  MarkerType
 } from '@xyflow/react';
 import type { 
   AppNode, 
@@ -105,7 +106,16 @@ const initialNodes: AppNode[] = [
 ];
 
 const initialEdges: AppEdge[] = [
-  { id: 'e1-2', source: 'agent-1', target: 'task-1', type: 'deletable', sourceHandle: 'out-task', targetHandle: 'left-target' }
+  { 
+    id: 'e1-2', 
+    source: 'agent-1', 
+    target: 'task-1', 
+    type: 'deletable', 
+    sourceHandle: 'out-task', 
+    targetHandle: 'left-target',
+    markerEnd: { type: MarkerType.ArrowClosed, color: '#3b82f6' },
+    animated: true 
+  }
 ];
 
 export const INITIAL_CHAT_MESSAGES: AppState['messages'] = [
@@ -125,6 +135,7 @@ export const createGraphSlice: StateCreator<AppState, [], [], GraphSlice> = (set
   executionResult: null,
   messages: INITIAL_CHAT_MESSAGES,
   activeNodeId: null,
+  focusedTreeRootId: null,
 
   onNodesChange: (changes: NodeChange<AppNode>[]) => {
     const { nodes } = get();
@@ -295,9 +306,10 @@ export const createGraphSlice: StateCreator<AppState, [], [], GraphSlice> = (set
         ...connection, 
         id: uuidv4(), 
         type: 'deletable',
-        // IDLE STATE: Blue Dashed
+        // IDLE STATE: Blue Dashed + Arrow
         style: { stroke: '#3b82f6', strokeWidth: 2, strokeDasharray: '5 5' },
-        animated: false
+        markerEnd: { type: MarkerType.ArrowClosed, color: '#3b82f6' },
+        animated: true
       } as AppEdge;
 
       if (isChatToCrew) {
@@ -328,7 +340,8 @@ export const createGraphSlice: StateCreator<AppState, [], [], GraphSlice> = (set
           animated: true,
           sourceHandle: 'state-out',
           targetHandle: 'state-in',
-          style: { stroke: '#a855f7', strokeWidth: 2 }
+          style: { stroke: '#a855f7', strokeWidth: 2 },
+          markerEnd: { type: MarkerType.ArrowClosed, color: '#a855f7' }
         };
       }
 
@@ -337,7 +350,8 @@ export const createGraphSlice: StateCreator<AppState, [], [], GraphSlice> = (set
           ...newConnection,
           animated: true,
           sourceHandle: connection.sourceHandle || 'data-out',
-          style: { stroke: '#a855f7', strokeWidth: 2 }
+          style: { stroke: '#a855f7', strokeWidth: 2 },
+          markerEnd: { type: MarkerType.ArrowClosed, color: '#a855f7' }
         };
       }
 
@@ -347,7 +361,8 @@ export const createGraphSlice: StateCreator<AppState, [], [], GraphSlice> = (set
           animated: true,
           sourceHandle: connection.sourceHandle || 'agent-out',
           targetHandle: connection.targetHandle || 'agent-in',
-          style: { stroke: '#3b82f6', strokeWidth: 2 }
+          style: { stroke: '#3b82f6', strokeWidth: 2 },
+          markerEnd: { type: MarkerType.ArrowClosed, color: '#3b82f6' }
         };
       }
 
@@ -363,7 +378,8 @@ export const createGraphSlice: StateCreator<AppState, [], [], GraphSlice> = (set
         newConnection = {
           ...newConnection,
           animated: true,
-          style: { stroke: '#14b8a6', strokeWidth: 2 }
+          style: { stroke: '#14b8a6', strokeWidth: 2 },
+          markerEnd: { type: MarkerType.ArrowClosed, color: '#14b8a6' }
         };
       }
 
@@ -436,11 +452,32 @@ export const createGraphSlice: StateCreator<AppState, [], [], GraphSlice> = (set
         newConnection.animated = true;
         newConnection.label = 'Condition Path';
         newConnection.labelStyle = { fill: '#6366f1', fontWeight: 700, fontSize: '10px' };
+        newConnection.markerEnd = { type: MarkerType.ArrowClosed, color: '#6366f1' };
+      }
+
+      // ─── Direct State Connection Sync ───────────────────────────────────
+      // When a manual connection to/from a State is made, update the data
+      if (isStateToCrew) {
+        nextNodes = nextNodes.map(n => n.id === targetNode.id 
+          ? { ...n, data: { ...n.data, selectedStateId: sourceNode.id, showStateConnections: true } } as AppNode 
+          : n
+        );
+      }
+      if (isAgentToState) {
+        let fieldKey = undefined;
+        if (connection.targetHandle?.startsWith('field-in-')) {
+          fieldKey = connection.targetHandle.replace('field-in-', '');
+        }
+        
+        nextNodes = nextNodes.map(n => n.id === sourceNode.id 
+          ? { ...n, data: { ...n.data, selectedStateId: targetNode.id, selectedStateKey: fieldKey, showStateConnections: true } } as AppNode 
+          : n
+        );
       }
 
       return {
         nodes: nextNodes,
-        edges: addEdge(newConnection, newEdges),
+        edges: (isStateToCrew || isAgentToState) ? newEdges : addEdge(newConnection, newEdges),
       };
     });
   },
@@ -499,6 +536,18 @@ export const createGraphSlice: StateCreator<AppState, [], [], GraphSlice> = (set
             const data = node.data as CrewNodeData;
             const agentOrder = data.agentOrder || [];
             return { ...node, data: { ...node.data, agentOrder: agentOrder.filter((id: string) => id !== nodeId) } } as AppNode;
+          }
+          return node;
+        });
+      }
+
+      if (nodeToDelete?.type === 'state') {
+        updatedNodes = updatedNodes.map((node: AppNode) => {
+          const data = node.data as { selectedStateId?: string };
+          if (data.selectedStateId === nodeId) {
+            const newData = { ...node.data } as Record<string, unknown>;
+            delete newData.selectedStateId;
+            return { ...node, data: newData } as AppNode;
           }
           return node;
         });
@@ -609,7 +658,8 @@ export const createGraphSlice: StateCreator<AppState, [], [], GraphSlice> = (set
             return { 
               ...edge, 
               animated: true, 
-              style: { ...edge.style, stroke: '#10b981', strokeWidth: 3, strokeDasharray: undefined } 
+              style: { ...edge.style, stroke: '#10b981', strokeWidth: 3, strokeDasharray: undefined },
+              markerEnd: { type: MarkerType.ArrowClosed, color: '#10b981' }
             };
           }
           return edge;
@@ -713,6 +763,91 @@ export const createGraphSlice: StateCreator<AppState, [], [], GraphSlice> = (set
     }));
   },
 
+  updateStateConnection: (nodeId: string, stateId: string | null, showLine: boolean, fieldKey?: string | null) => {
+    set((state: AppState) => {
+      const { nodes, edges } = state;
+      const node = nodes.find(n => n.id === nodeId);
+      if (!node) return state;
+
+      // 1. Update node data
+      const nextNodes = nodes.map((n: AppNode) => {
+        if (n.id === nodeId) {
+          const newData = { ...n.data };
+          if (stateId) {
+            newData.selectedStateId = stateId;
+            if (fieldKey) {
+              newData.selectedStateKey = fieldKey;
+            } else {
+              delete newData.selectedStateKey;
+            }
+          } else {
+            delete newData.selectedStateId;
+            delete newData.selectedStateKey;
+          }
+          newData.showStateConnections = showLine;
+          return { ...n, data: newData } as AppNode;
+        }
+        return n;
+      });
+
+      // 2. Manage edges
+      const nextEdges = edges.filter(e => {
+        // Always remove the auto-edge for this node
+        if (e.id === `auto-state-${nodeId}`) return false;
+        
+        // Remove ANY manual edges between this node and state nodes
+        const sourceIsState = nodes.find(n => n.id === e.source)?.type === 'state';
+        const targetIsState = nodes.find(n => n.id === e.target)?.type === 'state';
+        
+        if (node.type === 'crew' && e.target === nodeId && sourceIsState) return false;
+        if (node.type === 'agent' && e.source === nodeId && targetIsState) return false;
+        
+        return true;
+      });
+
+      // If a state is selected, add the new edge
+      if (stateId) {
+        const stateNode = nodes.find(n => n.id === stateId);
+        if (stateNode) {
+          let newEdge: AppEdge;
+          
+          if (node.type === 'crew') {
+            // State -> Crew
+            newEdge = {
+              id: `auto-state-${nodeId}`,
+              source: stateId,
+              target: nodeId,
+              sourceHandle: 'state-out',
+              targetHandle: 'state-in',
+              type: 'deletable',
+              hidden: !showLine,
+              animated: true,
+              style: { stroke: '#a855f7', strokeWidth: 2 },
+              markerEnd: { type: MarkerType.ArrowClosed, color: '#a855f7' }
+            } as AppEdge;
+          } else {
+            // Agent -> State
+            newEdge = {
+              id: `auto-state-${nodeId}`,
+              source: nodeId,
+              target: stateId,
+              sourceHandle: 'data-out',
+              targetHandle: fieldKey ? `field-in-${fieldKey}` : 'field-in-default', // Fallback to a default if key missing, though UI should prevent this
+              type: 'deletable',
+              hidden: !showLine,
+              animated: true,
+              style: { stroke: '#a855f7', strokeWidth: 2 },
+              markerEnd: { type: MarkerType.ArrowClosed, color: '#a855f7' }
+            } as AppEdge;
+          }
+          nextEdges.push(newEdge);
+        }
+      }
+
+      return { nodes: nextNodes, edges: nextEdges };
+    });
+  },
+
   validateGraph: () => {
     const state = get();
     const errors: Record<string, string[]> = {};
@@ -785,9 +920,10 @@ export const createGraphSlice: StateCreator<AppState, [], [], GraphSlice> = (set
       nodeErrors: {},
       edges: state.edges.map(edge => ({
         ...edge,
-        animated: false,
-        // IDLE STATE: Blue Dashed
-        style: { ...edge.style, stroke: '#3b82f6', strokeWidth: 2, strokeDasharray: '5 5', opacity: 1 }
+        animated: true,
+        // IDLE STATE: Blue Dashed + Arrow
+        style: { ...edge.style, stroke: '#3b82f6', strokeWidth: 2, strokeDasharray: '5 5', opacity: 1 },
+        markerEnd: { type: MarkerType.ArrowClosed, color: '#3b82f6' }
       })),
       nodes: state.nodes.map(node => ({
         ...node,
@@ -850,6 +986,85 @@ export const createGraphSlice: StateCreator<AppState, [], [], GraphSlice> = (set
   },
 
   
+
+  focusNodeTree: (nodeId: string | null) => {
+    set((state: AppState) => {
+      if (!nodeId) {
+        return {
+          focusedTreeRootId: null,
+          nodes: state.nodes.map(node => ({
+            ...node,
+            data: { ...node.data, isDimmed: false, isTreeRoot: false }
+          })) as AppNode[],
+          edges: state.edges.map(edge => ({
+            ...edge,
+            data: { ...edge.data, isDimmed: false }
+          }))
+        };
+      }
+
+      const descendants = getDescendantsToHide(nodeId, state.edges);
+      const treeNodeIds = new Set([nodeId, ...descendants]);
+
+      return {
+        focusedTreeRootId: nodeId,
+        nodes: state.nodes.map(node => ({
+          ...node,
+          data: { 
+            ...node.data, 
+            isDimmed: !treeNodeIds.has(node.id),
+            isTreeRoot: node.id === nodeId
+          }
+        })) as AppNode[],
+        edges: state.edges.map(edge => ({
+          ...edge,
+          data: { 
+            ...edge.data, 
+            // Highlight ONLY if source is part of the tree 
+            // AND target is NOT the root node (blocks incoming connections to the start of focus)
+            isDimmed: !treeNodeIds.has(edge.source) || (edge.target === nodeId && edge.source !== nodeId)
+          }
+        }))
+      };
+    });
+  },
+
+  focusEdge: (edgeId: string | null) => {
+    set((state: AppState) => {
+      if (!edgeId) {
+        return {
+          nodes: state.nodes.map(node => ({
+            ...node,
+            data: { ...node.data, isDimmed: false }
+          })) as AppNode[],
+          edges: state.edges.map(edge => ({
+            ...edge,
+            data: { ...edge.data, isDimmed: false }
+          }))
+        };
+      }
+
+      const edge = state.edges.find(e => e.id === edgeId);
+      if (!edge) return {};
+
+      const sourceId = edge.source;
+      const targetId = edge.target;
+
+      return {
+        nodes: state.nodes.map(node => ({
+          ...node,
+          data: { 
+            ...node.data, 
+            isDimmed: node.id !== sourceId && node.id !== targetId 
+          }
+        })) as AppNode[],
+        edges: state.edges.map(e => ({
+          ...e,
+          data: { ...e.data, isDimmed: e.id !== edgeId }
+        }))
+      };
+    });
+  },
 
   clearDimmedState: () => {
     set((state: AppState) => ({

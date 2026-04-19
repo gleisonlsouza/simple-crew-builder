@@ -21,6 +21,7 @@ vi.mock('lucide-react', () => ({
   Clock: () => <div data-testid="icon-clock" />,
   Cpu: () => <div data-testid="icon-cpu" />,
   Settings: () => <div data-testid="icon-settings" />,
+  Server: () => <div data-testid="icon-server" />,
 }));
 
 // Mock the store
@@ -100,7 +101,8 @@ describe('AgentNode', () => {
     const user = userEvent.setup();
     render(wrap(<AgentNode {...defaultProps} />));
     
-    const select = screen.getByRole('combobox');
+    const selects = screen.getAllByRole('combobox');
+    const select = selects[0];
     expect(select).toHaveValue('model-1');
     
     await user.selectOptions(select, 'model-2');

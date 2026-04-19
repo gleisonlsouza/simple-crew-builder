@@ -1,22 +1,9 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   MessageSquare, ArrowRightFromLine,
-  ChevronRight, ChevronDown, Database, Check, X, Layers,
+  ChevronRight, ChevronDown, Database, Check, X, Layers, Server
 } from 'lucide-react';
-import type { CrewNodeData } from '../../types/nodes.types';
-
-// ─── Types mirroring useNodeConfig output ─────────────────────────────────────
-interface StateFieldInfo {
-  key: string;
-  type: string;
-  /** dot-notation sub-keys when type == a Schema name, e.g. ['response.result', 'response.score'] */
-  subKeys?: string[];
-}
-interface StateNodeInfo {
-  id: string;
-  name: string;
-  fields: StateFieldInfo[];
-}
+import type { CrewNodeData, StateFieldInfo, StateNodeInfo } from '../../types/nodes.types';
 
 interface GraphFormProps {
   data: CrewNodeData;
@@ -27,6 +14,7 @@ interface GraphFormProps {
   nameError: boolean;
   stateFields?: string[];
   stateNodes?: StateNodeInfo[];
+  updateStateConnection: (nodeId: string, stateId: string | null, showLine: boolean, fieldKey?: string | null) => void;
 }
 
 // ─── Sub-key row ──────────────────────────────────────────────────────────────
@@ -273,6 +261,7 @@ export const GraphForm: React.FC<GraphFormProps> = ({
   handleNameChange,
   nameError,
   stateNodes = [],
+  updateStateConnection,
 }) => {
   const [isPickerOpen, setIsPickerOpen] = useState(false);
   const triggerRef = useRef<HTMLButtonElement>(null);
@@ -309,6 +298,44 @@ export const GraphForm: React.FC<GraphFormProps> = ({
             onChange={handleNameChange}
             placeholder="e.g. Content Generation Graph"
           />
+        </div>
+
+        {/* ── State Connection ───────────────────────────────────────────── */}
+        <div className="flex flex-col gap-3 pt-4 border-t border-brand-border/30">
+          <div className="flex items-center gap-2">
+            <Server className="w-3.5 h-3.5 text-purple-500" />
+            <label className="text-xs font-bold text-brand-muted uppercase tracking-wider">State Connection</label>
+          </div>
+          
+          <div className="space-y-3">
+             <select
+               value={data.selectedStateId || ''}
+               onChange={(e) => updateStateConnection(nodeId, e.target.value || null, data.showStateConnections ?? true)}
+               className="w-full bg-brand-bg border border-brand-border rounded-lg px-3 py-2 text-sm text-brand-text focus:outline-none focus:ring-2 focus:ring-purple-500 transition-all"
+             >
+               <option value="">No State Connected</option>
+               {stateNodes.map(sNode => (
+                 <option key={sNode.id} value={sNode.id}>{sNode.name}</option>
+               ))}
+             </select>
+
+             <label className="flex items-center gap-2 cursor-pointer group/toggle">
+                <input
+                  type="checkbox"
+                  checked={data.showStateConnections ?? true}
+                  onChange={(e) => updateStateConnection(nodeId, data.selectedStateId || null, e.target.checked)}
+                  className="w-4 h-4 rounded border-brand-border text-purple-600 focus:ring-purple-500 cursor-pointer bg-brand-bg"
+                />
+                <span className="text-xs font-medium text-brand-muted group-hover/toggle:text-brand-text transition-colors">
+                  Show Connection Line on Canvas
+                </span>
+              </label>
+          </div>
+          
+          <p className="text-[10px] text-brand-muted px-0.5 leading-relaxed italic">
+            Connecting to a State node allows this Graph to read/write shared data. 
+            You can hide the manual line to reduce visual pollution.
+          </p>
         </div>
 
         {/* ── Final Output Mapping ───────────────────────────────────────── */}

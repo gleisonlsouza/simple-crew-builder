@@ -1,7 +1,7 @@
 import React, { useState, memo } from 'react';
-import { Sparkles, Cpu, MessageSquare } from 'lucide-react';
+import { Sparkles, Cpu, MessageSquare, Server } from 'lucide-react';
 import HighlightedTextField from '../HighlightedTextField';
-import type { LangGraphAgentData } from '../../types/nodes.types';
+import type { LangGraphAgentData, StateNodeInfo, StateFieldInfo } from '../../types/nodes.types';
 import type { ModelConfig } from '../../types/config.types';
 
 interface LangGraphAgentFormProps {
@@ -13,6 +13,8 @@ interface LangGraphAgentFormProps {
   onAiSuggest: (field: string) => void;
   onFieldKeyDown: (e: React.KeyboardEvent<HTMLInputElement | HTMLTextAreaElement>) => void;
   onFieldChange: (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement> | { target: { value: string } }, field: string, updateFn: (val: string) => void) => void;
+  stateNodes: StateNodeInfo[];
+  updateStateConnection: (nodeId: string, stateId: string | null, showLine: boolean, fieldKey?: string | null) => void;
 }
 
 export const LangGraphAgentForm: React.FC<LangGraphAgentFormProps> = memo(({
@@ -24,6 +26,8 @@ export const LangGraphAgentForm: React.FC<LangGraphAgentFormProps> = memo(({
   onAiSuggest,
   onFieldKeyDown,
   onFieldChange,
+  stateNodes,
+  updateStateConnection,
 }) => {
   const [activeTab, setActiveTab] = useState<'basic' | 'llm'>('basic');
 
@@ -124,6 +128,55 @@ export const LangGraphAgentForm: React.FC<LangGraphAgentFormProps> = memo(({
               rows={4}
               data-testid="field-agent-backstory"
             />
+          </div>
+
+          {/* -- State Connection -- */}
+          <div className="flex flex-col gap-3 p-4 bg-brand-bg/20 rounded-xl border border-brand-border/30">
+            <div className="flex items-center gap-2">
+              <Server className="w-3.5 h-3.5 text-purple-500" />
+              <label className="text-xs font-bold text-brand-muted uppercase tracking-wider">State Connection</label>
+            </div>
+            
+            <div className="space-y-3">
+              <select
+                value={data.selectedStateId ? `${data.selectedStateId}${data.selectedStateKey ? `:${data.selectedStateKey}` : ''}` : ''}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  if (!val) {
+                    updateStateConnection(nodeId, null, data.showStateConnections ?? true);
+                  } else {
+                    const [stateId, key] = val.split(':');
+                    updateStateConnection(nodeId, stateId, data.showStateConnections ?? true, key || null);
+                  }
+                }}
+                className="w-full bg-brand-bg border border-brand-border rounded-lg px-3 py-2 text-sm text-brand-text focus:outline-none focus:ring-2 focus:ring-purple-500 transition-all cursor-pointer"
+              >
+                <option value="">No State Connected</option>
+                {stateNodes?.flatMap(sNode => {
+                  const fields = sNode.fields || [];
+                  if (fields.length === 0) {
+                    return [<option key={sNode.id} value={sNode.id}>{sNode.name} (Entire State)</option>];
+                  }
+                  return fields.map((f: StateFieldInfo) => (
+                    <option key={`${sNode.id}-${f.key}`} value={`${sNode.id}:${f.key}`}>
+                      {sNode.name} &gt; {f.key}
+                    </option>
+                  ));
+                })}
+              </select>
+
+              <label className="flex items-center gap-2 cursor-pointer group/toggle">
+                <input
+                  type="checkbox"
+                  checked={data.showStateConnections ?? true}
+                  onChange={(e) => updateStateConnection(nodeId, data.selectedStateId || null, e.target.checked, data.selectedStateKey || null)}
+                  className="w-4 h-4 rounded border-brand-border text-purple-600 focus:ring-purple-500 cursor-pointer bg-brand-bg"
+                />
+                <span className="text-xs font-medium text-brand-muted group-hover/toggle:text-brand-text transition-colors">
+                  Show Connection Line on Canvas
+                </span>
+              </label>
+            </div>
           </div>
         </div>
       )}

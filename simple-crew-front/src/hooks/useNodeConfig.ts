@@ -4,20 +4,29 @@ import { arrayMove } from '@dnd-kit/sortable';
 import type { DragEndEvent } from '@dnd-kit/core';
 import { useStore } from '../store/index';
 import type { AppState } from '../types/store.types';
-import type { AppNode } from '../types/nodes.types';
+import type { AppNode, AppEdge } from '../types/nodes.types';
 import type { ToolConfig } from '../types/config.types';
 import { useGraphVariables } from './useGraphVariables';
 
 export const useNodeConfig = () => {
   const activeNodeId = useStore((state: AppState) => state.activeNodeId);
-  const nodes = useStore((state: AppState) => state.nodes);
-  const edges = useStore((state: AppState) => state.edges);
+  const nodes = useStore((state: AppState) => state.nodes, (oldNodes: AppNode[], newNodes: AppNode[]) => {
+    if (oldNodes.length !== newNodes.length) return false;
+    for (let i = 0; i < oldNodes.length; i++) {
+      if (oldNodes[i].id !== newNodes[i].id) return false;
+      if (oldNodes[i].type !== newNodes[i].type) return false;
+      if (JSON.stringify(oldNodes[i].data) !== JSON.stringify(newNodes[i].data)) return false;
+    }
+    return true;
+  });
+  const edges = useStore((state: AppState) => state.edges, (oldEdges: AppEdge[], newEdges: AppEdge[]) => JSON.stringify(oldEdges) === JSON.stringify(newEdges));
   const setActiveNode = useStore((state: AppState) => state.setActiveNode);
   const updateNodeData = useStore((state: AppState) => state.updateNodeData);
   const deleteNode = useStore((state: AppState) => state.deleteNode);
   const updateCrewAgentOrder = useStore((state: AppState) => state.updateCrewAgentOrder);
   const updateCrewTaskOrder = useStore((state: AppState) => state.updateCrewTaskOrder);
   const updateAgentTaskOrder = useStore((state: AppState) => state.updateAgentTaskOrder);
+  const updateStateConnection = useStore((state: AppState) => state.updateStateConnection);
   const models = useStore((state: AppState) => state.models);
   const mcpServers = useStore((state: AppState) => state.mcpServers);
   const suggestAiContent = useStore((state: AppState) => state.suggestAiContent);
@@ -479,6 +488,7 @@ export const useNodeConfig = () => {
     stateNodes,
     variables,
     currentProjectFramework,
+    updateStateConnection,
     nodeWarnings: activeNodeId ? (nodeWarningsStore[activeNodeId] || []) : []
   };
 };

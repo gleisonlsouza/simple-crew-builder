@@ -36,7 +36,7 @@ export const CustomToolNode = memo(({ id, data }: NodeProps<Node<CustomToolNodeD
   return (
     <div
       onClick={(e) => { e.stopPropagation(); setActiveNode(id); }}
-      className={`group relative bg-white dark:bg-slate-900 rounded-xl shadow-sm hover:shadow-md dark:shadow-none border border-slate-200 dark:border-slate-700 w-52 overflow-visible transition-all duration-300 cursor-pointer ${statusClasses} ${status === 'running' ? 'running' : ''}`}
+      className={`group relative bg-white dark:bg-slate-900 rounded-xl shadow-sm hover:shadow-md dark:shadow-none border border-slate-200 dark:border-slate-700 w-52 overflow-visible transition-opacity duration-300 cursor-pointer ${statusClasses} ${status === 'running' ? 'running' : ''}`}
     >
       {status === 'waiting' && (
         <div className="absolute -top-2 -right-2 bg-white dark:bg-slate-900 rounded-full p-0.5 shadow-md z-20 border border-slate-100 dark:border-slate-800 animate-in zoom-in duration-200">
@@ -81,7 +81,7 @@ export const CustomToolNode = memo(({ id, data }: NodeProps<Node<CustomToolNodeD
                 updateNodeData(id, { toolId: e.target.value, name: tool?.name || 'Tool' });
               }}
               onClick={(e) => e.stopPropagation()}
-              className="w-full bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-lg px-2 py-1.5 text-[11px] font-medium transition-all focus:ring-1 focus:ring-emerald-500 outline-none shadow-sm text-slate-700 dark:text-slate-300"
+              className="w-full bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-lg px-2 py-1.5 text-[11px] font-medium transition-[opacity,filter,color,background-color,border-color] focus:ring-1 focus:ring-emerald-500 outline-none shadow-sm text-slate-700 dark:text-slate-300"
             >
               <option value="">Select Tool...</option>
               {customTools.map(tool => (

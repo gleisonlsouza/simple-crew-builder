@@ -7,11 +7,12 @@ import type { TaskNodeData } from '../types/nodes.types';
 
 
 export const TaskNode = memo(({ id, data }: NodeProps<Node<TaskNodeData, 'task'>>) => {
-  const { deleteNode, toggleCollapse, setActiveNode, framework } = useStore(
+  const { deleteNode, toggleCollapse, setActiveNode, focusNodeTree, framework } = useStore(
     useShallow((state) => ({
       deleteNode: state.deleteNode,
       toggleCollapse: state.toggleCollapse,
       setActiveNode: state.setActiveNode,
+      focusNodeTree: state.focusNodeTree,
       framework: state.currentProjectFramework,
     }))
   );
@@ -34,19 +35,14 @@ export const TaskNode = memo(({ id, data }: NodeProps<Node<TaskNodeData, 'task'>
   return (
     <div
       data-testid="node-task"
-      onClick={(e) => { e.stopPropagation(); setActiveNode(id); }}
+      onClick={(e) => { e.stopPropagation(); focusNodeTree(id); }}
       className={`group relative bg-white dark:bg-slate-900 rounded-xl shadow-sm hover:shadow-md dark:shadow-none border border-slate-200 dark:border-slate-700 w-56 overflow-visible cursor-pointer ${statusClasses} ${status === 'running' ? 'running' : ''} ${
         data.isDimmed 
-          ? 'opacity-40 grayscale pointer-events-none transition-all duration-700 scale-95' 
-          : 'opacity-100 transition-all duration-500 scale-100'
-      }`}
+          ? 'opacity-40 pointer-events-none transition-opacity duration-300' 
+          : 'opacity-100 transition-opacity duration-300'
+      } ${data.isTreeRoot ? 'is-tree-root' : ''}`}
       style={{
-        '--node-color': '#10b981',
-        backfaceVisibility: 'hidden',
-        transformStyle: 'preserve-3d',
-        WebkitFontSmoothing: 'antialiased',
-        MozOsxFontSmoothing: 'grayscale',
-        textRendering: 'optimizeLegibility'
+        '--node-color': '#10b981'
       } as React.CSSProperties}
     >
 
@@ -75,6 +71,7 @@ export const TaskNode = memo(({ id, data }: NodeProps<Node<TaskNodeData, 'task'>
         <CheckSquare className="w-4 h-4 text-white" />
         <h3
           className="text-white text-sm font-medium truncate flex-1 cursor-text"
+          onClick={(e) => { e.stopPropagation(); focusNodeTree(id); }}
           onDoubleClick={(e) => { e.stopPropagation(); setActiveNode(id); }}
         >
           {data.name || 'New Task'}

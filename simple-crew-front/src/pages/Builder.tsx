@@ -211,13 +211,14 @@ const FlowCanvas = () => {
     useStore.getState().setIsUsabilityDrawerOpen(false);
   }, [screenToFlowPosition, addNode, validateGraph]);
 
-    const clearDimmedState = useStore((state) => state.clearDimmedState);
+    const focusEdge = useStore((state) => state.focusEdge);
   
     return (
       <ReactFlow
         nodes={nodes} edges={edges} onNodesChange={onNodesChange} onEdgesChange={onEdgesChange} onConnect={onConnect}
-        onPaneClick={() => clearDimmedState()}
-        onNodeClick={() => clearDimmedState()}
+        onPaneClick={() => focusEdge(null)}
+        onNodeClick={() => focusEdge(null)}
+        onEdgeClick={(_, edge) => focusEdge(edge.id)}
         nodeTypes={nodeTypes} edgeTypes={edgeTypes} isValidConnection={isValidConnection}
         onDragOver={onDragOver} onDrop={onDrop}
         fitViewOptions={FIT_VIEW_OPTIONS}

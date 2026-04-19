@@ -76,6 +76,7 @@ export function NodeConfigDrawer() {
     stateNodes,
     variables,
     currentProjectFramework,
+    updateStateConnection,
     nodeWarnings
   } = useNodeConfig();
 
@@ -191,6 +192,8 @@ export function NodeConfigDrawer() {
               onAiSuggest={handleAiSuggest}
               onFieldKeyDown={handleFieldKeyDown}
               onFieldChange={handleFieldChange}
+              stateNodes={stateNodes}
+              updateStateConnection={updateStateConnection}
             />
           ) : (
             <AgentForm
@@ -258,6 +261,7 @@ export function NodeConfigDrawer() {
               nameError={nameError}
               stateFields={stateFields}
               stateNodes={stateNodes}
+              updateStateConnection={updateStateConnection}
             />
           ) : (
             <CrewForm

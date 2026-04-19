@@ -4,7 +4,8 @@ import { X, Save, Plus, Trash2, GitBranch, AlertCircle, ChevronRight, ListTree, 
 import { v4 as uuidv4 } from 'uuid';
 import { DndContext, useDroppable, type DragEndEvent } from '@dnd-kit/core';
 import { useStore } from '../../store/index';
-import type { RouterNodeData, RouteCondition, RouterOperator, StateNodeData, SchemaNodeData } from '../../types/nodes.types';
+import type { AppState } from '../../store/index';
+import type { AppNode, AppEdge, RouterNodeData, RouteCondition, RouterOperator, StateNodeData, SchemaNodeData } from '../../types/nodes.types';
 import { JsonTree } from '../node-config/JsonVisualMapper';
 
 interface ConditionDropZoneProps {
@@ -56,14 +57,22 @@ const ConditionDropZone: React.FC<ConditionDropZoneProps> = ({ id, value, onChan
 };
 
 export const RouterNodeModal = () => {
-  const isOpen = useStore((state) => state.isRouterModalOpen);
-  const activeRouterNodeId = useStore((state) => state.activeRouterNodeId);
-  const nodes = useStore((state) => state.nodes);
-  const edges = useStore((state) => state.edges);
-  const updateNodeData = useStore((state) => state.updateNodeData);
-  const closeRouterModal = useStore((state) => state.closeRouterModal);
+  const isOpen = useStore((state: AppState) => state.isRouterModalOpen);
+  const activeRouterNodeId = useStore((state: AppState) => state.activeRouterNodeId);
+  const nodes = useStore((state: AppState) => state.nodes, (oldNodes: AppNode[], newNodes: AppNode[]) => {
+    if (oldNodes.length !== newNodes.length) return false;
+    for (let i = 0; i < oldNodes.length; i++) {
+        if (oldNodes[i].id !== newNodes[i].id) return false;
+        if (oldNodes[i].type !== newNodes[i].type) return false;
+        if (JSON.stringify(oldNodes[i].data) !== JSON.stringify(newNodes[i].data)) return false;
+    }
+    return true;
+  });
+  const edges = useStore((state: AppState) => state.edges, (oldEdges: AppEdge[], newEdges: AppEdge[]) => JSON.stringify(oldEdges) === JSON.stringify(newEdges));
+  const updateNodeData = useStore((state: AppState) => state.updateNodeData);
+  const closeRouterModal = useStore((state: AppState) => state.closeRouterModal);
 
-  const activeNode = nodes.find((n) => n.id === activeRouterNodeId);
+  const activeNode = nodes.find((n: AppNode) => n.id === activeRouterNodeId);
   const activeData = activeNode?.data as RouterNodeData | undefined;
 
   // Source Mode: 'auto' (Schema Discovery) or 'manual' (Pasted JSON)
@@ -74,29 +83,29 @@ export const RouterNodeModal = () => {
     if (!activeRouterNodeId || !isOpen) return null;
 
     // A. Find parent Agent (trace backwards from Router)
-    const agentEdge = edges.find(e => {
+    const agentEdge = edges.find((e: AppEdge) => {
       if (e.target !== activeRouterNodeId) return false;
-      const sourceNode = nodes.find(n => n.id === e.source);
+      const sourceNode = nodes.find((n: AppNode) => n.id === e.source);
       return sourceNode?.type === 'agent';
     });
     
     if (!agentEdge) return null;
-    const agentNode = nodes.find(n => n.id === agentEdge.source);
+    const agentNode = nodes.find((n: AppNode) => n.id === agentEdge.source);
     if (!agentNode) return null;
 
     // B. Find grandfather Schema (trace backwards from Agent)
-    const schemaEdge = edges.find(e => {
+    const schemaEdge = edges.find((e: AppEdge) => {
       if (e.target !== agentNode.id) return false;
-      const sourceNode = nodes.find(n => n.id === e.source);
+      const sourceNode = nodes.find((n: AppNode) => n.id === e.source);
       return sourceNode?.type === 'schema';
     });
 
     if (!schemaEdge) return { agentName: (agentNode.data as Record<string, unknown>).name as string };
-    const schemaNode = nodes.find(n => n.id === schemaEdge.source);
+    const schemaNode = nodes.find((n: AppNode) => n.id === schemaEdge.source);
     if (!schemaNode) return { agentName: (agentNode.data as Record<string, unknown>).name as string };
-
+    
     // C. Find which State key is associated with this Schema
-    const stateNode = nodes.find(n => n.type === 'state');
+    const stateNode = nodes.find((n: AppNode) => n.type === 'state');
     const schemaData = schemaNode.data as SchemaNodeData;
     const schemaName = schemaData.name;
     const stateData = stateNode?.data as StateNodeData | undefined;
@@ -157,9 +166,9 @@ export const RouterNodeModal = () => {
 
   // Get all available state fields from any state node in the graph
   const availableFields = useMemo(() => {
-    const stateNodes = nodes.filter(n => n.type === 'state');
+    const stateNodes = nodes.filter((n: AppNode) => n.type === 'state');
     const fields = new Set<string>();
-    stateNodes.forEach(n => {
+    stateNodes.forEach((n: AppNode) => {
       const data = n.data as StateNodeData;
       data.fields?.forEach(f => {
         if (f.key) fields.add(f.key);

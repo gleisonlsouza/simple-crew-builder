@@ -1,27 +1,44 @@
 import { memo, useState, useEffect } from 'react';
 import { Handle, Position, type NodeProps, type Node } from '@xyflow/react';
 import { useShallow } from 'zustand/shallow';
-import { Users, Trash2, ChevronDown, ChevronUp, Loader2, CheckCircle2, Link, Settings, Clock, AlertCircle } from 'lucide-react';
+import { Users, Trash2, ChevronDown, ChevronUp, Loader2, CheckCircle2, Link, Settings, Clock, AlertCircle, Server } from 'lucide-react';
 import { useStore } from '../store/index';
 import { FRAMEWORK_CONFIG } from '../config/frameworks.config';
 import type { CrewNodeData, AgentNodeData } from '../types/nodes.types';
 
 export const CrewNode = memo(({ id, data }: NodeProps<Node<CrewNodeData, 'crew'>>) => {
-  const { deleteNode, toggleCollapse, nodes, onConnect, setActiveNode, currentProjectFramework } = useStore(
+  const { deleteNode, toggleCollapse, nodes, onConnect, setActiveNode, focusNodeTree, currentProjectFramework, updateStateConnection } = useStore(
     useShallow((state) => ({
       deleteNode: state.deleteNode,
       toggleCollapse: state.toggleCollapse,
       nodes: state.nodes,
       onConnect: state.onConnect,
       setActiveNode: state.setActiveNode,
+      focusNodeTree: state.focusNodeTree,
       currentProjectFramework: state.currentProjectFramework,
+      updateStateConnection: state.updateStateConnection,
     }))
   );
 
   const [isConnectMenuOpen, setIsConnectMenuOpen] = useState(false);
   const status = useStore((state) => state.nodeStatuses[id] || 'idle');
   const errors = useStore((state) => state.nodeErrors[id]);
-  const childCount = useStore((state) => state.edges.filter((edge) => edge.source === id).length);
+  const edges = useStore((state) => state.edges);
+  const childCount = edges.filter((edge) => edge.source === id).length;
+
+  // Sync selectedStateId with existing edges if not already set
+  useEffect(() => {
+    if (!data.selectedStateId && currentProjectFramework === 'langgraph') {
+      const stateEdge = edges.find(e => e.target === id && nodes.find(n => n.id === e.source)?.type === 'state');
+      if (stateEdge) {
+        // Use a timeout to avoid collision with other state updates during initial load
+        const timer = setTimeout(() => {
+          updateStateConnection(id, stateEdge.source, data.showStateConnections ?? true);
+        }, 100);
+        return () => clearTimeout(timer);
+      }
+    }
+  }, [id, data.selectedStateId, currentProjectFramework, edges, nodes, updateStateConnection, data.showStateConnections]);
 
   // Close menus when clicking outside
   useEffect(() => {
@@ -46,19 +63,14 @@ export const CrewNode = memo(({ id, data }: NodeProps<Node<CrewNodeData, 'crew'>
   return (
     <div 
       data-testid="node-crew"
-      onClick={(e) => { e.stopPropagation(); setActiveNode(id); }}
+      onClick={(e) => { e.stopPropagation(); focusNodeTree(id); }}
       className={`group relative bg-white dark:bg-slate-900 rounded-xl shadow-sm hover:shadow-md dark:shadow-none border border-slate-200 dark:border-slate-700 w-64 overflow-visible cursor-pointer ${statusClasses} ${status === 'running' ? 'running' : ''} ${
         data.isDimmed 
-          ? 'opacity-40 grayscale pointer-events-none transition-all duration-700 scale-95' 
-          : 'opacity-100 transition-all duration-500 scale-100'
-      }`}
+          ? 'opacity-40 pointer-events-none transition-opacity duration-300' 
+          : 'opacity-100 transition-opacity duration-300'
+      } ${data.isTreeRoot ? 'is-tree-root' : ''}`}
       style={{ 
-        '--node-color': '#8b5cf6',
-        backfaceVisibility: 'hidden',
-        transformStyle: 'preserve-3d',
-        WebkitFontSmoothing: 'antialiased',
-        MozOsxFontSmoothing: 'grayscale',
-        textRendering: 'optimizeLegibility'
+        '--node-color': '#8b5cf6'
       } as React.CSSProperties}
     >
 
@@ -87,6 +99,7 @@ export const CrewNode = memo(({ id, data }: NodeProps<Node<CrewNodeData, 'crew'>
         <Users className="w-4 h-4 text-white" />
         <h3 
           className="text-white text-sm font-medium truncate flex-1 cursor-text"
+          onClick={(e) => { e.stopPropagation(); focusNodeTree(id); }}
           onDoubleClick={(e) => { e.stopPropagation(); setActiveNode(id); }}
         >
           {data.name || FRAMEWORK_CONFIG[currentProjectFramework || 'crewai']?.labels.crew || 'New Crew'}
@@ -178,6 +191,45 @@ export const CrewNode = memo(({ id, data }: NodeProps<Node<CrewNodeData, 'crew'>
               <div className="flex items-center gap-1.5 text-xs text-slate-600 dark:text-slate-300 bg-slate-50 dark:bg-slate-800/50 w-fit px-2 py-1 rounded-md border border-slate-200 dark:border-slate-700 shadow-sm">
                 <Users className="w-3.5 h-3.5 text-purple-500" />
                 <span className="font-medium" data-testid="agent-count">{childCount} {childCount === 1 ? 'Agent' : 'Agents'}</span>
+              </div>
+            </div>
+          )}
+
+          {currentProjectFramework === 'langgraph' && (
+            <div className="mt-3 pt-3 border-t border-slate-100 dark:border-slate-800">
+              <div className="flex items-center gap-2 mb-1.5">
+                <Server className="w-3.5 h-3.5 text-purple-500" />
+                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">State Connection</span>
+              </div>
+              <div className="space-y-2">
+                <select
+                  value={data.selectedStateId || ''}
+                  onChange={(e) => updateStateConnection(id, e.target.value || null, data.showStateConnections ?? true)}
+                  onClick={(e) => e.stopPropagation()}
+                  className="w-full bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-lg px-2 py-1.5 text-[11px] font-medium text-slate-700 dark:text-slate-300 outline-none focus:ring-1 focus:ring-purple-500 transition-all shadow-sm"
+                >
+                  <option value="">No State Connected</option>
+                  {nodes
+                    .filter(n => n.type === 'state')
+                    .map(stateNode => (
+                      <option key={stateNode.id} value={stateNode.id}>
+                        {stateNode.data.name || `State #${stateNode.id.slice(-4)}`}
+                      </option>
+                    ))
+                  }
+                </select>
+
+                <label className="flex items-center gap-2 cursor-pointer group/toggle nodrag" onClick={(e) => e.stopPropagation()}>
+                  <input
+                    type="checkbox"
+                    checked={data.showStateConnections ?? true}
+                    onChange={(e) => updateStateConnection(id, data.selectedStateId || null, e.target.checked)}
+                    className="w-3.5 h-3.5 rounded border-slate-300 text-purple-600 focus:ring-purple-500 cursor-pointer"
+                  />
+                  <span className="text-[10px] font-medium text-slate-500 dark:text-slate-400 group-hover/toggle:text-slate-700 dark:group-hover/toggle:text-slate-200 transition-colors">
+                    Show Connection Line
+                  </span>
+                </label>
               </div>
             </div>
           )}

@@ -70,7 +70,7 @@ describe('Store Helpers', () => {
       const edges = [{ id: 'e1', source: 's1', target: 't1', sourceHandle: 'right', targetHandle: 'left' }];
       const migrated = migrateEdges(edges);
       expect(migrated[0]).toMatchObject({
-        type: 'smoothstep',
+        type: 'deletable',
         sourceHandle: 'right-source',
         targetHandle: 'left-target'
       });

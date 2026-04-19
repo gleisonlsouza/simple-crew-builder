@@ -19,15 +19,13 @@ export const StateNode = memo(({ id, data }: NodeProps<Node<StateNodeData, 'stat
       onClick={(e) => { e.stopPropagation(); openStateModal(id); }}
       className={`group relative bg-white dark:bg-slate-900 rounded-xl shadow-sm hover:shadow-md dark:shadow-none border border-slate-200 dark:border-slate-700 w-60 overflow-visible cursor-pointer ${
         data.isDimmed 
-          ? 'opacity-40 grayscale pointer-events-none transition-all duration-700 scale-95' 
-          : 'opacity-100 transition-all duration-500 scale-100 hover:ring-2 hover:ring-purple-400'
+          ? 'opacity-40 pointer-events-none transition-opacity duration-300' 
+          : 'opacity-100 transition-opacity duration-300 hover:ring-2 hover:ring-purple-400'
       }`}
       style={{
         '--node-color': '#a855f7',
       } as React.CSSProperties}
     >
-
-
       {/* Header */}
       <div className="bg-gradient-to-r from-purple-500 to-indigo-600 px-3 py-2 flex items-center gap-2 rounded-t-xl relative">
         <Server className="w-4 h-4 text-white" />

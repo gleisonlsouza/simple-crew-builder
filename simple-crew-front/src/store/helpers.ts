@@ -158,7 +158,7 @@ export const migrateEdges = (edges: AppEdge[], nodes: AppNode[] = []): AppEdge[]
 
     return {
       ...edge,
-      type: edge.type || 'smoothstep',
+      type: edge.type || 'deletable',
       sourceHandle,
       targetHandle,
     };

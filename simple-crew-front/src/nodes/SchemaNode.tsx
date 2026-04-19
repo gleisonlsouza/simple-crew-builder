@@ -19,8 +19,8 @@ export const SchemaNode = memo(({ id, data }: NodeProps<Node<SchemaNodeData, 'sc
       onClick={(e) => { e.stopPropagation(); openSchemaModal(id); }}
       className={`group relative bg-white dark:bg-slate-900 rounded-xl shadow-sm hover:shadow-md dark:shadow-none border border-slate-200 dark:border-slate-700 w-60 overflow-visible cursor-pointer ${
         data.isDimmed 
-          ? 'opacity-40 grayscale pointer-events-none transition-all duration-700 scale-95' 
-          : 'opacity-100 transition-all duration-500 scale-100 hover:ring-2 hover:ring-teal-400'
+          ? 'opacity-40 pointer-events-none transition-opacity duration-300' 
+          : 'opacity-100 transition-opacity duration-300 hover:ring-2 hover:ring-teal-400'
       }`}
       style={{
         '--node-color': '#14b8a6',

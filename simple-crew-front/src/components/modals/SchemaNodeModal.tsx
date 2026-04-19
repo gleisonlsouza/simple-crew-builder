@@ -3,16 +3,25 @@ import { createPortal } from 'react-dom';
 import { X, Save, Plus, Trash2, FileJson, AlertCircle } from 'lucide-react';
 import { v4 as uuidv4 } from 'uuid';
 import { useStore } from '../../store/index';
-import type { SchemaNodeData, SchemaField } from '../../types/nodes.types';
+import type { AppState } from '../../store/index';
+import type { AppNode, SchemaNodeData, SchemaField } from '../../types/nodes.types';
 
 export const SchemaNodeModal = () => {
-  const isOpen = useStore((state) => state.isSchemaModalOpen);
-  const activeNodeId = useStore((state) => state.activeSchemaNodeId);
-  const nodes = useStore((state) => state.nodes);
-  const updateNodeData = useStore((state) => state.updateNodeData);
-  const closeSchemaModal = useStore((state) => state.closeSchemaModal);
+  const isOpen = useStore((state: AppState) => state.isSchemaModalOpen);
+  const activeNodeId = useStore((state: AppState) => state.activeSchemaNodeId);
+  const nodes = useStore((state: AppState) => state.nodes, (oldNodes: AppNode[], newNodes: AppNode[]) => {
+    if (oldNodes.length !== newNodes.length) return false;
+    for (let i = 0; i < oldNodes.length; i++) {
+        if (oldNodes[i].id !== newNodes[i].id) return false;
+        if (oldNodes[i].type !== newNodes[i].type) return false;
+        if (JSON.stringify(oldNodes[i].data) !== JSON.stringify(newNodes[i].data)) return false;
+    }
+    return true;
+  });
+  const updateNodeData = useStore((state: AppState) => state.updateNodeData);
+  const closeSchemaModal = useStore((state: AppState) => state.closeSchemaModal);
 
-  const activeNode = nodes.find((n) => n.id === activeNodeId);
+  const activeNode = nodes.find((n: AppNode) => n.id === activeNodeId);
   const activeData = activeNode?.data as SchemaNodeData | undefined;
 
   const [localFields, setLocalFields] = useState<SchemaField[]>([]);

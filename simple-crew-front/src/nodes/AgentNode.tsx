@@ -1,20 +1,22 @@
-import { memo } from 'react';
+import { memo, useEffect } from 'react';
 import { Handle, Position, type NodeProps, type Node } from '@xyflow/react';
 import { useShallow } from 'zustand/shallow';
-import { User, Trash2, ChevronDown, ChevronUp, Loader2, CheckCircle2, AlertCircle, Clock, Cpu, Settings } from 'lucide-react';
+import { User, Trash2, ChevronDown, ChevronUp, Loader2, CheckCircle2, AlertCircle, Clock, Cpu, Settings, Server } from 'lucide-react';
 import { useStore } from '../store/index';
-import type { AgentNodeData } from '../types/nodes.types';
+import type { AgentNodeData, StateNodeData, StateField } from '../types/nodes.types';
 import type { NodeStatus } from '../types/store.types';
 
 
 
 export const AgentNode = memo(({ id, data }: NodeProps<Node<AgentNodeData, 'agent'>>) => {
-  const { deleteNode, toggleCollapse, updateNodeData, setActiveNode } = useStore(
+  const { deleteNode, toggleCollapse, updateNodeData, setActiveNode, focusNodeTree, updateStateConnection } = useStore(
     useShallow((state) => ({
       deleteNode: state.deleteNode,
       toggleCollapse: state.toggleCollapse,
       updateNodeData: state.updateNodeData,
       setActiveNode: state.setActiveNode,
+      focusNodeTree: state.focusNodeTree,
+      updateStateConnection: state.updateStateConnection,
     }))
   );
 
@@ -22,6 +24,27 @@ export const AgentNode = memo(({ id, data }: NodeProps<Node<AgentNodeData, 'agen
   const models = useStore((state) => state.models);
   const status = useStore((state) => (state.nodeStatuses[id] as NodeStatus) || 'idle');
   const errors = useStore((state) => state.nodeErrors[id]);
+  const nodes = useStore((state) => state.nodes);
+  const edges = useStore((state) => state.edges);
+  const currentProjectFramework = useStore((state) => state.currentProjectFramework);
+
+  // Sync selectedStateId with existing edges if not already set
+  useEffect(() => {
+    if (!data.selectedStateId && currentProjectFramework === 'langgraph') {
+      const stateEdge = edges.find(e => e.source === id && nodes.find(n => n.id === e.target)?.type === 'state');
+      if (stateEdge) {
+        let fieldKey = null;
+        if (stateEdge.targetHandle?.startsWith('field-in-')) {
+          fieldKey = stateEdge.targetHandle.replace('field-in-', '');
+        }
+        
+        const timer = setTimeout(() => {
+          updateStateConnection(id, stateEdge.target, data.showStateConnections ?? true, fieldKey);
+        }, 100);
+        return () => clearTimeout(timer);
+      }
+    }
+  }, [id, data.selectedStateId, currentProjectFramework, edges, nodes, updateStateConnection, data.showStateConnections]);
 
 
 
@@ -40,19 +63,14 @@ export const AgentNode = memo(({ id, data }: NodeProps<Node<AgentNodeData, 'agen
   return (
     <div
       data-testid="node-agent"
-      onClick={(e) => { e.stopPropagation(); setActiveNode(id); }}
+      onClick={(e) => { e.stopPropagation(); focusNodeTree(id); }}
       className={`group relative bg-white dark:bg-slate-900 rounded-xl shadow-sm hover:shadow-md dark:shadow-none border border-slate-200 dark:border-slate-700 w-64 overflow-visible cursor-pointer ${statusClasses} ${status === 'running' ? 'running' : ''} ${
         data.isDimmed 
-          ? 'opacity-40 grayscale pointer-events-none transition-all duration-700 scale-95' 
-          : 'opacity-100 transition-all duration-500 scale-100'
-      }`}
+          ? 'opacity-40 pointer-events-none transition-opacity duration-300' 
+          : 'opacity-100 transition-opacity duration-300'
+      } ${data.isTreeRoot ? 'is-tree-root' : ''}`}
       style={{
-        '--node-color': '#3b82f6',
-        backfaceVisibility: 'hidden',
-        transformStyle: 'preserve-3d',
-        WebkitFontSmoothing: 'antialiased',
-        MozOsxFontSmoothing: 'grayscale',
-        textRendering: 'optimizeLegibility'
+        '--node-color': '#3b82f6'
       } as React.CSSProperties}
     >
       {/* Main Execution Flow Handle (Top) */}
@@ -162,6 +180,7 @@ export const AgentNode = memo(({ id, data }: NodeProps<Node<AgentNodeData, 'agen
         <User className="w-4 h-4 text-white" />
         <h3
           className="text-white text-sm font-medium truncate flex-1 cursor-text"
+          onClick={(e) => { e.stopPropagation(); focusNodeTree(id); }}
           onDoubleClick={(e) => { e.stopPropagation(); setActiveNode(id); }}
         >
           {data.name || 'New Agent'}
@@ -205,13 +224,68 @@ export const AgentNode = memo(({ id, data }: NodeProps<Node<AgentNodeData, 'agen
               value={data.modelId || ''}
               onChange={(e) => updateNodeData(id, { modelId: e.target.value || undefined })}
               onClick={(e) => e.stopPropagation()}
-              className="w-full bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-lg px-2 py-1.5 text-[11px] font-medium text-slate-700 dark:text-slate-300 outline-none focus:ring-1 focus:ring-indigo-500 transition-all shadow-sm"
+              className="w-full bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-lg px-2 py-1.5 text-[11px] font-medium text-slate-700 dark:text-slate-300 outline-none focus:ring-1 focus:ring-indigo-500 transition-[opacity,filter,color,background-color,border-color] shadow-sm"
             >
               <option value="">Default ({models.find(m => m.isDefault)?.name || 'Not set'})</option>
               {models.map(model => (
                 <option key={model.id} value={model.id}>{model.name}</option>
               ))}
             </select>
+          </div>
+
+          <div className="pt-3 border-t border-slate-100 dark:border-slate-800">
+            <div className="flex items-center gap-2 mb-1.5">
+              <Server className="w-3.5 h-3.5 text-purple-500" />
+              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">State Connection</span>
+            </div>
+            <div className="space-y-2">
+              <select
+                value={data.selectedStateId ? `${data.selectedStateId}${data.selectedStateKey ? `:${data.selectedStateKey}` : ''}` : ''}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  if (!val) {
+                    updateStateConnection(id, null, data.showStateConnections ?? true);
+                  } else {
+                    const [stateId, key] = val.split(':');
+                    updateStateConnection(id, stateId, data.showStateConnections ?? true, key || null);
+                  }
+                }}
+                onClick={(e) => e.stopPropagation()}
+                className="w-full bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-lg px-2 py-1.5 text-[11px] font-medium text-slate-700 dark:text-slate-300 outline-none focus:ring-1 focus:ring-purple-500 transition-all shadow-sm"
+              >
+                <option value="">No State Connected</option>
+                {nodes
+                  .filter(n => n.type === 'state')
+                  .flatMap(stateNode => {
+                    const stateData = stateNode.data as StateNodeData;
+                    const fields = stateData.fields || [];
+                    const stateName = stateData.name || `State #${stateNode.id.slice(-4)}`;
+                    
+                    if (fields.length === 0) {
+                      return [<option key={stateNode.id} value={stateNode.id}>{stateName} (Entire State)</option>];
+                    }
+                    
+                    return fields.map((f: StateField) => (
+                      <option key={`${stateNode.id}-${f.key}`} value={`${stateNode.id}:${f.key}`}>
+                        {stateName} &gt; {f.key}
+                      </option>
+                    ));
+                  })
+                }
+              </select>
+
+              <label className="flex items-center gap-2 cursor-pointer group/toggle nodrag" onClick={(e) => e.stopPropagation()}>
+                <input
+                  type="checkbox"
+                  checked={data.showStateConnections ?? true}
+                  onChange={(e) => updateStateConnection(id, data.selectedStateId || null, e.target.checked, data.selectedStateKey || null)}
+                  className="w-3.5 h-3.5 rounded border-slate-300 text-purple-600 focus:ring-purple-500 cursor-pointer"
+                />
+                <span className="text-[10px] font-medium text-slate-500 dark:text-slate-400 group-hover/toggle:text-slate-700 dark:group-hover/toggle:text-slate-200 transition-colors">
+                  Show Connection Line
+                </span>
+              </label>
+            </div>
           </div>
 
         </div>

@@ -47,20 +47,22 @@ body,
 
 /* Node Styling & Contrast Enhancement */
 .react-flow__node {
-  transition: box-shadow 0.3s ease;
-  backface-visibility: hidden;
-  transform-style: preserve-3d;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-  text-rendering: optimizeLegibility;
-  image-rendering: -webkit-optimize-contrast;
+  /* Removed heavy 3D transforms and filter rendering that degraded drag performance */
+  will-change: transform;
+}
+
+/* React Flow applies this when dragging. Disable hit testing to save CPU. */
+.react-flow__node.react-flow__node-dragging,
+.react-flow__node.react-flow__node-dragging * {
+  pointer-events: none !important;
 }
 
 .react-flow__node > div {
   background-color: var(--bg-card);
   border: 1px solid var(--border-main);
   border-radius: 12px;
-  transition: background-color 0.3s ease, border-color 0.3s ease, box-shadow 0.3s ease;
+  /* Removed transition-all/box-shadow as the container handles hover slightly differently but better */
+  transition: background-color 0.3s ease, border-color 0.3s ease;
 }
 
 :root .react-flow__node > div {
@@ -77,22 +79,54 @@ body,
 }
 
 .react-flow__edge-path {
-  stroke-width: 2.5;
+  stroke-width: 3;
+  transition: stroke 0.3s ease, stroke-width 0.3s ease;
+}
+
+.react-flow__edge:hover .react-flow__edge-path {
+  stroke-width: 4;
+}
+
+.react-flow__edge.animated .react-flow__edge-path {
+  stroke-dasharray: 8;
+  animation: react-flow__dashdraw 0.5s linear infinite;
 }
 
 .react-flow__edge.running .react-flow__edge-path {
-  stroke: var(--accent-primary);
-  stroke-dasharray: 5;
-  animation: dash 1s linear infinite;
+  stroke: #10b981; /* emerald-500 for success/running */
+  stroke-width: 4;
 }
 
-@keyframes dash {
+@keyframes react-flow__dashdraw {
   from {
-    stroke-dashoffset: 10;
+    stroke-dashoffset: 16;
   }
   to {
     stroke-dashoffset: 0;
   }
+}
+
+/* Marker Styling */
+.react-flow__arrowhead path {
+  fill: currentColor;
+}
+
+/* Focus Mode: Dim all edges when ONE is selected, except the selected one */
+.react-flow__edges:has(.react-flow__edge.selected) .react-flow__edge:not(.selected) {
+  opacity: 0.15;
+  filter: grayscale(0.8);
+  transition: opacity 0.4s ease, filter 0.4s ease;
+}
+
+.react-flow__edge.selected .react-flow__edge-path {
+  stroke: var(--accent-primary) !important;
+  stroke-width: 6 !important;
+  filter: drop-shadow(0 0 12px var(--accent-primary));
+  transition: stroke-width 0.3s ease, filter 0.3s ease;
+}
+
+.react-flow__edge.selected .react-flow__edge-animated {
+  stroke-width: 6;
 }
 
 @keyframes sparkle-shimmer {
@@ -172,6 +206,45 @@ body,
 .dark .custom-scrollbar::-webkit-scrollbar-thumb {
   background: var(--border-main);
   opacity: 0.4;
+}
+
+/* Enhancing Focus States for Nodes */
+.react-flow__node.opacity-40 {
+  opacity: 0.1 !important;
+  filter: saturate(0) blur(0.5px);
+  transition: opacity 0.6s cubic-bezier(0.4, 0, 0.2, 1), filter 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.react-flow__node:not(.opacity-40) {
+  z-index: 50 !important;
+}
+
+.react-flow__node:not(.opacity-40) > div {
+  /* Stronger shadow and highlight for focused nodes */
+  box-shadow: 0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1);
+  border-color: var(--accent-primary);
+}
+
+.dark .react-flow__node:not(.opacity-40) > div {
+  box-shadow: 0 0 30px -5px rgba(59, 130, 246, 0.3);
+  border-color: var(--accent-primary);
+}
+
+/* Tree Root Highlight (The selected entry point) */
+.react-flow__node.is-tree-root {
+  z-index: 100 !important;
+}
+
+.react-flow__node.is-tree-root > div {
+  border-color: var(--accent-primary) !important;
+  border-width: 2px !important;
+  box-shadow: 0 0 25px -2px var(--accent-primary) !important;
+  transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+  transform: scale(1.02);
+}
+
+.dark .react-flow__node.is-tree-root > div {
+  box-shadow: 0 0 40px -5px var(--accent-primary) !important;
 }
 
 /* Firefox Support */

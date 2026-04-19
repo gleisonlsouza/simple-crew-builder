@@ -1,5 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useStore } from '../store/index';
+import type { AppState } from '../store/index';
+import type { AppNode, AppEdge } from '../types/nodes.types';
 import { X, ChevronDown, ChevronUp, Trash2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { ConfirmationModal } from './ConfirmationModal';
@@ -7,15 +9,23 @@ import { ChatMessage } from './ChatMessage';
 import { ChatInput } from './ChatInput';
 
 export function ResizableChatPanel() {
-  const isChatVisible = useStore((state) => state.isChatVisible);
-  const setIsChatVisible = useStore((state) => state.setIsChatVisible);
-  const startRealExecution = useStore((state) => state.startRealExecution);
-  const updateNodeData = useStore((state) => state.updateNodeData);
-  const nodes = useStore((state) => state.nodes);
-  const edges = useStore((state) => state.edges);
-  const messages = useStore((state) => state.messages);
-  const setMessages = useStore((state) => state.setMessages);
-  const clearChat = useStore((state) => state.clearChat);
+  const isChatVisible = useStore((state: AppState) => state.isChatVisible);
+  const setIsChatVisible = useStore((state: AppState) => state.setIsChatVisible);
+  const startRealExecution = useStore((state: AppState) => state.startRealExecution);
+  const updateNodeData = useStore((state: AppState) => state.updateNodeData);
+  const nodes = useStore((state: AppState) => state.nodes, (oldNodes: AppNode[], newNodes: AppNode[]) => {
+    if (oldNodes.length !== newNodes.length) return false;
+    for (let i = 0; i < oldNodes.length; i++) {
+        if (oldNodes[i].id !== newNodes[i].id) return false;
+        if (oldNodes[i].type !== newNodes[i].type) return false;
+        if (JSON.stringify(oldNodes[i].data) !== JSON.stringify(newNodes[i].data)) return false;
+    }
+    return true;
+  });
+  const edges = useStore((state: AppState) => state.edges, (oldEdges: AppEdge[], newEdges: AppEdge[]) => JSON.stringify(oldEdges) === JSON.stringify(newEdges));
+  const messages = useStore((state: AppState) => state.messages);
+  const setMessages = useStore((state: AppState) => state.setMessages);
+  const clearChat = useStore((state: AppState) => state.clearChat);
 
   const [chatHeight, setChatHeight] = useState(300);
   const [isResizing, setIsResizing] = useState(false);
@@ -76,19 +86,19 @@ export function ResizableChatPanel() {
     setMessages(prev => [...prev, userMessage]);
 
     // Find the Chat node
-    const chatNode = nodes.find(n => n.type === 'chat');
+    const chatNode = nodes.find((n: AppNode) => n.type === 'chat');
     if (!chatNode) {
       setMessages(prev => [...prev, { id: Date.now().toString(), role: 'assistant', content: 'No Chat Trigger found on the canvas.' }]);
       return;
     }
 
     // Find the connected Crew/Graph node
-    const edgeToCrew = edges.find(e => e.source === chatNode.id);
+    const edgeToCrew = edges.find((e: AppEdge) => e.source === chatNode.id);
     if (!edgeToCrew) {
       setMessages(prev => [...prev, { id: Date.now().toString(), role: 'assistant', content: 'Chat Trigger is disconnected. Connect it to a Crew or Graph node.' }]);
       return;
     }
-    const crewNode = nodes.find(n => n.id === edgeToCrew.target);
+    const crewNode = nodes.find((n: AppNode) => n.id === edgeToCrew.target);
     if (!crewNode || crewNode.type !== 'crew') {
       setMessages(prev => [...prev, { id: Date.now().toString(), role: 'assistant', content: 'Chat Trigger is not connected to a valid Crew/Graph node.' }]);
       return;
@@ -96,7 +106,7 @@ export function ResizableChatPanel() {
 
     const chatData = chatNode.data as Record<string, unknown>;
     const inputMapping = chatData.inputMapping as string | undefined;
-    const isLangGraph = (nodes.some(n => n.type === 'state')); // LangGraph has a State node
+    const isLangGraph = (nodes.some((n: AppNode) => n.type === 'state')); // LangGraph has a State node
 
     // ── LangGraph path ────────────────────────────────────────────────────────
     if (isLangGraph) {
@@ -193,7 +203,7 @@ export function ResizableChatPanel() {
   };
 
 
-  const isSidebarCollapsed = useStore((state) => state.isSidebarCollapsed);
+  const isSidebarCollapsed = useStore((state: AppState) => state.isSidebarCollapsed);
 
   if (!isChatVisible) return null;
 

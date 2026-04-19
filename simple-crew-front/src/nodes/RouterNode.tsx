@@ -7,10 +7,11 @@ import type { RouterNodeData } from '../types/nodes.types';
 import type { NodeStatus } from '../types/store.types';
 
 export const RouterNode = memo(({ id, data }: NodeProps<Node<RouterNodeData, 'router'>>) => {
-  const { deleteNode, openRouterModal } = useStore(
+  const { deleteNode, openRouterModal, focusNodeTree } = useStore(
     useShallow((state) => ({
       deleteNode: state.deleteNode,
       openRouterModal: state.openRouterModal,
+      focusNodeTree: state.focusNodeTree,
     }))
   );
 
@@ -32,12 +33,12 @@ export const RouterNode = memo(({ id, data }: NodeProps<Node<RouterNodeData, 'ro
   return (
     <div
       data-testid="node-router"
-      onClick={(e) => { e.stopPropagation(); openRouterModal(id); }}
+      onClick={(e) => { e.stopPropagation(); focusNodeTree(id); }}
       className={`group relative bg-white dark:bg-slate-900 rounded-xl shadow-sm hover:shadow-md dark:shadow-none border border-slate-200 dark:border-slate-700 w-64 overflow-visible cursor-pointer ${statusClasses} ${
         data.isDimmed 
-          ? 'opacity-40 grayscale pointer-events-none transition-all duration-700 scale-95' 
-          : 'opacity-100 transition-all duration-500 scale-100'
-      }`}
+          ? 'opacity-40 pointer-events-none transition-opacity duration-300' 
+          : 'opacity-100 transition-opacity duration-300'
+      } ${data.isTreeRoot ? 'is-tree-root' : ''}`}
       style={{
         '--node-color': '#6366f1',
       } as React.CSSProperties}
@@ -57,7 +58,11 @@ export const RouterNode = memo(({ id, data }: NodeProps<Node<RouterNodeData, 'ro
       {/* Header */}
       <div className="bg-gradient-to-r from-indigo-500 to-indigo-600 px-3 py-2 flex items-center gap-2 rounded-t-xl relative">
         <GitBranch className="w-4 h-4 text-white" />
-        <h3 className="text-white text-sm font-medium truncate flex-1 leading-relaxed">
+        <h3 
+          className="text-white text-sm font-medium truncate flex-1 leading-relaxed cursor-text"
+          onClick={(e) => { e.stopPropagation(); focusNodeTree(id); }}
+          onDoubleClick={(e) => { e.stopPropagation(); openRouterModal(id); }}
+        >
           {data.name || 'Conditional Router'}
         </h3>
 
@@ -96,7 +101,7 @@ export const RouterNode = memo(({ id, data }: NodeProps<Node<RouterNodeData, 'ro
               return (
                 <div 
                   key={condition.id} 
-                  className={`relative flex items-center justify-between px-2 py-1.5 rounded-lg border group/route transition-all duration-300 ${
+                  className={`relative flex items-center justify-between px-2 py-1.5 rounded-lg border group/route transition-opacity duration-300 ${
                     isExecuted 
                       ? 'bg-green-500/20 border-green-500 shadow-[0_0_8px_rgba(34,197,94,0.4)]' 
                       : 'bg-slate-50 dark:bg-slate-800/50 border-slate-100 dark:border-slate-800 hover:border-indigo-200'
@@ -129,7 +134,7 @@ export const RouterNode = memo(({ id, data }: NodeProps<Node<RouterNodeData, 'ro
             {(() => {
               const isDefaultExecuted = data.executedRoute === 'route-default';
               return (
-                <div className={`relative flex items-center justify-between px-2 py-1.5 rounded-lg border transition-all duration-300 group/default ${
+                <div className={`relative flex items-center justify-between px-2 py-1.5 rounded-lg border transition-opacity duration-300 group/default ${
                   isDefaultExecuted 
                     ? 'bg-green-500/20 border-green-500 shadow-[0_0_8px_rgba(34,197,94,0.4)]' 
                     : 'bg-indigo-50/50 dark:bg-indigo-900/20 border-indigo-100 dark:border-indigo-900/30 hover:border-indigo-300'

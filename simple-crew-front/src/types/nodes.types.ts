@@ -35,6 +35,9 @@ export interface AgentNodeData extends Record<string, unknown> {
   response_template?: string;
   taskOrder?: string[];
   disabledToolIds?: string[];
+  selectedStateId?: string;
+  selectedStateKey?: string;
+  showStateConnections?: boolean;
 }
 
 export interface LangGraphAgentData extends Record<string, unknown> {
@@ -43,6 +46,9 @@ export interface LangGraphAgentData extends Record<string, unknown> {
   goal: string;
   backstory: string;
   llm_id?: string;
+  selectedStateId?: string;
+  selectedStateKey?: string;
+  showStateConnections?: boolean;
 }
 
 export interface LangGraphTaskData extends Record<string, unknown> {
@@ -90,6 +96,8 @@ export interface CrewNodeData extends Record<string, unknown> {
   /** LangGraph only: the state key to surface as the final output.
    *  Use '__FULL_STATE__' (or leave undefined) to return the entire state object. */
   outputKey?: string;
+  selectedStateId?: string;
+  showStateConnections?: boolean;
 }
 
 export interface ChatNodeData extends Record<string, unknown> {
@@ -192,3 +200,15 @@ export type AppNode =
   | Node<SchemaNodeData, 'schema'>;
 
 export type AppEdge = Edge;
+
+export interface StateFieldInfo {
+  key: string;
+  type: string;
+  subKeys?: string[];
+}
+
+export interface StateNodeInfo {
+  id: string;
+  name: string;
+  fields: StateFieldInfo[];
+}

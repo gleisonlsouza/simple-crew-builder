@@ -3,24 +3,33 @@ import { createPortal } from 'react-dom';
 import { X, Save, Plus, Trash2, Database, AlertCircle } from 'lucide-react';
 import { v4 as uuidv4 } from 'uuid';
 import { useStore } from '../../store/index';
-import type { StateNodeData, StateField } from '../../types/nodes.types';
+import type { AppState } from '../../store/index';
+import type { AppNode, StateNodeData, StateField } from '../../types/nodes.types';
 
 export const StateNodeModal = () => {
-  const isOpen = useStore((state) => state.isStateModalOpen);
-  const activeStateNodeId = useStore((state) => state.activeStateNodeId);
-  const nodes = useStore((state) => state.nodes);
-  const updateNodeData = useStore((state) => state.updateNodeData);
-  const closeStateModal = useStore((state) => state.closeStateModal);
+  const isOpen = useStore((state: AppState) => state.isStateModalOpen);
+  const activeStateNodeId = useStore((state: AppState) => state.activeStateNodeId);
+  const nodes = useStore((state: AppState) => state.nodes, (oldNodes: AppNode[], newNodes: AppNode[]) => {
+    if (oldNodes.length !== newNodes.length) return false;
+    for (let i = 0; i < oldNodes.length; i++) {
+        if (oldNodes[i].id !== newNodes[i].id) return false;
+        if (oldNodes[i].type !== newNodes[i].type) return false;
+        if (JSON.stringify(oldNodes[i].data) !== JSON.stringify(newNodes[i].data)) return false;
+    }
+    return true;
+  });
+  const updateNodeData = useStore((state: AppState) => state.updateNodeData);
+  const closeStateModal = useStore((state: AppState) => state.closeStateModal);
 
 
-  const activeNode = nodes.find((n) => n.id === activeStateNodeId);
+  const activeNode = nodes.find((n: AppNode) => n.id === activeStateNodeId);
   const activeData = activeNode?.data as StateNodeData | undefined;
 
   // Discover schema node names from the canvas (no edge required)
   const schemaTypes = useMemo(() => {
     return nodes
-      .filter((n) => n.type === 'schema' && (n.data as Record<string, unknown>)?.name)
-      .map((n) => (n.data as Record<string, unknown>).name as string);
+      .filter((n: AppNode) => n.type === 'schema' && (n.data as Record<string, unknown>)?.name)
+      .map((n: AppNode) => (n.data as Record<string, unknown>).name as string);
   }, [nodes]);
 
 
@@ -155,7 +164,7 @@ export const StateNodeModal = () => {
                           </optgroup>
                           {schemaTypes?.length > 0 && (
                             <optgroup label="Schema Nodes">
-                              {schemaTypes.map((schemaName, idx) => (
+                              {schemaTypes.map((schemaName: string, idx: number) => (
                                 <option key={`schema-${idx}`} value={schemaName}>
                                   {schemaName}
                                 </option>
