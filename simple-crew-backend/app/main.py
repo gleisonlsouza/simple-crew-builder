@@ -31,7 +31,7 @@ from .schemas import (
     AiTaskBulkSuggestionRequest, AiTaskBulkSuggestionResponse,
     ExecutionRead
 )
-from .exporter import generate_python_project
+from .exporter import generate_python_project, generate_langgraph_project
 from .ai_service import generate_suggestion, generate_bulk_suggestion, generate_task_bulk_suggestion
 from .core.database.neo4j_db import neo4j_manager, get_neo4j_session
 from neo4j import Session as Neo4jSession
@@ -433,20 +433,38 @@ async def export_project_python(project_id: str, session: Session = Depends(get_
                     "env_vars": rec.env_vars
                 })
 
-        zip_bytes = generate_python_project(
-            graph_data, 
-            project.name,
-            author_name=author_name,
-            author_email=author_email,
-            mcp_servers=mcp_servers_data,
-            project_description=project.description or "",
-            agent_llms=agent_llms_data,
-            providers=list(unique_providers),
-            workspace_path=workspace_path
-        )
+        # Detect Framework
+        is_langgraph = project.framework == 'langgraph' or any(n.type == 'state' for n in graph_data.nodes)
+        
+        if is_langgraph:
+            zip_bytes = generate_langgraph_project(
+                graph_data, 
+                project.name,
+                author_name=author_name,
+                author_email=author_email,
+                mcp_servers=mcp_servers_data,
+                project_description=project.description or "",
+                agent_llms=agent_llms_data,
+                providers=list(unique_providers),
+                workspace_path=workspace_path
+            )
+            suffix = "langgraph"
+        else:
+            zip_bytes = generate_python_project(
+                graph_data, 
+                project.name,
+                author_name=author_name,
+                author_email=author_email,
+                mcp_servers=mcp_servers_data,
+                project_description=project.description or "",
+                agent_llms=agent_llms_data,
+                providers=list(unique_providers),
+                workspace_path=workspace_path
+            )
+            suffix = "crew"
         
         # Nome do arquivo sanitizado para o header de download
-        filename = f"{project.name.lower().replace(' ', '_')}_crew.zip"
+        filename = f"{project.name.lower().replace(' ', '_')}_{suffix}.zip"
         
         return StreamingResponse(
             io.BytesIO(zip_bytes),

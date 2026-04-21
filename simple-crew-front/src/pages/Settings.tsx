@@ -106,7 +106,7 @@ const SettingsPage = () => {
     workspaces, fetchWorkspaces, addWorkspace, updateWorkspace, deleteWorkspace, activeWorkspaceId, setActiveWorkspaceId
   } = useStore();
 
-  const [activeTab, setActiveTab] = useState<'credentials' | 'models' | 'tools_crewai' | 'mcp' | 'workspaces' | 'knowledge_base'>('credentials');
+  const [activeTab, setActiveTab] = useState<'credentials' | 'models' | 'tools_crewai' | 'tools_langgraph' | 'mcp' | 'workspaces' | 'knowledge_base'>('credentials');
   const [isToolsExpanded, setIsToolsExpanded] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isModelModalOpen, setIsModelModalOpen] = useState(false);
@@ -155,6 +155,8 @@ const SettingsPage = () => {
   React.useEffect(() => {
     if (activeTab === 'tools_crewai') {
       fetchCustomTools('crewai');
+    } else if (activeTab === 'tools_langgraph') {
+      fetchCustomTools('langgraph');
     }
   }, [activeTab, fetchCustomTools]);
 
@@ -322,8 +324,11 @@ const SettingsPage = () => {
 
   const handleSaveCustomTool = () => {
     if (newCustomTool.name && newCustomTool.code) {
-      // Derive framework from active tab (future-proofing for LangGraph)
-      const currentFramework = activeTab === 'tools_crewai' ? 'crewai' : 'unknown';
+      // Derive framework from active tab
+      const currentFramework = 
+        activeTab === 'tools_crewai' ? 'crewai' : 
+        activeTab === 'tools_langgraph' ? 'langgraph' : 
+        'unknown';
 
       const toolPayload = {
         ...newCustomTool,
@@ -422,7 +427,12 @@ const SettingsPage = () => {
                 >
                   CrewAI
                 </button>
-                {/* Future frameworks (LangGraph, etc.) will be added here */}
+                <button
+                  onClick={() => setActiveTab('tools_langgraph')}
+                  className={`w-full text-left px-3 py-2 rounded-lg text-xs font-bold transition-all ${activeTab === 'tools_langgraph' ? 'bg-indigo-600 text-white shadow-md' : 'text-brand-muted hover:text-indigo-500 hover:bg-indigo-50 dark:hover:bg-indigo-900/20'}`}
+                >
+                  LangGraph
+                </button>
               </div>
             )}
           </div>
@@ -699,12 +709,18 @@ const SettingsPage = () => {
             </div>
           )}
 
-          {activeTab === 'tools_crewai' && (
+          {(activeTab === 'tools_crewai' || activeTab === 'tools_langgraph') && (
             <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
               <header className="flex items-center justify-between mb-10">
                 <div>
-                  <h1 className="text-3xl font-bold text-brand-text tracking-tight mb-2">CrewAI Tools</h1>
-                  <p className="text-brand-muted text-sm">Enable and create global capabilities specifically for your CrewAI agents.</p>
+                  <h1 className="text-3xl font-bold text-brand-text tracking-tight mb-2">
+                    {activeTab === 'tools_crewai' ? 'CrewAI Tools' : 'LangGraph Tools'}
+                  </h1>
+                  <p className="text-brand-muted text-sm">
+                    {activeTab === 'tools_crewai' 
+                      ? 'Enable and create global capabilities specifically for your CrewAI agents.'
+                      : 'Enable and create global capabilities specifically for your LangGraph agents.'}
+                  </p>
                 </div>
               </header>
 
@@ -712,7 +728,11 @@ const SettingsPage = () => {
                 {/* Default Tools Section */}
                 <section className="space-y-12">
                   {Object.entries(
-                    globalTools.reduce((acc, tool) => {
+                    globalTools.filter(tool => {
+                      if (activeTab === 'tools_crewai') return tool.framework === 'crewai' || tool.framework === 'both' || !tool.framework;
+                      if (activeTab === 'tools_langgraph') return tool.framework === 'langgraph' || tool.framework === 'both';
+                      return true;
+                    }).reduce((acc, tool) => {
                       const category = tool.category || 'Other';
                       if (!acc[category]) acc[category] = [];
                       acc[category].push(tool);

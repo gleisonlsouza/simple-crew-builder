@@ -58,6 +58,7 @@ describe('AgentNode', () => {
     nodeStatuses: {},
     nodeErrors: {},
     models: defaultModels,
+    currentProjectFramework: 'crewai',
   };
 
   beforeEach(() => {
@@ -129,7 +130,7 @@ describe('AgentNode', () => {
     
     if (actualCollapseBtn) {
         await user.click(actualCollapseBtn);
-        expect(mockToggleCollapse).toHaveBeenCalledWith('agent-1', undefined);
+        expect(mockToggleCollapse).toHaveBeenCalledWith('agent-1', ['out-task', 'out-tool', 'out-custom-tool', 'out-mcp']);
     } else {
         throw new Error('Collapse button not found');
     }
@@ -158,14 +159,15 @@ describe('AgentNode', () => {
     // Check for handles using their data attributes or class names
     const handles = container.querySelectorAll('.react-flow__handle');
     
-    // We expect 7 handles: agent-in, schema-input (Top), out-task, out-tool, out-mcp, data-out, agent-out (Bottom)
-    expect(handles.length).toBe(7);
+    // We expect 8 handles: agent-in, schema-input (Top), out-task, out-tool, out-custom-tool, out-mcp, data-out, agent-out (Bottom)
+    expect(handles.length).toBe(8);
     
     const handleIds = Array.from(handles).map(h => h.getAttribute('data-handleid'));
     expect(handleIds).toContain('agent-in');
     expect(handleIds).toContain('schema-input');
     expect(handleIds).toContain('out-task');
     expect(handleIds).toContain('out-tool');
+    expect(handleIds).toContain('out-custom-tool');
     expect(handleIds).toContain('out-mcp');
     expect(handleIds).toContain('data-out');
     expect(handleIds).toContain('agent-out');

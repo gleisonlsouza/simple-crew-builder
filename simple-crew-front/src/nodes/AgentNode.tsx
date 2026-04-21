@@ -33,7 +33,7 @@ export const AgentNode = memo(({ id, data }: NodeProps<Node<AgentNodeData, 'agen
   );
 
   const tasksCount = edges.filter(e => e.source === id && e.sourceHandle === 'out-task').length;
-  const toolsCount = edges.filter(e => e.source === id && e.sourceHandle === 'out-tool').length;
+  const toolsCount = edges.filter(e => e.source === id && (e.sourceHandle === 'out-tool' || e.sourceHandle === 'out-custom-tool')).length;
   const mcpCount = edges.filter(e => e.source === id && e.sourceHandle === 'out-mcp').length;
 
   // Sync selectedStateId with existing edges if not already set
@@ -118,46 +118,57 @@ export const AgentNode = memo(({ id, data }: NodeProps<Node<AgentNodeData, 'agen
            <span className="absolute top-4 left-1/2 -translate-x-1/2 text-[9px] font-bold text-blue-500 bg-white dark:bg-slate-900 px-1 rounded shadow-sm opacity-0 group-hover/h-task:opacity-100 transition-opacity whitespace-nowrap border border-blue-100 dark:border-blue-900/30 pointer-events-none">Tasks</span>
         </Handle>
         
-        {/* Tool Handle - 33% */}
+        {/* Tool Handle - 32% */}
         <Handle 
           type="source" 
           position={Position.Bottom} 
           id="out-tool" 
           className="!w-3 !h-3 !border-2 !border-white dark:!border-slate-900 !cursor-crosshair pointer-events-auto group/h-tool z-10" 
-          style={{ backgroundColor: '#f97316', left: '33%' }} 
+          style={{ backgroundColor: '#f97316', left: '32%' }} 
         >
            <span className="absolute top-4 left-1/2 -translate-x-1/2 text-[9px] font-bold text-orange-500 bg-white dark:bg-slate-900 px-1 rounded shadow-sm opacity-0 group-hover/h-tool:opacity-100 transition-opacity whitespace-nowrap border border-orange-100 dark:border-orange-900/30 pointer-events-none">Tools</span>
         </Handle>
 
-        {/* MCP Handle - 50% */}
+        {/* Custom Tool Handle - 48% */}
+        <Handle 
+          type="source" 
+          position={Position.Bottom} 
+          id="out-custom-tool" 
+          className="!w-3 !h-3 !border-2 !border-white dark:!border-slate-900 !cursor-crosshair pointer-events-auto group/h-custom-tool z-10" 
+          style={{ backgroundColor: '#fbbf24', left: '48%' }} 
+        >
+           <span className="absolute top-4 left-1/2 -translate-x-1/2 text-[9px] font-bold text-amber-500 bg-white dark:bg-slate-900 px-1 rounded shadow-sm opacity-0 group-hover/h-custom-tool:opacity-100 transition-opacity whitespace-nowrap border border-amber-100 dark:border-amber-900/30 pointer-events-none">Custom Tools</span>
+        </Handle>
+
+        {/* MCP Handle - 64% */}
         <Handle 
           type="source" 
           position={Position.Bottom} 
           id="out-mcp" 
           className="!w-3 !h-3 !border-2 !border-white dark:!border-slate-900 !cursor-crosshair pointer-events-auto group/h-mcp z-10" 
-          style={{ backgroundColor: '#ec4899', left: '50%' }} 
+          style={{ backgroundColor: '#ec4899', left: '64%' }} 
         >
            <span className="absolute top-4 left-1/2 -translate-x-1/2 text-[9px] font-bold text-pink-500 bg-white dark:bg-slate-900 px-1 rounded shadow-sm opacity-0 group-hover/h-mcp:opacity-100 transition-opacity whitespace-nowrap border border-pink-100 dark:border-pink-900/30 pointer-events-none">MCP</span>
         </Handle>
 
-        {/* Data Output Handle - 67% */}
+        {/* Data Output Handle - 80% */}
         <Handle 
           type="source" 
           position={Position.Bottom} 
           id="data-out" 
           className="!w-3 !h-3 !border-2 !border-white dark:!border-slate-900 !cursor-crosshair pointer-events-auto group/h-data-out z-10" 
-          style={{ backgroundColor: '#a855f7', left: '67%' }} 
+          style={{ backgroundColor: '#a855f7', left: '80%' }} 
         >
            <span className="absolute top-4 left-1/2 -translate-x-1/2 text-[9px] font-bold text-purple-600 bg-white dark:bg-slate-900 px-1 rounded shadow-sm opacity-0 group-hover/h-data-out:opacity-100 transition-opacity whitespace-nowrap border border-purple-100 dark:border-purple-900/30 pointer-events-none uppercase">Data Out</span>
         </Handle>
 
-        {/* Execution Output Handle - 84% */}
+        {/* Execution Output Handle - 92% */}
         <Handle 
           type="source" 
           position={Position.Bottom} 
           id="agent-out" 
           className="!w-3 !h-3 !border-2 !border-white dark:!border-slate-900 !cursor-crosshair pointer-events-auto group/h-agent-out z-10 font-bold" 
-          style={{ backgroundColor: '#2563eb', left: '84%' }} 
+          style={{ backgroundColor: '#2563eb', left: '92%' }} 
         >
            <span className="absolute top-4 left-1/2 -translate-x-1/2 text-[9px] font-bold text-blue-600 bg-white dark:bg-slate-900 px-1 rounded shadow-sm opacity-0 group-hover/h-agent-out:opacity-100 transition-opacity whitespace-nowrap border border-blue-100 dark:border-blue-900/30 pointer-events-none uppercase">Execution Out</span>
         </Handle>
@@ -294,7 +305,7 @@ export const AgentNode = memo(({ id, data }: NodeProps<Node<AgentNodeData, 'agen
                 </span>
               </label>
 
-          {data.isCollapsed && currentProjectFramework === 'langgraph' && (tasksCount > 0 || toolsCount > 0 || mcpCount > 0) && (
+          {data.isCollapsed && (currentProjectFramework === 'langgraph' || currentProjectFramework === 'crewai') && (tasksCount > 0 || toolsCount > 0 || mcpCount > 0) && (
             <div className="pt-3 mt-3 border-t border-slate-100 dark:border-slate-800 animate-in fade-in slide-in-from-top-1 duration-200">
               <div className="flex items-center gap-3">
                 {tasksCount > 0 && (
@@ -327,8 +338,8 @@ export const AgentNode = memo(({ id, data }: NodeProps<Node<AgentNodeData, 'agen
       <button
         onClick={(e) => { 
           e.stopPropagation(); 
-          const allowedHandles = currentProjectFramework === 'langgraph' 
-            ? ['out-task', 'out-tool', 'out-mcp'] 
+          const allowedHandles = (currentProjectFramework === 'langgraph' || currentProjectFramework === 'crewai')
+            ? ['out-task', 'out-tool', 'out-custom-tool', 'out-mcp'] 
             : undefined;
           toggleCollapse(id, allowedHandles); 
         }}

@@ -276,6 +276,7 @@ export const createGraphSlice: StateCreator<AppState, [], [], GraphSlice> = (set
       const isAgentToTool = sourceNode.type === 'agent' && ['tool', 'customTool', 'toolNode', 'customToolNode', 'globalTool'].includes(targetNode.type);
       const isTaskToTool = sourceNode.type === 'task' && ['tool', 'customTool', 'toolNode', 'customToolNode', 'globalTool'].includes(targetNode.type);
       const isAgentToMcp = sourceNode.type === 'agent' && targetNode.type === 'mcp';
+      const isTaskToMcp = sourceNode.type === 'task' && targetNode.type === 'mcp';
       const isStateToCrew = sourceNode.type === 'state' && targetNode.type === 'crew';
       const isSchemaToAgent = sourceNode.type === 'schema' && targetNode.type === 'agent';
       const isSchemaToState = sourceNode.type === 'schema' && targetNode.type === 'state';
@@ -287,7 +288,7 @@ export const createGraphSlice: StateCreator<AppState, [], [], GraphSlice> = (set
       const isAgentToAgent = sourceNode.type === 'agent' && targetNode.type === 'agent';
       const isAgentToState = sourceNode.type === 'agent' && targetNode.type === 'state';
 
-      if (!isCrewToAgent && !isAgentToTask && !isChatToCrew && !isWebhookToCrew && !isAgentToTool && !isTaskToTool && !isAgentToMcp && !isStateToCrew && !isSchemaToAgent && !isSchemaToState && !isRouterToAgent && !isRouterToTask && !isRouterToRouter && !isAgentToRouter && !isCrewToRouter && !isAgentToAgent && !isAgentToState) {
+      if (!isCrewToAgent && !isAgentToTask && !isChatToCrew && !isWebhookToCrew && !isAgentToTool && !isTaskToTool && !isAgentToMcp && !isTaskToMcp && !isStateToCrew && !isSchemaToAgent && !isSchemaToState && !isRouterToAgent && !isRouterToTask && !isRouterToRouter && !isAgentToRouter && !isCrewToRouter && !isAgentToAgent && !isAgentToState) {
         console.warn(`[Rules] Invalid connection blocked: ${sourceNode.type} -> ${targetNode.type}`);
         return state;
       }

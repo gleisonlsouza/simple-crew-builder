@@ -31,6 +31,7 @@ export interface ToolConfig {
   apiKey?: string;
   requiresKey: boolean;
   category?: string;
+  framework?: 'crewai' | 'langgraph' | 'both';
   user_config_schema?: {
     fields: Record<string, {
       type: 'string' | 'number' | 'boolean' | 'select';

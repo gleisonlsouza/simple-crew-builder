@@ -90,7 +90,8 @@ export const migrateEdges = (edges: AppEdge[], nodes: AppNode[] = []): AppEdge[]
       if (sourceNode.type === 'agent') {
         // Specific specialized handles
         if (targetNode?.type === 'task') sourceHandle = 'out-task';
-        else if (targetNode?.type === 'tool' || targetNode?.type === 'customTool') sourceHandle = 'out-tool';
+        else if (targetNode?.type === 'tool') sourceHandle = 'out-tool';
+        else if (targetNode?.type === 'customTool') sourceHandle = 'out-custom-tool';
         else if (targetNode?.type === 'mcp') sourceHandle = 'out-mcp';
         // Flow handles
         else if (targetNode?.type === 'agent' || targetNode?.type === 'crew' || targetNode?.type === 'router') sourceHandle = 'agent-out';
@@ -102,6 +103,11 @@ export const migrateEdges = (edges: AppEdge[], nodes: AppNode[] = []): AppEdge[]
         else if (sourceHandle?.startsWith('out-mcp')) sourceHandle = 'out-mcp';
         else if (sourceHandle === 'data-out') sourceHandle = 'data-out';
         else sourceHandle = 'out-task'; 
+      } else if (sourceNode.type === 'task') {
+        if (targetNode?.type === 'tool') sourceHandle = 'out-tool';
+        else if (targetNode?.type === 'customTool') sourceHandle = 'out-custom-tool';
+        else if (targetNode?.type === 'mcp') sourceHandle = 'out-mcp';
+        else sourceHandle = 'out-tool'; // Default for task outlets in CrewAI is tool-related
       } else if (['crew', 'chat', 'webhook'].includes(sourceNode.type)) {
         sourceHandle = 'right-source';
       } else if (sourceNode.type === 'router') {

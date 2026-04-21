@@ -240,7 +240,7 @@ export const CrewNode = memo(({ id, data }: NodeProps<Node<CrewNodeData, 'crew'>
         </div>
       )}
 
-      {currentProjectFramework !== 'langgraph' && (
+      {currentProjectFramework !== 'langgraph' && currentProjectFramework !== 'crewai' && (
         <button
           onClick={(e) => { e.stopPropagation(); toggleCollapse(id); }}
           className="absolute -bottom-3 right-4 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-full p-0.5 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-700 shadow-sm z-10 transition-colors text-slate-400 dark:text-slate-500 hover:text-purple-500 dark:hover:text-purple-400"

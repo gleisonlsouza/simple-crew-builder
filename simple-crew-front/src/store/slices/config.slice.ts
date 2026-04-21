@@ -9,7 +9,7 @@ const API_URL = import.meta.env.VITE_API_URL || '';
 import { initialGlobalTools } from '../initialTools';
 
 const getInitialGlobalTools = (): ToolConfig[] => {
-  const STORAGE_KEY = 'global_tools_v8';
+  const STORAGE_KEY = 'global_tools_v9';
   const persistedRaw = localStorage.getItem(STORAGE_KEY);
   
   if (!persistedRaw) return initialGlobalTools;
@@ -198,7 +198,7 @@ export const createConfigSlice: StateCreator<AppState, [], [], ConfigSlice> = (s
     set({ defaultModel: model });
   },
 
-  updateToolConfig: (id: string, config: Partial<ModelConfig>) => {
+  updateToolConfig: (id: string, config: Partial<ToolConfig>) => {
     set((state) => {
       const newTools = state.globalTools.map((t) => t.id === id ? { ...t, ...config } : t);
       localStorage.setItem('global_tools_v8', JSON.stringify(newTools));
