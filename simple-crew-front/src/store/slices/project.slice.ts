@@ -55,7 +55,8 @@ export const createProjectSlice: StateCreator<AppState, [], [], ProjectSlice> = 
       nodeStatuses: {},
       nodeErrors: {},
       nodeWarnings: {},
-      activeNodeId: null
+      activeNodeId: null,
+      canvasLayout: snapshot.canvasLayout || 'vertical'
     });
   },
 
@@ -92,7 +93,8 @@ export const createProjectSlice: StateCreator<AppState, [], [], ProjectSlice> = 
           edges: state.edges,
           customTools: state.customTools,
           globalTools: state.globalTools,
-          version: "1.0"
+          version: "1.0",
+          canvasLayout: state.canvasLayout
         },
         framework: state.currentProjectFramework || 'crewai'
       };
@@ -218,7 +220,8 @@ export const createProjectSlice: StateCreator<AppState, [], [], ProjectSlice> = 
         messages: INITIAL_CHAT_MESSAGES,
         isConsoleOpen: false,
         isConsoleExpanded: false,
-        isChatVisible: false
+        isChatVisible: false,
+        canvasLayout: canvas_data.canvasLayout || 'vertical'
       });
       toast.success(`Project "${project.name}" loaded!`);
       // Ensure a clean slate (UI-only) right after load
@@ -254,7 +257,8 @@ export const createProjectSlice: StateCreator<AppState, [], [], ProjectSlice> = 
       canvas_data: {
         nodes: [],
         edges: [],
-        version: "1.0"
+        version: "1.0",
+        canvasLayout: "vertical"
       }
     };
 
@@ -476,7 +480,8 @@ export const createProjectSlice: StateCreator<AppState, [], [], ProjectSlice> = 
         currentProjectId: null,
         nodeStatuses: {},
         nodeErrors: {},
-        nodeWarnings: warnings
+        nodeWarnings: warnings,
+        canvasLayout: project.canvasLayout || 'vertical'
       });
       get().showNotification("Project uploaded successfully!", "success");
       return true;
@@ -503,7 +508,8 @@ export const createProjectSlice: StateCreator<AppState, [], [], ProjectSlice> = 
             edges: migrateEdges(migratedEdges, finalNodes),
             customTools: project.customTools || [],
             mcpServers: project.mcpServers || [],
-            version: project.version || "1.0"
+            version: project.version || "1.0",
+            canvasLayout: project.canvasLayout || "vertical"
           };
         })()
       };

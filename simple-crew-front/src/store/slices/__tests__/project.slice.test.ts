@@ -85,6 +85,8 @@ describe('projectSlice - Elite Coverage Max', () => {
             isLoadingExecutions: false,
             executions: [],
             currentExecution: null,
+            canvasLayout: 'vertical',
+            setCanvasLayout: vi.fn(),
 
             // Functions
             resetExecutionVisuals: vi.fn(),
@@ -610,7 +612,8 @@ describe('projectSlice - Elite Coverage Max', () => {
             nodes: [{ id: 'snap-n1', type: 'agent', data: MOCK_AGENT_DATA, position: { x: 0, y: 0 } } as AppNode],
             edges: [{ id: 'snap-e1', source: 'snap-n1', target: 'snap-n2' } as AppEdge],
             workspaceId: 'ws-2',
-            version: '1.0'
+            version: '1.0',
+            canvasLayout: 'vertical' as const
         };
 
         slice.hydrateFromSnapshot('snapshot-project-id', snapshot);
@@ -629,7 +632,7 @@ describe('projectSlice - Elite Coverage Max', () => {
     });
 
     it('hydrateFromSnapshot: falls back gracefully when workspace is missing or unknown', () => {
-        slice.hydrateFromSnapshot('snapshot-2', { nodes: [], edges: [], version: '1.0' });
+        slice.hydrateFromSnapshot('snapshot-2', { nodes: [], edges: [], version: '1.0', canvasLayout: 'vertical' });
         expect(mockState.currentProjectWorkspaceId).toBeNull();
         expect(mockState.currentProjectWorkspaceName).toBeNull();
         expect(mockState.isDirty).toBe(true);

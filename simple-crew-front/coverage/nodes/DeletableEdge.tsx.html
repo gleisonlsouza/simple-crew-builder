@@ -23,16 +23,16 @@
         <div class='clearfix'>
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">90.9% </span>
+                <span class="strong">91.3% </span>
                 <span class="quiet">Statements</span>
-                <span class='fraction'>20/22</span>
+                <span class='fraction'>21/23</span>
             </div>
         
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">100% </span>
+                <span class="strong">88.88% </span>
                 <span class="quiet">Branches</span>
-                <span class='fraction'>19/19</span>
+                <span class='fraction'>24/27</span>
             </div>
         
             
@@ -44,9 +44,9 @@
         
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">89.47% </span>
+                <span class="strong">90% </span>
                 <span class="quiet">Lines</span>
-                <span class='fraction'>17/19</span>
+                <span class='fraction'>18/20</span>
             </div>
         
             
@@ -169,7 +169,13 @@
 <a name='L104'></a><a href='#L104'>104</a>
 <a name='L105'></a><a href='#L105'>105</a>
 <a name='L106'></a><a href='#L106'>106</a>
-<a name='L107'></a><a href='#L107'>107</a></td><td class="line-coverage quiet"><span class="cline-any cline-neutral">&nbsp;</span>
+<a name='L107'></a><a href='#L107'>107</a>
+<a name='L108'></a><a href='#L108'>108</a>
+<a name='L109'></a><a href='#L109'>109</a>
+<a name='L110'></a><a href='#L110'>110</a>
+<a name='L111'></a><a href='#L111'>111</a>
+<a name='L112'></a><a href='#L112'>112</a></td><td class="line-coverage quiet"><span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -225,6 +231,10 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-yes">5x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">5x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -279,7 +289,7 @@
 import {
   BaseEdge,
   EdgeLabelRenderer,
-  getBezierPath,
+  getSmoothStepPath,
   type EdgeProps,
 } from '@xyflow/react';
 import { Trash2 } from 'lucide-react';
@@ -299,8 +309,9 @@ export function DeletableEdge({
   targetPosition,
   style = {},
   markerEnd,
+  data,
 }: EdgeProps) {
-  const [edgePath, labelX, labelY] = getBezierPath({
+  const [edgePath, labelX, labelY] = getSmoothStepPath({
     sourceX,
     sourceY,
     sourcePosition,
@@ -325,17 +336,21 @@ export function DeletableEdge({
     const isRunning = sourceStatus === 'running' || targetStatus === 'running';
     const isSuccess = sourceStatus === 'success' &amp;&amp; targetStatus === 'success';
 &nbsp;
-    let strokeColor = '#94a3b8';
+    let strokeColor = (style.stroke as string) || <span class="branch-1 cbranch-no" title="branch not covered" >'#94a3b8';</span>
     if (isRunning) strokeColor = '#3b82f6';
     else if (isSuccess) strokeColor = '#10b981';
+&nbsp;
+    const isDimmed = data?.isDimmed;
 &nbsp;
     return {
       ...style,
       stroke: strokeColor,
-      strokeWidth: isRunning ? 3 : 2,
-      transition: 'stroke 0.5s ease, stroke-width 0.5s ease',
+      strokeWidth: isRunning ? 4 : (style.strokeWidth as number || 3),
+      transition: 'stroke 0.5s ease, stroke-width 0.5s ease, opacity 0.5s ease, filter 0.5s ease',
+      opacity: isDimmed ? <span class="branch-0 cbranch-no" title="branch not covered" >0.15 : 1</span>,
+      filter: isDimmed ? <span class="branch-0 cbranch-no" title="branch not covered" >'grayscale(1)' : '</span>none',
     };
-  }, [sourceStatus, targetStatus, style]);
+  }, [sourceStatus, targetStatus, style, data?.isDimmed]);
 &nbsp;
   return (
     &lt;&gt;
@@ -369,7 +384,7 @@ export function DeletableEdge({
                 event.stopPropagation();
                 deleteEdge(id);
               }}
-              className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-xl rounded-md p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/30 hover:border-red-300 transition-all cursor-pointer flex items-center justify-center pointer-events-auto translate-y-0 active:scale-90"
+              className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-xl rounded-md p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/30 hover:border-red-300 transition-[opacity,filter,color,background-color,border-color] cursor-pointer flex items-center justify-center pointer-events-auto translate-y-0 active:scale-90"
               title="Delete connection"
               aria-label="Excluir conexão"
             &gt;
@@ -388,7 +403,7 @@ export function DeletableEdge({
             <div class='footer quiet pad2 space-top1 center small'>
                 Code coverage generated by
                 <a href="https://istanbul.js.org/" target="_blank" rel="noopener noreferrer">istanbul</a>
-                at 2026-04-05T23:14:12.181Z
+                at 2026-04-21T23:17:45.018Z
             </div>
         <script src="../prettify.js"></script>
         <script>

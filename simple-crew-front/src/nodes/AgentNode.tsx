@@ -1,5 +1,5 @@
 import { memo, useEffect } from 'react';
-import { Handle, Position, type NodeProps, type Node } from '@xyflow/react';
+import { Handle, Position, useUpdateNodeInternals, type NodeProps, type Node } from '@xyflow/react';
 import { useShallow } from 'zustand/shallow';
 import { User, Trash2, ChevronDown, ChevronUp, Loader2, CheckCircle2, AlertCircle, Clock, Cpu, Settings, Server, CheckSquare, Wrench } from 'lucide-react';
 import { useStore } from '../store/index';
@@ -27,6 +27,12 @@ export const AgentNode = memo(({ id, data }: NodeProps<Node<AgentNodeData, 'agen
   const nodes = useStore((state) => state.nodes);
   const edges = useStore((state) => state.edges);
   const currentProjectFramework = useStore((state) => state.currentProjectFramework);
+  const layout = useStore(state => state.canvasLayout);
+  const updateNodeInternals = useUpdateNodeInternals();
+
+  useEffect(() => {
+    updateNodeInternals(id);
+  }, [layout, id, updateNodeInternals]);
   
   const isAnyNodeRunning = useStore((state) => 
     Object.values(state.nodeStatuses || {}).some(s => s === 'running')
@@ -81,98 +87,147 @@ export const AgentNode = memo(({ id, data }: NodeProps<Node<AgentNodeData, 'agen
         '--node-color': '#3b82f6'
       } as React.CSSProperties}
     >
-      {/* Main Execution Flow Handle (Top) */}
-      <div className="absolute left-[40%] -top-[1px] -translate-x-1/2 flex flex-col items-center gap-2 group/h-crew -translate-y-full pointer-events-none">
-         <span className="text-[9px] font-bold text-blue-500 bg-white dark:bg-slate-900 px-1 rounded shadow-sm opacity-0 group-hover/h-crew:opacity-100 transition-opacity whitespace-nowrap border border-blue-100 dark:border-blue-900/30">Execution In</span>
-         <Handle 
-           type="target" 
-           position={Position.Top} 
-           id="agent-in" 
-           className="!w-3 !h-3 !border-2 !border-white dark:!border-slate-900 !static !translate-x-0 !cursor-crosshair pointer-events-auto shadow-sm" 
-           style={{ backgroundColor: '#2563eb' }} 
-         />
-      </div>
+      {/* Connection Handles */}
+      {(() => {
+        const isHorizontal = layout === 'horizontal';
 
-      {/* Structured Output Schema Handle (Top) */}
-      <div className="absolute left-[60%] -top-[1px] -translate-x-1/2 flex flex-col items-center gap-2 group/h-schema -translate-y-full pointer-events-none">
-         <span className="text-[9px] font-bold text-teal-500 bg-white dark:bg-slate-900 px-1 rounded shadow-sm opacity-0 group-hover/h-schema:opacity-100 transition-opacity whitespace-nowrap border border-teal-100 dark:border-teal-900/30">Schema In</span>
-         <Handle 
-           type="target" 
-           position={Position.Top} 
-           id="schema-input" 
-           className="!w-3 !h-3 !border-2 !border-white dark:!border-slate-900 !static !translate-x-0 !cursor-crosshair pointer-events-auto shadow-sm" 
-           style={{ backgroundColor: '#14b8a6' }} 
-         />
-      </div>
+        return (
+          <>
+            {/* Main Execution Flow Handle */}
+            <div className={isHorizontal
+              ? "absolute top-[40%] -left-[1px] -translate-y-1/2 flex items-center gap-2 group/h-crew -translate-x-full pointer-events-none"
+              : "absolute left-[40%] -top-[1px] -translate-x-1/2 flex flex-col items-center gap-2 group/h-crew -translate-y-full pointer-events-none"
+            }>
+               <span className="text-[9px] font-bold text-blue-500 bg-white dark:bg-slate-900 px-1 rounded shadow-sm opacity-0 group-hover/h-crew:opacity-100 transition-opacity whitespace-nowrap border border-blue-100 dark:border-blue-900/30">Execution In</span>
+               <Handle 
+                 type="target" 
+                 position={isHorizontal ? Position.Left : Position.Top} 
+                 id="agent-in" 
+                 className="!w-3 !h-3 !border-2 !border-white dark:!border-slate-900 !static !translate-x-0 !translate-y-0 !cursor-crosshair pointer-events-auto shadow-sm" 
+                 style={{ backgroundColor: '#2563eb' }} 
+               />
+            </div>
 
-      {/* Handles at the Bottom (Sources for Delegation & Flow) */}
-      <>
-        {/* Task Handle - 16% */}
-        <Handle 
-          type="source" 
-          position={Position.Bottom} 
-          id="out-task" 
-          className="!w-3 !h-3 !border-2 !border-white dark:!border-slate-900 !cursor-crosshair pointer-events-auto group/h-task z-10" 
-          style={{ backgroundColor: '#3b82f6', left: '16%' }} 
-        >
-           <span className="absolute top-4 left-1/2 -translate-x-1/2 text-[9px] font-bold text-blue-500 bg-white dark:bg-slate-900 px-1 rounded shadow-sm opacity-0 group-hover/h-task:opacity-100 transition-opacity whitespace-nowrap border border-blue-100 dark:border-blue-900/30 pointer-events-none">Tasks</span>
-        </Handle>
-        
-        {/* Tool Handle - 32% */}
-        <Handle 
-          type="source" 
-          position={Position.Bottom} 
-          id="out-tool" 
-          className="!w-3 !h-3 !border-2 !border-white dark:!border-slate-900 !cursor-crosshair pointer-events-auto group/h-tool z-10" 
-          style={{ backgroundColor: '#f97316', left: '32%' }} 
-        >
-           <span className="absolute top-4 left-1/2 -translate-x-1/2 text-[9px] font-bold text-orange-500 bg-white dark:bg-slate-900 px-1 rounded shadow-sm opacity-0 group-hover/h-tool:opacity-100 transition-opacity whitespace-nowrap border border-orange-100 dark:border-orange-900/30 pointer-events-none">Tools</span>
-        </Handle>
+            {/* Structured Output Schema Handle */}
+            <div className={isHorizontal
+              ? "absolute top-[60%] -left-[1px] -translate-y-1/2 flex items-center gap-2 group/h-schema -translate-x-full pointer-events-none"
+              : "absolute left-[60%] -top-[1px] -translate-x-1/2 flex flex-col items-center gap-2 group/h-schema -translate-y-full pointer-events-none"
+            }>
+               <span className="text-[9px] font-bold text-teal-500 bg-white dark:bg-slate-900 px-1 rounded shadow-sm opacity-0 group-hover/h-schema:opacity-100 transition-opacity whitespace-nowrap border border-teal-100 dark:border-teal-900/30">Schema In</span>
+               <Handle 
+                 type="target" 
+                 position={isHorizontal ? Position.Left : Position.Top} 
+                 id="schema-input" 
+                 className="!w-3 !h-3 !border-2 !border-white dark:!border-slate-900 !static !translate-x-0 !translate-y-0 !cursor-crosshair pointer-events-auto shadow-sm" 
+                 style={{ backgroundColor: '#14b8a6' }} 
+               />
+            </div>
 
-        {/* Custom Tool Handle - 48% */}
-        <Handle 
-          type="source" 
-          position={Position.Bottom} 
-          id="out-custom-tool" 
-          className="!w-3 !h-3 !border-2 !border-white dark:!border-slate-900 !cursor-crosshair pointer-events-auto group/h-custom-tool z-10" 
-          style={{ backgroundColor: '#fbbf24', left: '48%' }} 
-        >
-           <span className="absolute top-4 left-1/2 -translate-x-1/2 text-[9px] font-bold text-amber-500 bg-white dark:bg-slate-900 px-1 rounded shadow-sm opacity-0 group-hover/h-custom-tool:opacity-100 transition-opacity whitespace-nowrap border border-amber-100 dark:border-amber-900/30 pointer-events-none">Custom Tools</span>
-        </Handle>
+            {/* Output Handles */}
+            {/* Task Handle */}
+            <Handle 
+              type="source" 
+              position={isHorizontal ? Position.Right : Position.Bottom} 
+              id="out-task" 
+              className="!w-3 !h-3 !border-2 !border-white dark:!border-slate-900 !cursor-crosshair pointer-events-auto group/h-task z-10" 
+              style={{ 
+                backgroundColor: '#3b82f6', 
+                ...(isHorizontal ? { top: '16%', right: '-6px', left: 'auto' } : { left: '16%' }) 
+              }} 
+            >
+               <span className={isHorizontal
+                 ? "absolute left-4 top-1/2 -translate-y-1/2 text-[9px] font-bold text-blue-500 bg-white dark:bg-slate-900 px-1 rounded shadow-sm opacity-0 group-hover/h-task:opacity-100 transition-opacity whitespace-nowrap border border-blue-100 dark:border-blue-900/30 pointer-events-none"
+                 : "absolute top-4 left-1/2 -translate-x-1/2 text-[9px] font-bold text-blue-500 bg-white dark:bg-slate-900 px-1 rounded shadow-sm opacity-0 group-hover/h-task:opacity-100 transition-opacity whitespace-nowrap border border-blue-100 dark:border-blue-900/30 pointer-events-none"
+               }>Tasks</span>
+            </Handle>
+            
+            {/* Tool Handle */}
+            <Handle 
+              type="source" 
+              position={isHorizontal ? Position.Right : Position.Bottom} 
+              id="out-tool" 
+              className="!w-3 !h-3 !border-2 !border-white dark:!border-slate-900 !cursor-crosshair pointer-events-auto group/h-tool z-10" 
+              style={{ 
+                backgroundColor: '#f97316', 
+                ...(isHorizontal ? { top: '32%', right: '-6px', left: 'auto' } : { left: '32%' }) 
+              }} 
+            >
+               <span className={isHorizontal
+                 ? "absolute left-4 top-1/2 -translate-y-1/2 text-[9px] font-bold text-orange-500 bg-white dark:bg-slate-900 px-1 rounded shadow-sm opacity-0 group-hover/h-tool:opacity-100 transition-opacity whitespace-nowrap border border-orange-100 dark:border-orange-900/30 pointer-events-none"
+                 : "absolute top-4 left-1/2 -translate-x-1/2 text-[9px] font-bold text-orange-500 bg-white dark:bg-slate-900 px-1 rounded shadow-sm opacity-0 group-hover/h-tool:opacity-100 transition-opacity whitespace-nowrap border border-orange-100 dark:border-orange-900/30 pointer-events-none"
+               }>Tools</span>
+            </Handle>
 
-        {/* MCP Handle - 64% */}
-        <Handle 
-          type="source" 
-          position={Position.Bottom} 
-          id="out-mcp" 
-          className="!w-3 !h-3 !border-2 !border-white dark:!border-slate-900 !cursor-crosshair pointer-events-auto group/h-mcp z-10" 
-          style={{ backgroundColor: '#ec4899', left: '64%' }} 
-        >
-           <span className="absolute top-4 left-1/2 -translate-x-1/2 text-[9px] font-bold text-pink-500 bg-white dark:bg-slate-900 px-1 rounded shadow-sm opacity-0 group-hover/h-mcp:opacity-100 transition-opacity whitespace-nowrap border border-pink-100 dark:border-pink-900/30 pointer-events-none">MCP</span>
-        </Handle>
+            {/* Custom Tool Handle */}
+            <Handle 
+              type="source" 
+              position={isHorizontal ? Position.Right : Position.Bottom} 
+              id="out-custom-tool" 
+              className="!w-3 !h-3 !border-2 !border-white dark:!border-slate-900 !cursor-crosshair pointer-events-auto group/h-custom-tool z-10" 
+              style={{ 
+                backgroundColor: '#fbbf24', 
+                ...(isHorizontal ? { top: '48%', right: '-6px', left: 'auto' } : { left: '48%' }) 
+              }} 
+            >
+               <span className={isHorizontal
+                 ? "absolute left-4 top-1/2 -translate-y-1/2 text-[9px] font-bold text-amber-500 bg-white dark:bg-slate-900 px-1 rounded shadow-sm opacity-0 group-hover/h-custom-tool:opacity-100 transition-opacity whitespace-nowrap border border-amber-100 dark:border-amber-900/30 pointer-events-none"
+                 : "absolute top-4 left-1/2 -translate-x-1/2 text-[9px] font-bold text-amber-500 bg-white dark:bg-slate-900 px-1 rounded shadow-sm opacity-0 group-hover/h-custom-tool:opacity-100 transition-opacity whitespace-nowrap border border-amber-100 dark:border-amber-900/30 pointer-events-none"
+               }>Custom Tools</span>
+            </Handle>
 
-        {/* Data Output Handle - 80% */}
-        <Handle 
-          type="source" 
-          position={Position.Bottom} 
-          id="data-out" 
-          className="!w-3 !h-3 !border-2 !border-white dark:!border-slate-900 !cursor-crosshair pointer-events-auto group/h-data-out z-10" 
-          style={{ backgroundColor: '#a855f7', left: '80%' }} 
-        >
-           <span className="absolute top-4 left-1/2 -translate-x-1/2 text-[9px] font-bold text-purple-600 bg-white dark:bg-slate-900 px-1 rounded shadow-sm opacity-0 group-hover/h-data-out:opacity-100 transition-opacity whitespace-nowrap border border-purple-100 dark:border-purple-900/30 pointer-events-none uppercase">Data Out</span>
-        </Handle>
+            {/* MCP Handle */}
+            <Handle 
+              type="source" 
+              position={isHorizontal ? Position.Right : Position.Bottom} 
+              id="out-mcp" 
+              className="!w-3 !h-3 !border-2 !border-white dark:!border-slate-900 !cursor-crosshair pointer-events-auto group/h-mcp z-10" 
+              style={{ 
+                backgroundColor: '#ec4899', 
+                ...(isHorizontal ? { top: '64%', right: '-6px', left: 'auto' } : { left: '64%' }) 
+              }} 
+            >
+               <span className={isHorizontal
+                 ? "absolute left-4 top-1/2 -translate-y-1/2 text-[9px] font-bold text-pink-500 bg-white dark:bg-slate-900 px-1 rounded shadow-sm opacity-0 group-hover/h-mcp:opacity-100 transition-opacity whitespace-nowrap border border-pink-100 dark:border-pink-900/30 pointer-events-none"
+                 : "absolute top-4 left-1/2 -translate-x-1/2 text-[9px] font-bold text-pink-500 bg-white dark:bg-slate-900 px-1 rounded shadow-sm opacity-0 group-hover/h-mcp:opacity-100 transition-opacity whitespace-nowrap border border-pink-100 dark:border-pink-900/30 pointer-events-none"
+               }>MCP</span>
+            </Handle>
 
-        {/* Execution Output Handle - 92% */}
-        <Handle 
-          type="source" 
-          position={Position.Bottom} 
-          id="agent-out" 
-          className="!w-3 !h-3 !border-2 !border-white dark:!border-slate-900 !cursor-crosshair pointer-events-auto group/h-agent-out z-10 font-bold" 
-          style={{ backgroundColor: '#2563eb', left: '92%' }} 
-        >
-           <span className="absolute top-4 left-1/2 -translate-x-1/2 text-[9px] font-bold text-blue-600 bg-white dark:bg-slate-900 px-1 rounded shadow-sm opacity-0 group-hover/h-agent-out:opacity-100 transition-opacity whitespace-nowrap border border-blue-100 dark:border-blue-900/30 pointer-events-none uppercase">Execution Out</span>
-        </Handle>
-      </>
+            {/* Data Output Handle */}
+            <Handle 
+              type="source" 
+              position={isHorizontal ? Position.Right : Position.Bottom} 
+              id="data-out" 
+              className="!w-3 !h-3 !border-2 !border-white dark:!border-slate-900 !cursor-crosshair pointer-events-auto group/h-data-out z-10" 
+              style={{ 
+                backgroundColor: '#a855f7', 
+                ...(isHorizontal ? { top: '80%', right: '-6px', left: 'auto' } : { left: '80%' }) 
+              }} 
+            >
+               <span className={isHorizontal
+                 ? "absolute left-4 top-1/2 -translate-y-1/2 text-[9px] font-bold text-purple-600 bg-white dark:bg-slate-900 px-1 rounded shadow-sm opacity-0 group-hover/h-data-out:opacity-100 transition-opacity whitespace-nowrap border border-purple-100 dark:border-purple-900/30 pointer-events-none uppercase"
+                 : "absolute top-4 left-1/2 -translate-x-1/2 text-[9px] font-bold text-purple-600 bg-white dark:bg-slate-900 px-1 rounded shadow-sm opacity-0 group-hover/h-data-out:opacity-100 transition-opacity whitespace-nowrap border border-purple-100 dark:border-purple-900/30 pointer-events-none uppercase"
+               }>Data Out</span>
+            </Handle>
+
+            {/* Execution Output Handle */}
+            <Handle 
+              type="source" 
+              position={isHorizontal ? Position.Right : Position.Bottom} 
+              id="agent-out" 
+              className="!w-3 !h-3 !border-2 !border-white dark:!border-slate-900 !cursor-crosshair pointer-events-auto group/h-agent-out z-10 font-bold" 
+              style={{ 
+                backgroundColor: '#2563eb', 
+                ...(isHorizontal ? { top: '92%', right: '-6px', left: 'auto' } : { left: '92%' }) 
+              }} 
+            >
+               <span className={isHorizontal
+                 ? "absolute left-4 top-1/2 -translate-y-1/2 text-[9px] font-bold text-blue-600 bg-white dark:bg-slate-900 px-1 rounded shadow-sm opacity-0 group-hover/h-agent-out:opacity-100 transition-opacity whitespace-nowrap border border-blue-100 dark:border-blue-900/30 pointer-events-none uppercase"
+                 : "absolute top-4 left-1/2 -translate-x-1/2 text-[9px] font-bold text-blue-600 bg-white dark:bg-slate-900 px-1 rounded shadow-sm opacity-0 group-hover/h-agent-out:opacity-100 transition-opacity whitespace-nowrap border border-blue-100 dark:border-blue-900/30 pointer-events-none uppercase"
+               }>Execution Out</span>
+            </Handle>
+          </>
+        );
+      })()}
 
       {status === 'waiting' && (
         <div className="absolute -top-2 -right-2 bg-white dark:bg-slate-900 rounded-full p-0.5 shadow-md z-20 border border-slate-100 dark:border-slate-800 animate-in zoom-in duration-200">

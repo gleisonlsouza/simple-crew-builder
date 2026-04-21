@@ -15,7 +15,7 @@ import {
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import { useShallow } from 'zustand/shallow';
-import { Play, Sparkles, Save, Loader2, ArrowLeft, Wand2 } from 'lucide-react';
+import { Play, Sparkles, Save, Loader2, ArrowLeft, Wand2, Rows, Columns } from 'lucide-react';
 import { useParams, useNavigate } from 'react-router-dom';
 import type { AppNode } from '../types/nodes.types';
 
@@ -243,7 +243,8 @@ function FlowBuilder() {
     isExecuting, startRealExecution, executionResult, setIsConsoleExpanded, setIsConsoleOpen,
     isChatVisible, setIsChatVisible, resetUIState,
     loadProject, saveProject, currentProjectId, isSaving, resetProject, validateGraph,
-    showNotification, updateProjectMetadata, currentProjectName, currentProjectDescription
+    showNotification, updateProjectMetadata, currentProjectName, currentProjectDescription,
+    canvasLayout, setCanvasLayout
   } = useStore(
     useShallow((state) => ({
       isExecuting: state.isExecuting,
@@ -263,7 +264,9 @@ function FlowBuilder() {
       showNotification: state.showNotification,
       updateProjectMetadata: state.updateProjectMetadata,
       currentProjectName: state.currentProjectName,
-      currentProjectDescription: state.currentProjectDescription
+      currentProjectDescription: state.currentProjectDescription,
+      canvasLayout: state.canvasLayout,
+      setCanvasLayout: state.setCanvasLayout
     }))
   );
 
@@ -410,8 +413,22 @@ function FlowBuilder() {
           </button>
         </div>
 
-        <div className="flex items-center gap-3">
-          {activeView === 'editor' && (
+          <div className="flex items-center gap-2">
+            {activeView === 'editor' && (
+              <button
+                onClick={() => setCanvasLayout(canvasLayout === 'vertical' ? 'horizontal' : 'vertical')}
+                className="flex items-center justify-center w-9 h-9 rounded-lg bg-brand-bg/40 border border-brand-border text-brand-muted hover:text-indigo-500 hover:border-indigo-500/50 hover:bg-indigo-500/5 transition-all duration-300 shadow-sm group"
+                title={`Switch to ${canvasLayout === 'vertical' ? 'Horizontal' : 'Vertical'} flow orientation`}
+              >
+                {canvasLayout === 'vertical' ? (
+                  <Columns className="w-4 h-4 transition-transform group-hover:rotate-180 duration-500" />
+                ) : (
+                  <Rows className="w-4 h-4 transition-transform group-hover:rotate-180 duration-500" />
+                )}
+              </button>
+            )}
+
+            {activeView === 'editor' && (
             <button
               onClick={() => useStore.getState().applyAutoLayout()}
               className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium text-violet-600 dark:text-violet-400 bg-violet-50 dark:bg-violet-900/20 hover:bg-violet-100 dark:hover:bg-violet-900/40 transition-colors shadow-sm border border-violet-200 dark:border-violet-800"

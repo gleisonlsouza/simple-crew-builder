@@ -1,5 +1,5 @@
 import { memo, useState, useEffect } from 'react';
-import { Handle, Position, type NodeProps, type Node } from '@xyflow/react';
+import { Handle, Position, useUpdateNodeInternals, type NodeProps, type Node } from '@xyflow/react';
 import { useShallow } from 'zustand/shallow';
 import { Users, Trash2, ChevronDown, ChevronUp, Loader2, CheckCircle2, Link, Settings, Clock, AlertCircle, Server } from 'lucide-react';
 import { useStore } from '../store/index';
@@ -25,9 +25,17 @@ export const CrewNode = memo(({ id, data }: NodeProps<Node<CrewNodeData, 'crew'>
   const errors = useStore((state) => state.nodeErrors[id]);
   const edges = useStore((state) => state.edges);
 
+  const layout = useStore(state => state.canvasLayout);
+  const updateNodeInternals = useUpdateNodeInternals();
+
+  useEffect(() => {
+    updateNodeInternals(id);
+  }, [layout, id, updateNodeInternals]);
+
   const isAnyNodeRunning = useStore((state) => 
     Object.values(state.nodeStatuses || {}).some(s => s === 'running')
   );
+
   const childCount = edges.filter((edge) => edge.source === id).length;
 
   // Sync selectedStateId with existing edges if not already set
@@ -251,41 +259,58 @@ export const CrewNode = memo(({ id, data }: NodeProps<Node<CrewNodeData, 'crew'>
       )}
 
       {/* Connection Handles */}
-      {/* Trigger Input Handle (Top) */}
-      <div className="absolute left-[40%] -top-[1px] -translate-x-1/2 flex flex-col items-center gap-2 group/h-trigger -translate-y-full pointer-events-none">
-         <span className="text-[9px] font-bold text-cyan-500 bg-white dark:bg-slate-900 px-1 rounded shadow-sm opacity-0 group-hover/h-trigger:opacity-100 transition-opacity whitespace-nowrap border border-cyan-100 dark:border-cyan-900/30">Trigger In</span>
-          <Handle 
-            type="target" 
-            position={Position.Top} 
-            id="trigger-in"
-            className="!w-3 !h-3 !border-2 !border-white dark:!border-slate-900 !static !translate-x-0 !cursor-crosshair pointer-events-auto shadow-sm" 
-            style={{ backgroundColor: '#06b6d4' }} 
-          />
-      </div>
+      {(() => {
+        const isHorizontal = layout === 'horizontal';
+        
+        return (
+          <>
+            {/* Trigger Input Handle */}
+            <div className={isHorizontal 
+              ? "absolute top-[40%] -left-[1px] -translate-y-1/2 flex items-center gap-2 group/h-trigger -translate-x-full pointer-events-none"
+              : "absolute left-[40%] -top-[1px] -translate-x-1/2 flex flex-col items-center gap-2 group/h-trigger -translate-y-full pointer-events-none"
+            }>
+               <span className="text-[9px] font-bold text-cyan-500 bg-white dark:bg-slate-900 px-1 rounded shadow-sm opacity-0 group-hover/h-trigger:opacity-100 transition-opacity whitespace-nowrap border border-cyan-100 dark:border-cyan-900/30">Trigger In</span>
+                <Handle 
+                  type="target" 
+                  position={isHorizontal ? Position.Left : Position.Top} 
+                  id="trigger-in"
+                  className="!w-3 !h-3 !border-2 !border-white dark:!border-slate-900 !static !translate-x-0 !translate-y-0 !cursor-crosshair pointer-events-auto shadow-sm" 
+                  style={{ backgroundColor: '#06b6d4' }} 
+                />
+            </div>
 
-      {/* State Input Handle (Top) */}
-      <div className="absolute left-[60%] -top-[1px] -translate-x-1/2 flex flex-col items-center gap-2 group/h-state -translate-y-full pointer-events-none">
-         <span className="text-[9px] font-bold text-purple-500 bg-white dark:bg-slate-900 px-1 rounded shadow-sm opacity-0 group-hover/h-state:opacity-100 transition-opacity whitespace-nowrap border border-purple-100 dark:border-purple-900/30">State In</span>
-          <Handle 
-            type="target" 
-            position={Position.Top} 
-            id="state-in"
-            className="!w-3 !h-3 !border-2 !border-white dark:!border-slate-900 !static !translate-x-0 !cursor-crosshair pointer-events-auto shadow-sm" 
-            style={{ backgroundColor: '#a855f7' }} 
-          />
-      </div>
+            {/* State Input Handle */}
+            <div className={isHorizontal
+              ? "absolute top-[60%] -left-[1px] -translate-y-1/2 flex items-center gap-2 group/h-state -translate-x-full pointer-events-none"
+              : "absolute left-[60%] -top-[1px] -translate-x-1/2 flex flex-col items-center gap-2 group/h-state -translate-y-full pointer-events-none"
+            }>
+               <span className="text-[9px] font-bold text-purple-500 bg-white dark:bg-slate-900 px-1 rounded shadow-sm opacity-0 group-hover/h-state:opacity-100 transition-opacity whitespace-nowrap border border-purple-100 dark:border-purple-900/30">State In</span>
+                <Handle 
+                  type="target" 
+                  position={isHorizontal ? Position.Left : Position.Top} 
+                  id="state-in"
+                  className="!w-3 !h-3 !border-2 !border-white dark:!border-slate-900 !static !translate-x-0 !translate-y-0 !cursor-crosshair pointer-events-auto shadow-sm" 
+                  style={{ backgroundColor: '#a855f7' }} 
+                />
+            </div>
 
-      {/* Exec Flow Output Handle (Bottom) */}
-      <div className="absolute left-1/2 -bottom-[1px] -translate-x-1/2 flex flex-col items-center gap-2 group/h-exec translate-y-full pointer-events-none">
-         <Handle 
-          type="source" 
-          position={Position.Bottom} 
-          id="right-source" 
-          className="!w-3 !h-3 !border-2 !border-white dark:!border-slate-900 !static !translate-x-0 !cursor-crosshair pointer-events-auto shadow-sm" 
-          style={{ backgroundColor: '#a855f7' }} 
-        />
-         <span className="text-[9px] font-bold text-purple-500 bg-white dark:bg-slate-900 px-1 rounded shadow-sm opacity-0 group-hover/h-exec:opacity-100 transition-opacity whitespace-nowrap border border-purple-100 dark:border-purple-900/30">Exec Flow</span>
-      </div>
+            {/* Exec Flow Output Handle */}
+            <div className={isHorizontal
+              ? "absolute top-1/2 -right-[1px] -translate-y-1/2 flex items-center gap-2 group/h-exec translate-x-full pointer-events-none"
+              : "absolute left-1/2 -bottom-[1px] -translate-x-1/2 flex flex-col items-center gap-2 group/h-exec translate-y-full pointer-events-none"
+            }>
+               <Handle 
+                type="source" 
+                position={isHorizontal ? Position.Right : Position.Bottom} 
+                id="right-source" 
+                className="!w-3 !h-3 !border-2 !border-white dark:!border-slate-900 !static !translate-x-0 !translate-y-0 !cursor-crosshair pointer-events-auto shadow-sm" 
+                style={{ backgroundColor: '#a855f7' }} 
+              />
+               <span className="text-[9px] font-bold text-purple-500 bg-white dark:bg-slate-900 px-1 rounded shadow-sm opacity-0 group-hover/h-exec:opacity-100 transition-opacity whitespace-nowrap border border-purple-100 dark:border-purple-900/30">Exec Flow</span>
+            </div>
+          </>
+        );
+      })()}
     </div>
   );
 });

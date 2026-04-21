@@ -1,5 +1,5 @@
-import { memo } from 'react';
-import { Handle, Position, type NodeProps, type Node } from '@xyflow/react';
+import { memo, useEffect } from 'react';
+import { Handle, Position, useUpdateNodeInternals, type NodeProps, type Node } from '@xyflow/react';
 import { useShallow } from 'zustand/shallow';
 import { GitBranch, Trash2, Settings, ListChecks, Check } from 'lucide-react';
 import { useStore } from '../store/index';
@@ -21,6 +21,12 @@ export const RouterNode = memo(({ id, data }: NodeProps<Node<RouterNodeData, 'ro
 
   const status = useStore((state) => (state.nodeStatuses[id] as NodeStatus) || 'idle');
   const errors = useStore((state) => state.nodeErrors[id]);
+  const layout = useStore(state => state.canvasLayout);
+  const updateNodeInternals = useUpdateNodeInternals();
+
+  useEffect(() => {
+    updateNodeInternals(id);
+  }, [layout, id, updateNodeInternals]);
 
   const statusClasses = errors?.length
     ? 'ring-2 ring-red-400 ring-offset-2'
@@ -47,17 +53,26 @@ export const RouterNode = memo(({ id, data }: NodeProps<Node<RouterNodeData, 'ro
         '--node-color': '#6366f1',
       } as React.CSSProperties}
     >
-      {/* Execution Input Handle (Top) */}
-      <div className="absolute left-1/2 -top-[1px] -translate-x-1/2 flex flex-col items-center gap-2 group/h-router-in -translate-y-full pointer-events-none">
-         <span className="text-[9px] font-bold text-indigo-500 bg-white dark:bg-slate-900 px-1 rounded shadow-sm opacity-0 group-hover/h-router-in:opacity-100 transition-opacity whitespace-nowrap border border-indigo-100 dark:border-indigo-900/30 font-sans">Execution In</span>
-          <Handle 
-            type="target" 
-            position={Position.Top} 
-            id="router-in"
-            className="!w-3 !h-3 !border-2 !border-white dark:!border-slate-900 !static !translate-x-0 !cursor-crosshair pointer-events-auto shadow-sm" 
-            style={{ backgroundColor: '#6366f1' }} 
-          />
-      </div>
+      {/* Connection Handles */}
+      {(() => {
+        const isHorizontal = layout === 'horizontal';
+
+        return (
+          <div className={isHorizontal
+            ? "absolute top-1/2 -left-[1px] -translate-y-1/2 flex items-center gap-2 group/h-router-in -translate-x-full pointer-events-none"
+            : "absolute left-1/2 -top-[1px] -translate-x-1/2 flex flex-col items-center gap-2 group/h-router-in -translate-y-full pointer-events-none"
+          }>
+             <span className="text-[9px] font-bold text-indigo-500 bg-white dark:bg-slate-900 px-1 rounded shadow-sm opacity-0 group-hover/h-router-in:opacity-100 transition-opacity whitespace-nowrap border border-indigo-100 dark:border-indigo-900/30 font-sans">Execution In</span>
+              <Handle 
+                type="target" 
+                position={isHorizontal ? Position.Left : Position.Top} 
+                id="router-in"
+                className="!w-3 !h-3 !border-2 !border-white dark:!border-slate-900 !static !translate-x-0 !translate-y-0 !cursor-crosshair pointer-events-auto shadow-sm" 
+                style={{ backgroundColor: '#6366f1' }} 
+              />
+          </div>
+        );
+      })()}
 
       {/* Header */}
       <div className="bg-gradient-to-r from-indigo-500 to-indigo-600 px-3 py-2 flex items-center gap-2 rounded-t-xl relative">

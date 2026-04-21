@@ -28,7 +28,7 @@ describe('ExecutionTable', () => {
       trigger_type: 'chat',
       input_data: {},
       output_data: 'Result 1',
-      graph_snapshot: { nodes: [], edges: [], version: '1.0' },
+      graph_snapshot: { nodes: [], edges: [], version: '1.0', canvasLayout: 'vertical' },
       timestamp: '2024-01-01T10:00:00Z',
       duration: 1500,
     },
@@ -39,7 +39,7 @@ describe('ExecutionTable', () => {
       trigger_type: 'webhook',
       input_data: {},
       output_data: 'Error message',
-      graph_snapshot: { nodes: [], edges: [], version: '1.0' },
+      graph_snapshot: { nodes: [], edges: [], version: '1.0', canvasLayout: 'vertical' },
       timestamp: '2024-01-01T11:00:00Z',
       duration: 2000,
     },
@@ -49,7 +49,7 @@ describe('ExecutionTable', () => {
         status: 'running' as any,
         trigger_type: 'chat',
         input_data: {},
-        graph_snapshot: { nodes: [], edges: [], version: '1.0' },
+        graph_snapshot: { nodes: [], edges: [], version: '1.0', canvasLayout: 'vertical' },
         timestamp: '2024-01-01T12:00:00Z',
       }
   ];

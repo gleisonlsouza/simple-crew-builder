@@ -941,7 +941,8 @@ export const createGraphSlice: StateCreator<AppState, [], [], GraphSlice> = (set
       currentProjectId: null,
       currentProjectName: null,
       currentProjectDescription: null,
-      isDirty: false
+      isDirty: false,
+      canvasLayout: 'vertical'
     });
   },
 
@@ -1119,8 +1120,8 @@ export const createGraphSlice: StateCreator<AppState, [], [], GraphSlice> = (set
   },
 
   applyAutoLayout: () => {
-    const { nodes, edges } = get();
-    const { nodes: layoutedNodes, edges: layoutedEdges } = getLayoutedElements(nodes, edges);
+    const { nodes, edges, canvasLayout } = get();
+    const { nodes: layoutedNodes, edges: layoutedEdges } = getLayoutedElements(nodes, edges, canvasLayout);
     set({ nodes: layoutedNodes, edges: layoutedEdges, isDirty: true });
   },
 });

@@ -1,5 +1,5 @@
-import { memo } from 'react';
-import { Handle, Position, type NodeProps, type Node } from '@xyflow/react';
+import { memo, useEffect } from 'react';
+import { Handle, Position, useUpdateNodeInternals, type NodeProps, type Node } from '@xyflow/react';
 import { useShallow } from 'zustand/shallow';
 import { CheckSquare, Trash2, Loader2, CheckCircle2, AlertCircle, Clock, Settings, ChevronDown, ChevronUp, Wrench, Server } from 'lucide-react';
 import { useStore } from '../store/index';
@@ -17,6 +17,12 @@ export const TaskNode = memo(({ id, data }: NodeProps<Node<TaskNodeData, 'task'>
     }))
   );
   const edges = useStore((state) => state.edges);
+  const layout = useStore(state => state.canvasLayout);
+  const updateNodeInternals = useUpdateNodeInternals();
+
+  useEffect(() => {
+    updateNodeInternals(id);
+  }, [layout, id, updateNodeInternals]);
 
   const status = useStore((state) => state.nodeStatuses[id] || 'idle');
   const errors = useStore((state) => state.nodeErrors[id]);
@@ -151,56 +157,82 @@ export const TaskNode = memo(({ id, data }: NodeProps<Node<TaskNodeData, 'task'>
         </button>
       )}
 
-      {/* Connection Handles - CrewAI Only */}
-      {framework === 'crewai' && (
-        <>
-          {/* Tools (Orange) */}
-          <Handle 
-            type="source" 
-            position={Position.Bottom} 
-            id="out-tool" 
-            className="!w-3 !h-3 !border-2 !border-white dark:!border-slate-900 !cursor-crosshair pointer-events-auto group/h-tool z-10" 
-            style={{ backgroundColor: '#f97316', left: '25%' }} 
-          >
-             <span className="absolute top-4 left-1/2 -translate-x-1/2 text-[9px] font-bold text-orange-500 bg-white dark:bg-slate-900 px-1 rounded shadow-sm opacity-0 group-hover/h-tool:opacity-100 transition-opacity whitespace-nowrap border border-orange-100 dark:border-orange-900/30 pointer-events-none">Tools</span>
-          </Handle>
+      {/* Connection Handles */}
+      {(() => {
+        const isHorizontal = layout === 'horizontal';
 
-          {/* Custom Tools (Amber/Orange) */}
-          <Handle 
-            type="source" 
-            position={Position.Bottom} 
-            id="out-custom-tool" 
-            className="!w-3 !h-3 !border-2 !border-white dark:!border-slate-900 !cursor-crosshair pointer-events-auto group/h-custom-tool z-10" 
-            style={{ backgroundColor: '#fbbf24', left: '50%' }} 
-          >
-             <span className="absolute top-4 left-1/2 -translate-x-1/2 text-[9px] font-bold text-amber-500 bg-white dark:bg-slate-900 px-1 rounded shadow-sm opacity-0 group-hover/h-custom-tool:opacity-100 transition-opacity whitespace-nowrap border border-amber-100 dark:border-amber-900/30 pointer-events-none">Custom Tools</span>
-          </Handle>
+        return (
+          <>
+            {/* CrewAI Tools */}
+            {framework === 'crewai' && (
+              <>
+                <Handle 
+                  type="source" 
+                  position={isHorizontal ? Position.Right : Position.Bottom} 
+                  id="out-tool" 
+                  className="!w-3 !h-3 !border-2 !border-white dark:!border-slate-900 !cursor-crosshair pointer-events-auto group/h-tool z-10" 
+                  style={{ 
+                    backgroundColor: '#f97316', 
+                    ...(isHorizontal ? { top: '25%', right: '-6px', left: 'auto' } : { left: '25%' }) 
+                  }} 
+                >
+                   <span className={isHorizontal
+                     ? "absolute left-4 top-1/2 -translate-y-1/2 text-[9px] font-bold text-orange-500 bg-white dark:bg-slate-900 px-1 rounded shadow-sm opacity-0 group-hover/h-tool:opacity-100 transition-opacity whitespace-nowrap border border-orange-100 dark:border-orange-900/30 pointer-events-none"
+                     : "absolute top-4 left-1/2 -translate-x-1/2 text-[9px] font-bold text-orange-500 bg-white dark:bg-slate-900 px-1 rounded shadow-sm opacity-0 group-hover/h-tool:opacity-100 transition-opacity whitespace-nowrap border border-orange-100 dark:border-orange-900/30 pointer-events-none"
+                   }>Tools</span>
+                </Handle>
 
-          {/* MCP (Pink) */}
-          <Handle 
-            type="source" 
-            position={Position.Bottom} 
-            id="out-mcp" 
-            className="!w-3 !h-3 !border-2 !border-white dark:!border-slate-900 !cursor-crosshair pointer-events-auto group/h-mcp z-10" 
-            style={{ backgroundColor: '#ec4899', left: '75%' }} 
-          >
-             <span className="absolute top-4 left-1/2 -translate-x-1/2 text-[9px] font-bold text-pink-500 bg-white dark:bg-slate-900 px-1 rounded shadow-sm opacity-0 group-hover/h-mcp:opacity-100 transition-opacity whitespace-nowrap border border-pink-100 dark:border-pink-900/30 pointer-events-none">MCP</span>
-          </Handle>
-        </>
-      )}
+                <Handle 
+                  type="source" 
+                  position={isHorizontal ? Position.Right : Position.Bottom} 
+                  id="out-custom-tool" 
+                  className="!w-3 !h-3 !border-2 !border-white dark:!border-slate-900 !cursor-crosshair pointer-events-auto group/h-custom-tool z-10" 
+                  style={{ 
+                    backgroundColor: '#fbbf24', 
+                    ...(isHorizontal ? { top: '50%', right: '-6px', left: 'auto' } : { left: '50%' }) 
+                  }} 
+                >
+                   <span className={isHorizontal
+                     ? "absolute left-4 top-1/2 -translate-y-1/2 text-[9px] font-bold text-amber-500 bg-white dark:bg-slate-900 px-1 rounded shadow-sm opacity-0 group-hover/h-custom-tool:opacity-100 transition-opacity whitespace-nowrap border border-amber-100 dark:border-amber-900/30 pointer-events-none"
+                     : "absolute top-4 left-1/2 -translate-x-1/2 text-[9px] font-bold text-amber-500 bg-white dark:bg-slate-900 px-1 rounded shadow-sm opacity-0 group-hover/h-custom-tool:opacity-100 transition-opacity whitespace-nowrap border border-amber-100 dark:border-amber-900/30 pointer-events-none"
+                   }>Custom Tools</span>
+                </Handle>
 
-      {/* Connection Handle - Task connects to Agent (Purple) */}
-      {/* Connection Handle - Task receives from Agent (Blue) */}
-      <div className="absolute left-1/2 -top-[1px] -translate-x-1/2 flex flex-col items-center gap-2 group/h-task -translate-y-full pointer-events-none">
-          <span className="text-[9px] font-bold text-blue-500 bg-white dark:bg-slate-900 px-1 rounded shadow-sm opacity-0 group-hover/h-task:opacity-100 transition-opacity whitespace-nowrap border border-blue-100 dark:border-blue-900/30">Task Instruction</span>
-          <Handle 
-            type="target" 
-            position={Position.Top} 
-            id="left-target"
-            className="!w-3 !h-3 !border-2 !border-white dark:!border-slate-900 !static !translate-x-0 !cursor-crosshair pointer-events-auto shadow-sm" 
-            style={{ backgroundColor: '#3b82f6' }} 
-          />
-      </div>
+                <Handle 
+                  type="source" 
+                  position={isHorizontal ? Position.Right : Position.Bottom} 
+                  id="out-mcp" 
+                  className="!w-3 !h-3 !border-2 !border-white dark:!border-slate-900 !cursor-crosshair pointer-events-auto group/h-mcp z-10" 
+                  style={{ 
+                    backgroundColor: '#ec4899', 
+                    ...(isHorizontal ? { top: '75%', right: '-6px', left: 'auto' } : { left: '75%' }) 
+                  }} 
+                >
+                   <span className={isHorizontal
+                     ? "absolute left-4 top-1/2 -translate-y-1/2 text-[9px] font-bold text-pink-500 bg-white dark:bg-slate-900 px-1 rounded shadow-sm opacity-0 group-hover/h-mcp:opacity-100 transition-opacity whitespace-nowrap border border-pink-100 dark:border-pink-900/30 pointer-events-none"
+                     : "absolute top-4 left-1/2 -translate-x-1/2 text-[9px] font-bold text-pink-500 bg-white dark:bg-slate-900 px-1 rounded shadow-sm opacity-0 group-hover/h-mcp:opacity-100 transition-opacity whitespace-nowrap border border-pink-100 dark:border-pink-900/30 pointer-events-none"
+                   }>MCP</span>
+                </Handle>
+              </>
+            )}
+
+            {/* Input Handle */}
+            <div className={isHorizontal
+              ? "absolute top-1/2 -left-[1px] -translate-y-1/2 flex items-center gap-2 group/h-task -translate-x-full pointer-events-none"
+              : "absolute left-1/2 -top-[1px] -translate-x-1/2 flex flex-col items-center gap-2 group/h-task -translate-y-full pointer-events-none"
+            }>
+               <span className="text-[9px] font-bold text-blue-500 bg-white dark:bg-slate-900 px-1 rounded shadow-sm opacity-0 group-hover/h-task:opacity-100 transition-opacity whitespace-nowrap border border-blue-100 dark:border-blue-900/30">Task Instruction</span>
+                <Handle 
+                  type="target" 
+                  position={isHorizontal ? Position.Left : Position.Top} 
+                  id="left-target"
+                  className="!w-3 !h-3 !border-2 !border-white dark:!border-slate-900 !static !translate-x-0 !translate-y-0 !cursor-crosshair pointer-events-auto shadow-sm" 
+                  style={{ backgroundColor: '#3b82f6' }} 
+                />
+            </div>
+          </>
+        );
+      })()}
     </div>
   );
 });

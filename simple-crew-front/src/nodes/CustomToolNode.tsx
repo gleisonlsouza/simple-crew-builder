@@ -1,5 +1,5 @@
-import { memo } from 'react';
-import { Handle, Position, type NodeProps, type Node } from '@xyflow/react';
+import { memo, useEffect } from 'react';
+import { Handle, Position, useUpdateNodeInternals, type NodeProps, type Node } from '@xyflow/react';
 import { useShallow } from 'zustand/shallow';
 import { Terminal, Trash2, Loader2, CheckCircle2, AlertCircle, Clock } from 'lucide-react';
 import { useStore } from '../store/index';
@@ -19,6 +19,12 @@ export const CustomToolNode = memo(({ id, data }: NodeProps<Node<CustomToolNodeD
   const isAnyNodeRunning = useStore((state) => 
     Object.values(state.nodeStatuses || {}).some(s => s === 'running')
   );
+  const layout = useStore(state => state.canvasLayout);
+  const updateNodeInternals = useUpdateNodeInternals();
+
+  useEffect(() => {
+    updateNodeInternals(id);
+  }, [layout, id, updateNodeInternals]);
 
   const selectedTool = customTools.find(t => t.id === data.toolId);
 
@@ -108,15 +114,24 @@ export const CustomToolNode = memo(({ id, data }: NodeProps<Node<CustomToolNodeD
         </div>
       </div>
 
-      <div className="absolute left-1/2 -top-[1px] -translate-x-1/2 flex flex-col items-center gap-2 group/h-tool -translate-y-full pointer-events-none">
-          <span className="text-[9px] font-bold text-orange-500 bg-white dark:bg-slate-900 px-1 rounded shadow-sm opacity-0 group-hover/h-tool:opacity-100 transition-opacity whitespace-nowrap border border-orange-100 dark:border-orange-900/30">Tool Link</span>
-          <Handle 
-            type="target" 
-            position={Position.Top} 
-            className="!w-3 !h-3 !border-2 !border-white dark:!border-slate-900 !static !translate-x-0 !cursor-crosshair pointer-events-auto shadow-sm" 
-            style={{ backgroundColor: '#f97316' }} 
-          />
-      </div>
+      {(() => {
+        const isHorizontal = layout === 'horizontal';
+
+        return (
+          <div className={isHorizontal
+            ? "absolute top-1/2 -left-[1px] -translate-y-1/2 flex items-center gap-2 group/h-tool -translate-x-full pointer-events-none"
+            : "absolute left-1/2 -top-[1px] -translate-x-1/2 flex flex-col items-center gap-2 group/h-tool -translate-y-full pointer-events-none"
+          }>
+             <span className="text-[9px] font-bold text-orange-500 bg-white dark:bg-slate-900 px-1 rounded shadow-sm opacity-0 group-hover/h-tool:opacity-100 transition-opacity whitespace-nowrap border border-orange-100 dark:border-orange-900/30">Tool Link</span>
+             <Handle 
+               type="target" 
+               position={isHorizontal ? Position.Left : Position.Top} 
+               className="!w-3 !h-3 !border-2 !border-white dark:!border-slate-900 !static !translate-x-0 !translate-y-0 !cursor-crosshair pointer-events-auto shadow-sm" 
+               style={{ backgroundColor: '#f97316' }} 
+             />
+          </div>
+        );
+      })()}
     </div>
   );
 });

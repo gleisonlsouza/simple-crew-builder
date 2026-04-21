@@ -1,5 +1,5 @@
-import { memo } from 'react';
-import { Handle, Position, type NodeProps, type Node } from '@xyflow/react';
+import { memo, useEffect } from 'react';
+import { Handle, Position, useUpdateNodeInternals, type NodeProps, type Node } from '@xyflow/react';
 import { useShallow } from 'zustand/shallow';
 import { Trash2, Settings, Server, List } from 'lucide-react';
 import { useStore } from '../store/index';
@@ -16,6 +16,12 @@ export const StateNode = memo(({ id, data }: NodeProps<Node<StateNodeData, 'stat
   const isAnyNodeRunning = useStore((state) => 
     Object.values(state.nodeStatuses || {}).some(s => s === 'running')
   );
+  const layout = useStore(state => state.canvasLayout);
+  const updateNodeInternals = useUpdateNodeInternals();
+
+  useEffect(() => {
+    updateNodeInternals(id);
+  }, [layout, id, updateNodeInternals]);
 
   return (
     <div
@@ -91,17 +97,26 @@ export const StateNode = memo(({ id, data }: NodeProps<Node<StateNodeData, 'stat
         </div>
       </div>
 
-      {/* Source handle (Bottom) */}
-      <div className="absolute left-1/2 -bottom-[1px] -translate-x-1/2 flex flex-col items-center gap-2 group/h-state translate-y-full pointer-events-none">
-        <Handle 
-          type="source" 
-          position={Position.Bottom} 
-          id="state-out" 
-          className="!w-3 !h-3 !border-2 !border-white dark:!border-slate-900 !static !translate-x-0 !cursor-crosshair pointer-events-auto shadow-sm" 
-          style={{ backgroundColor: '#a855f7' }} 
-        />
-        <span className="text-[9px] font-bold text-purple-500 bg-white dark:bg-slate-900 px-1 rounded shadow-sm opacity-0 group-hover/h-state:opacity-100 transition-opacity whitespace-nowrap border border-purple-100 dark:border-purple-900/30">State Out</span>
-      </div>
+      {/* Source handle */}
+      {(() => {
+        const isHorizontal = layout === 'horizontal';
+
+        return (
+          <div className={isHorizontal
+            ? "absolute top-1/2 -right-[1px] -translate-y-1/2 flex items-center gap-2 group/h-state translate-x-full pointer-events-none"
+            : "absolute left-1/2 -bottom-[1px] -translate-x-1/2 flex flex-col items-center gap-2 group/h-state translate-y-full pointer-events-none"
+          }>
+            <Handle 
+              type="source" 
+              position={isHorizontal ? Position.Right : Position.Bottom} 
+              id="state-out" 
+              className="!w-3 !h-3 !border-2 !border-white dark:!border-slate-900 !static !translate-x-0 !translate-y-0 !cursor-crosshair pointer-events-auto shadow-sm" 
+              style={{ backgroundColor: '#a855f7' }} 
+            />
+            <span className="text-[9px] font-bold text-purple-500 bg-white dark:bg-slate-900 px-1 rounded shadow-sm opacity-0 group-hover/h-state:opacity-100 transition-opacity whitespace-nowrap border border-purple-100 dark:border-purple-900/30">State Out</span>
+          </div>
+        );
+      })()}
     </div>
   );
 });

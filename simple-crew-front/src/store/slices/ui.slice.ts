@@ -17,6 +17,7 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set) => (
   isRouterModalOpen: false,
   activeRouterNodeId: null,
   notification: null,
+  canvasLayout: 'vertical',
 
   toggleTheme: () => {
     set((state: AppState) => {
@@ -24,6 +25,10 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set) => (
       localStorage.setItem('theme', newTheme);
       return { theme: newTheme };
     });
+  },
+
+  setCanvasLayout: (layout) => {
+    set({ canvasLayout: layout });
   },
 
   setIsSettingsOpen: (open) => set({ isSettingsOpen: open }),

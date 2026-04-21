@@ -25,6 +25,8 @@ vi.mock('lucide-react', () => ({
   Plus: ({ className }: any) => <span data-testid="icon-plus" className={className} />,
   FolderOpen: ({ className }: any) => <span data-testid="icon-folder" className={className} />,
   ChevronDown: ({ className }: any) => <span data-testid="icon-chevron-down" className={className} />,
+  Rows: ({ className }: any) => <span data-testid="icon-rows" className={className} />,
+  Columns: ({ className }: any) => <span data-testid="icon-columns" className={className} />,
 }));
 
 // Mock fetch globally
@@ -54,6 +56,8 @@ describe('SettingsDrawer', () => {
     deleteWorkspace: vi.fn(),
     setIsExplorerOpen: vi.fn(),
     setCurrentExplorerWsId: vi.fn(),
+    canvasLayout: 'vertical',
+    setCanvasLayout: vi.fn(),
   };
 
   beforeEach(() => {

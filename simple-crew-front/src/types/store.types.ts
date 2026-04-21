@@ -29,6 +29,7 @@ export interface ExportedProject {
   description?: string;
   workspaceId?: string | null;
   workspaceName?: string | null;
+  canvasLayout?: 'vertical' | 'horizontal';
 }
 
 export interface Project {
@@ -43,6 +44,7 @@ export interface Project {
     customTools?: CustomTool[];
     mcpServers?: MCPServer[];
     version: string;
+    canvasLayout: 'vertical' | 'horizontal';
   };
   created_at: string;
   updated_at: string;
@@ -144,7 +146,9 @@ export interface UISlice {
   isRouterModalOpen: boolean;
   activeRouterNodeId: string | null;
   notification: AppNotification | null;
+  canvasLayout: 'vertical' | 'horizontal';
   toggleTheme: () => void;
+  setCanvasLayout: (layout: 'vertical' | 'horizontal') => void;
   setIsSettingsOpen: (open: boolean) => void;
   setIsConsoleOpen: (open: boolean) => void;
   setIsConsoleExpanded: (expanded: boolean) => void;
