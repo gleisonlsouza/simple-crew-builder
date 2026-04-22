@@ -166,7 +166,7 @@ export const createProjectSlice: StateCreator<AppState, [], [], ProjectSlice> = 
       ]);
 
       const response = await fetch(`${API_URL}/api/v1/projects/${projectId}`);
-      if (!response.ok) throw new Error('Falha ao carregar projeto');
+      if (!response.ok) throw new Error('Failed to load project');
       const project = await response.json();
 
       const canvas_data = project.canvas_data;
@@ -243,7 +243,7 @@ export const createProjectSlice: StateCreator<AppState, [], [], ProjectSlice> = 
       }
 
       await get().fetchProjects();
-      toast.success("Projeto removido.");
+      toast.success("Project removed.");
     } catch (error) {
       toast.error((error as Error).message);
     }
@@ -592,7 +592,7 @@ export const createProjectSlice: StateCreator<AppState, [], [], ProjectSlice> = 
         signal: controller.signal
       });
       if (!response.ok) {
-        let errorMsg = "Erro inesperado do Backend";
+        let errorMsg = "Unexpected Backend Error";
         try {
           const errorData = await response.json();
           errorMsg = errorData.detail || errorMsg;
@@ -602,7 +602,7 @@ export const createProjectSlice: StateCreator<AppState, [], [], ProjectSlice> = 
         throw new Error(errorMsg);
       }
       const reader = response.body?.getReader();
-      if (!reader) throw new Error("Stream API não suportado pelo Browser");
+      if (!reader) throw new Error("Stream API not supported by Browser");
       const decoder = new TextDecoder("utf-8");
       let hasError = false;
       while (true) {
@@ -674,7 +674,7 @@ export const createProjectSlice: StateCreator<AppState, [], [], ProjectSlice> = 
                 const newStatuses: Record<string, NodeStatus> = { ...get().nodeStatuses };
                 state.nodes.forEach(n => { if (newStatuses[n.id] === 'running') newStatuses[n.id] = 'success'; });
                 set({ nodeStatuses: newStatuses, isConsoleExpanded: true, executionResult: resultStr });
-                get().showNotification("Pipeline de Agentes concluído!", "success");
+                get().showNotification("Agent Pipeline completed!", "success");
 
               }
             } else if (event.type === 'done') {
@@ -702,10 +702,10 @@ export const createProjectSlice: StateCreator<AppState, [], [], ProjectSlice> = 
     } catch (err) {
       const error = err as Error;
       if (error.name === 'AbortError') {
-        get().showNotification("Pipeline de Agentes interrompido pelo usuário.", "warning");
+        get().showNotification("Agent Pipeline stopped by user.", "warning");
       } else {
         console.error(error);
-        state.showNotification(`Falha na API Inteligente: ${error.message}`, "error");
+        state.showNotification(`Intelligent API Failure: ${error.message}`, "error");
       }
       return null;
     } finally {

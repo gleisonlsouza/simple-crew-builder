@@ -75,7 +75,7 @@ describe('useMermaidExport - Hook Coverage', () => {
             await result.current.downloadPNG(mockRef);
         });
         
-        expect(toast.success).toHaveBeenCalledWith(expect.stringContaining('PNG iniciado'), expect.any(Object));
+        expect(toast.success).toHaveBeenCalledWith(expect.stringContaining('PNG download started'), expect.any(Object));
     });
 
     it('downloadPDF: triggers the pipeline and saves pdf', async () => {
@@ -92,7 +92,7 @@ describe('useMermaidExport - Hook Coverage', () => {
             await result.current.downloadPDF(mockRef);
         });
         
-        expect(toast.success).toHaveBeenCalledWith(expect.stringContaining('PDF iniciado'), expect.any(Object));
+        expect(toast.success).toHaveBeenCalledWith(expect.stringContaining('PDF download started'), expect.any(Object));
     });
 
     it('handles missing SVG in downloadPNG', async () => {
@@ -102,7 +102,7 @@ describe('useMermaidExport - Hook Coverage', () => {
         await act(async () => {
             await result.current.downloadPNG(mockRef);
         });
-        expect(toast.error).toHaveBeenCalledWith(expect.stringContaining('Diagrama não encontrado'), expect.any(Object));
+        expect(toast.error).toHaveBeenCalledWith(expect.stringContaining('Diagram not found'), expect.any(Object));
     });
 
     it('downloadPDF: handles missing SVG', async () => {
@@ -112,7 +112,7 @@ describe('useMermaidExport - Hook Coverage', () => {
         await act(async () => {
             await result.current.downloadPDF(mockRef);
         });
-        expect(toast.error).toHaveBeenCalledWith(expect.stringContaining('Diagrama não encontrado'), expect.any(Object));
+        expect(toast.error).toHaveBeenCalledWith(expect.stringContaining('Diagram not found'), expect.any(Object));
     });
 
     it('downloadPDF: handles errors in the pipeline', async () => {
@@ -238,7 +238,7 @@ describe('useMermaidExport - Hook Coverage', () => {
             await result.current.downloadPNG(mockRef);
         });
         
-        expect(toast.error).toHaveBeenCalledWith(expect.stringContaining('bloqueou a renderização'), expect.any(Object));
+        expect(toast.error).toHaveBeenCalledWith(expect.stringContaining('blocked SVG rendering'), expect.any(Object));
     });
 
     it('exportSvgToCanvas: handles unexpected errors', async () => {

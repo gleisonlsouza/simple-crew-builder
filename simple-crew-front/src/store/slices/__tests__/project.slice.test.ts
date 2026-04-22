@@ -228,7 +228,7 @@ describe('projectSlice - Elite Coverage Max', () => {
         // 4. Delete
         vi.mocked(fetch).mockResolvedValueOnce({ ok: true } as unknown as Response);
         await slice.deleteProject('p1');
-        expect(toast.success).toHaveBeenCalledWith('Projeto removido.');
+        expect(toast.success).toHaveBeenCalledWith('Project removed.');
     });
 
     it('createNewProject: handles API success', async () => {
@@ -432,7 +432,7 @@ describe('projectSlice - Elite Coverage Max', () => {
         vi.mocked(fetch).mockResolvedValueOnce({ ok: true, body: null } as unknown as Response);
 
         await slice.startRealExecution();
-        expect(mockState.showNotification).toHaveBeenCalledWith(expect.stringContaining('Stream API não suportado'), 'error');
+        expect(mockState.showNotification).toHaveBeenCalledWith(expect.stringContaining('Stream API not supported'), 'error');
     });
 
     it('startRealExecution: handles network error during stream', async () => {
@@ -452,7 +452,7 @@ describe('projectSlice - Elite Coverage Max', () => {
         vi.mocked(fetch).mockResolvedValueOnce({ ok: true, body: { getReader: () => mockReader } } as unknown as Response);
 
         await slice.startRealExecution();
-        expect(mockState.showNotification).toHaveBeenCalledWith(expect.stringContaining('interrompido'), 'warning');
+        expect(mockState.showNotification).toHaveBeenCalledWith(expect.stringContaining('stopped'), 'warning');
     });
 
     it('fetchProjects: updates savedProjects on success', async () => {
@@ -741,7 +741,7 @@ describe('projectSlice - Elite Coverage Max', () => {
         } as unknown as Response);
 
         await slice.startRealExecution();
-        expect(mockState.showNotification).toHaveBeenCalledWith(expect.stringContaining('Erro inesperado'), 'error');
+        expect(mockState.showNotification).toHaveBeenCalledWith(expect.stringContaining('Unexpected Backend Error'), 'error');
     });
 
     it('startRealExecution: handles explicit error event (lines 601-606)', async () => {
@@ -756,7 +756,7 @@ describe('projectSlice - Elite Coverage Max', () => {
 
         await slice.startRealExecution();
         expect(mockState.nodeStatuses['n1']).toBe('error');
-        expect(mockState.showNotification).toHaveBeenCalledWith('Falha na API Inteligente: Stream Crash', 'error');
+        expect(mockState.showNotification).toHaveBeenCalledWith('Intelligent API Failure: Stream Crash', 'error');
     });
 
     // --- PHASE 1 Coverage Improvement ---

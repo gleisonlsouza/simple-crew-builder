@@ -815,7 +815,7 @@ export default function AnimationView() {
                 <div className="grid grid-cols-2 gap-6">
                   <div className="space-y-2">
                     <div className="flex justify-between items-center text-[9px] font-mono text-gray-500 uppercase font-bold">
-                      <div className="flex items-center gap-1"><Zap size={10} /> Energia</div>
+                      <div className="flex items-center gap-1"><Zap size={10} /> Energy</div>
                       <span className="text-white">{Math.round(robots.find(r => r.id === selectedRobotId)?.energy || 0)}%</span>
                     </div>
                     <div className="h-1.5 w-full bg-white/5 rounded-full overflow-hidden">
@@ -1022,7 +1022,7 @@ export default function AnimationView() {
           SYNC: REAL-TIME
         </div>
         <div className="flex items-center gap-2 uppercase">
-          PROJETO: {currentProjectName || 'ACTIVE'}
+          PROJECT: {currentProjectName || 'ACTIVE'}
         </div>
       </footer>
     </div>
