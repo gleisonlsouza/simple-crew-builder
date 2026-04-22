@@ -76,12 +76,18 @@ export const StateNode = memo(({ id, data }: NodeProps<Node<StateNodeData, 'stat
                 <div key={field.id} className="relative flex items-center justify-between bg-slate-50 dark:bg-slate-800/50 px-2 py-1 rounded border border-slate-100 dark:border-slate-800 group/field">
                   <Handle 
                     type="target" 
-                    position={Position.Left} 
+                    position={layout === 'horizontal' ? Position.Left : Position.Top} 
                     id={`field-in-${field.key}`} 
-                    className="!w-3 !h-3 !border-2 !border-white dark:!border-slate-900 !cursor-crosshair pointer-events-auto shadow-sm !-left-[18px] hover:scale-125 transition-transform" 
+                    className={`!w-3 !h-3 !border-2 !border-white dark:!border-slate-900 !cursor-crosshair pointer-events-auto shadow-sm hover:scale-125 transition-transform ${
+                      layout === 'horizontal' ? '!-left-[18px]' : '!-top-[18px] !left-1/2 !-translate-x-1/2'
+                    }`} 
                     style={{ backgroundColor: '#a855f7' }}
                   />
-                  <span className="absolute -left-[70px] top-1/2 -translate-y-1/2 text-[9px] font-bold text-purple-500 bg-white dark:bg-slate-900 px-1 rounded shadow-sm opacity-0 group-hover/field:opacity-100 transition-opacity border border-purple-100 dark:border-purple-900/30 whitespace-nowrap pointer-events-none z-10">Data In</span>
+                  <span className={`absolute text-[9px] font-bold text-purple-500 bg-white dark:bg-slate-900 px-1 rounded shadow-sm opacity-0 group-hover/field:opacity-100 transition-opacity border border-purple-100 dark:border-purple-900/30 whitespace-nowrap pointer-events-none z-10 ${
+                    layout === 'horizontal' 
+                      ? '-left-[70px] top-1/2 -translate-y-1/2' 
+                      : 'left-1/2 -top-8 -translate-x-1/2'
+                  }`}>Data In</span>
                   <span className="text-[10px] font-medium text-slate-700 dark:text-slate-300 truncate max-w-[80px]">
                     {field.key}
                   </span>

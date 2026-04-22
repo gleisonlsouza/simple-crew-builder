@@ -40,6 +40,7 @@ export const CrewNode = memo(({ id, data }: NodeProps<Node<CrewNodeData, 'crew'>
 
   // Sync selectedStateId with existing edges if not already set
   useEffect(() => {
+    if (data.isSnapshot) return;
     if (!data.selectedStateId && currentProjectFramework === 'langgraph') {
       const stateEdge = edges.find(e => e.target === id && nodes.find(n => n.id === e.source)?.type === 'state');
       if (stateEdge) {
@@ -50,7 +51,7 @@ export const CrewNode = memo(({ id, data }: NodeProps<Node<CrewNodeData, 'crew'>
         return () => clearTimeout(timer);
       }
     }
-  }, [id, data.selectedStateId, currentProjectFramework, edges, nodes, updateStateConnection, data.showStateConnections]);
+  }, [id, data.selectedStateId, currentProjectFramework, edges, nodes, updateStateConnection, data.showStateConnections, data.isSnapshot]);
 
   // Close menus when clicking outside
   useEffect(() => {

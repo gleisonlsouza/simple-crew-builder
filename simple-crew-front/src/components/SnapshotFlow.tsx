@@ -26,6 +26,9 @@ import { getLayoutedElements } from '../utils/layoutUtils';
 import { ToolNode } from '../nodes/ToolNode';
 import { CustomToolNode } from '../nodes/CustomToolNode';
 import { McpNode } from '../nodes/McpNode';
+import { StateNode } from '../nodes/StateNode';
+import { SchemaNode } from '../nodes/SchemaNode';
+import { RouterNode } from '../nodes/RouterNode';
 
 const withSnapshotBadge = <T extends NodeProps>(WrappedComponent: React.ComponentType<T>) => {
   return function BadgeWrapper(props: T) {
@@ -61,6 +64,9 @@ const nodeTypes = {
   tool: withSnapshotBadge(ToolNode),
   customTool: withSnapshotBadge(CustomToolNode),
   mcp: withSnapshotBadge(McpNode),
+  state: withSnapshotBadge(StateNode),
+  schema: withSnapshotBadge(SchemaNode),
+  router: withSnapshotBadge(RouterNode),
 };
 
 const edgeTypes = {
@@ -120,7 +126,8 @@ export const SnapshotFlow: React.FC<SnapshotFlowProps> = ({ nodes = [], edges = 
         style: historyStyle,
         data: {
           ...node.data,
-          executionStatus: nodeState // Inject status here to be read by the BadgeWrapper
+          executionStatus: nodeState, // Inject status here to be read by the BadgeWrapper
+          isSnapshot: true
         }
       };
     });

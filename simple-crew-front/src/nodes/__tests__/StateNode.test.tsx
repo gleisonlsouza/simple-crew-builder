@@ -113,11 +113,20 @@ describe('StateNode', () => {
   });
 
   it('contains target handles for each field', () => {
+    currentState = { ...defaultState, canvasLayout: 'horizontal' };
     const { container } = render(wrap(<StateNode {...defaultProps} />));
     const handles = container.querySelectorAll('.react-flow__handle-left');
     expect(handles.length).toBe(2);
     expect(handles[0].getAttribute('data-handleid')).toBe('field-in-user_id');
     expect(handles[1].getAttribute('data-handleid')).toBe('field-in-is_active');
+  });
+
+  it('contains top target handles in vertical layout', () => {
+    currentState = { ...defaultState, canvasLayout: 'vertical' };
+    const { container } = render(wrap(<StateNode {...defaultProps} />));
+    const handles = container.querySelectorAll('.react-flow__handle-top');
+    expect(handles.length).toBe(2);
+    expect(handles[0].getAttribute('data-handleid')).toBe('field-in-user_id');
   });
 
   it('changes source handle position based on layout', () => {

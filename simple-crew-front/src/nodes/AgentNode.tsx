@@ -44,6 +44,7 @@ export const AgentNode = memo(({ id, data }: NodeProps<Node<AgentNodeData, 'agen
 
   // Sync selectedStateId with existing edges if not already set
   useEffect(() => {
+    if (data.isSnapshot) return;
     if (!data.selectedStateId && currentProjectFramework === 'langgraph') {
       const stateEdge = edges.find(e => e.source === id && nodes.find(n => n.id === e.target)?.type === 'state');
       if (stateEdge) {
@@ -58,7 +59,7 @@ export const AgentNode = memo(({ id, data }: NodeProps<Node<AgentNodeData, 'agen
         return () => clearTimeout(timer);
       }
     }
-  }, [id, data.selectedStateId, currentProjectFramework, edges, nodes, updateStateConnection, data.showStateConnections]);
+  }, [id, data.selectedStateId, currentProjectFramework, edges, nodes, updateStateConnection, data.showStateConnections, data.isSnapshot]);
 
 
 
