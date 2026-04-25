@@ -26,9 +26,14 @@ import {
   Terminal,
   FileCode,
   FolderOpen,
+  Type,
   Layout,
-  Type
+  BookOpen,
+  UploadCloud
 } from 'lucide-react';
+
+
+
 import { useStore } from '../store/index';
 import HighlightedTextField from '../components/HighlightedTextField';
 import { CustomSelect } from '../components/CustomSelect';
@@ -103,10 +108,14 @@ const SettingsPage = () => {
     customTools, addCustomTool, updateCustomTool, deleteCustomTool, fetchCustomTools,
     mcpServers, addMCPServer, updateMCPServer, deleteMCPServer, fetchMCPServers,
     systemAiModelId, setSystemAiModelId, embeddingModelId, setEmbeddingModelId, fetchSettings,
-    workspaces, fetchWorkspaces, addWorkspace, updateWorkspace, deleteWorkspace, activeWorkspaceId, setActiveWorkspaceId
+    workspaces, fetchWorkspaces, addWorkspace, updateWorkspace, deleteWorkspace, activeWorkspaceId, setActiveWorkspaceId,
+    skills, fetchSkills, importSkill, uploadSkill, deleteSkill
   } = useStore();
 
-  const [activeTab, setActiveTab] = useState<'credentials' | 'models' | 'tools_crewai' | 'tools_langgraph' | 'mcp' | 'workspaces' | 'knowledge_base'>('credentials');
+
+
+  const [activeTab, setActiveTab] = useState<'credentials' | 'models' | 'tools_crewai' | 'tools_langgraph' | 'mcp' | 'workspaces' | 'knowledge_base' | 'skills'>('credentials');
+
   const [isToolsExpanded, setIsToolsExpanded] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isModelModalOpen, setIsModelModalOpen] = useState(false);
@@ -141,7 +150,11 @@ const SettingsPage = () => {
   const [editingMCPId, setEditingMCPId] = useState<string | null>(null);
   const [editingCustomToolId, setEditingCustomToolId] = useState<string | null>(null);
   const [editingWorkspaceId, setEditingWorkspaceId] = useState<string | null>(null);
+  const [isSkillModalOpen, setIsSkillModalOpen] = useState(false);
+  const [newSkillUrl, setNewSkillUrl] = useState('');
+  const [isImportingSkill, setIsImportingSkill] = useState(false);
   const [showKeys, setShowKeys] = useState<Record<string, boolean>>({});
+
 
   React.useEffect(() => {
     fetchCredentials();
@@ -150,7 +163,9 @@ const SettingsPage = () => {
     fetchSettings();
     fetchMCPServers();
     fetchCustomTools(); // Fetch all by default on settings load
-  }, [fetchCredentials, fetchModels, fetchWorkspaces, fetchSettings, fetchMCPServers, fetchCustomTools]);
+    fetchSkills();
+  }, [fetchCredentials, fetchModels, fetchWorkspaces, fetchSettings, fetchMCPServers, fetchCustomTools, fetchSkills]);
+
 
   React.useEffect(() => {
     if (activeTab === 'tools_crewai') {
@@ -163,12 +178,14 @@ const SettingsPage = () => {
   // Delete Confirmation State
   const [deleteConfirm, setDeleteConfirm] = useState<{
     isOpen: boolean;
-    type: 'credential' | 'model' | 'tool' | 'mcp' | 'workspace' | null;
+    type: 'credential' | 'model' | 'tool' | 'mcp' | 'workspace' | 'skill' | null;
     id: string;
+
     name: string;
   }>({ isOpen: false, type: null, id: '', name: '' });
 
-  const requestDelete = (type: 'credential' | 'model' | 'tool' | 'mcp' | 'workspace', id: string, name: string) => {
+  const requestDelete = (type: 'credential' | 'model' | 'tool' | 'mcp' | 'workspace' | 'skill', id: string, name: string) => {
+
     setDeleteConfirm({ isOpen: true, type, id, name });
   };
 
@@ -179,6 +196,8 @@ const SettingsPage = () => {
     else if (type === 'tool') deleteCustomTool(id);
     else if (type === 'mcp') deleteMCPServer(id);
     else if (type === 'workspace') deleteWorkspace(id);
+    else if (type === 'skill') deleteSkill(id);
+
     
     setDeleteConfirm({ isOpen: false, type: null, id: '', name: '' });
   };
@@ -469,6 +488,18 @@ const SettingsPage = () => {
             </div>
             <ChevronRight className={`w-4 h-4 transition-transform ${activeTab === 'knowledge_base' ? 'rotate-90' : ''}`} />
           </button>
+
+          <button 
+            onClick={() => setActiveTab('skills')}
+            className={`w-full flex items-center justify-between p-3 rounded-xl transition-all ${activeTab === 'skills' ? 'bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600' : 'text-brand-muted hover:bg-brand-bg hover:text-brand-text'}`}
+          >
+            <div className="flex items-center gap-3 text-sm font-bold">
+              <BookOpen className="w-4 h-4" />
+              Skill Library
+            </div>
+            <ChevronRight className={`w-4 h-4 transition-transform ${activeTab === 'skills' ? 'rotate-90' : ''}`} />
+          </button>
+
         </nav>
 
         <div className="p-4 border-t border-brand-border space-y-6">
@@ -730,7 +761,7 @@ const SettingsPage = () => {
                   {Object.entries(
                     globalTools.filter(tool => {
                       if (activeTab === 'tools_crewai') return tool.framework === 'crewai' || tool.framework === 'both' || !tool.framework;
-                      if (activeTab === 'tools_langgraph') return tool.framework === 'langgraph' || tool.framework === 'both';
+                      if (activeTab === 'tools_langgraph') return tool.framework === 'langgraph' || tool.framework === 'both' || !tool.framework;
                       return true;
                     }).reduce((acc, tool) => {
                       const category = tool.category || 'Other';
@@ -1098,6 +1129,72 @@ const SettingsPage = () => {
           {activeTab === 'knowledge_base' && (
             <KnowledgeBaseSettings />
           )}
+
+          {activeTab === 'skills' && (
+            <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
+              <header className="flex items-center justify-between mb-10">
+                <div>
+                  <h1 className="text-3xl font-bold text-brand-text tracking-tight mb-2">Agent Skills Library</h1>
+                  <p className="text-brand-muted text-sm">Import and manage community-driven procedures and context for your agents.</p>
+                </div>
+                <button 
+                  onClick={() => {
+                    setNewSkillUrl('');
+                    setIsSkillModalOpen(true);
+                  }}
+                  className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2.5 rounded-xl font-bold shadow-lg shadow-indigo-600/20 transition-all active:scale-95"
+                >
+                  <Plus className="w-5 h-5" />
+                  Import Skill
+                </button>
+              </header>
+
+              <div className="space-y-4">
+                {skills.length === 0 ? (
+                  <div className="py-20 text-center bg-brand-card border border-brand-border border-dashed rounded-3xl">
+                    <BookOpen className="w-12 h-12 text-brand-muted mx-auto mb-4 opacity-20" />
+                    <p className="text-brand-muted">No skills imported yet. Build your library by importing from GitHub.</p>
+                  </div>
+                ) : (
+                  skills.map((skill) => (
+                    <div key={skill.id} className="bg-brand-card border border-brand-border rounded-2xl p-6 flex items-center justify-between group hover:shadow-md transition-all">
+                      <div className="flex items-center gap-4 flex-1">
+                        <div className="w-12 h-12 bg-indigo-50 dark:bg-indigo-900/20 rounded-xl flex items-center justify-center text-indigo-600">
+                          <BookOpen className="w-6 h-6" />
+                        </div>
+                        <div className="flex-1">
+                          <h3 className="font-bold text-brand-text">{skill.name}</h3>
+                          <p className="text-xs text-brand-muted line-clamp-1">{skill.description || 'No description'}</p>
+                          <div className="flex items-center gap-3 mt-1.5">
+                            {skill.source_url && (
+                              <span className="flex items-center gap-1 text-[9px] font-mono text-indigo-500 bg-brand-bg border border-brand-border px-2 py-0.5 rounded-md truncate max-w-[250px]">
+                                {skill.source_url}
+                              </span>
+                            )}
+                            <span className="flex items-center gap-1 text-[10px] text-brand-muted bg-brand-bg px-2 py-0.5 rounded-md">
+                              <Calendar className="w-3 h-3" />
+                              {formatDate(skill.created_at)}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                      
+                      <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-all">
+                        <button 
+                          onClick={() => requestDelete('skill', skill.id, skill.name)}
+                          className="p-2 text-brand-muted hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-all"
+                          title="Delete"
+                        >
+                          <Trash2 className="w-5 h-5" />
+                        </button>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+          )}
+
         </div>
       </main>
 
@@ -1785,7 +1882,126 @@ const SettingsPage = () => {
         </div>
       )}
 
+      {/* Modal - Import Skill */}
+      {isSkillModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 animate-in fade-in duration-200">
+          <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => !isImportingSkill && setIsSkillModalOpen(false)} />
+          <div className="relative w-full max-w-md bg-brand-card border border-brand-border rounded-3xl shadow-2xl p-8 animate-in zoom-in-95 duration-200">
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="text-xl font-bold text-brand-text">Import Agent Skill</h2>
+              <button 
+                disabled={isImportingSkill}
+                onClick={() => setIsSkillModalOpen(false)} 
+                className="p-2 hover:bg-brand-bg rounded-full text-brand-muted transition-colors disabled:opacity-30"
+              >
+                <X className="w-6 h-6" />
+              </button>
+            </div>
+
+            <div className="space-y-5">
+              <div>
+                <label className="block text-xs font-bold text-brand-muted uppercase tracking-wider mb-2">GitHub URL, NPX Command or Raw URL</label>
+                <input 
+                  autoFocus
+                  placeholder="https://github.com/user/repo/blob/main/skill.md"
+                  className="w-full bg-brand-bg border border-brand-border rounded-xl px-4 py-3 text-brand-text outline-none focus:ring-2 focus:ring-indigo-600 transition-all font-medium"
+                  value={newSkillUrl}
+                  onChange={(e) => setNewSkillUrl(e.target.value)}
+                  disabled={isImportingSkill}
+                />
+                <p className="mt-2 text-[10px] text-brand-muted italic">
+                  Provide a link or paste the npx command from skills.sh.
+                </p>
+              </div>
+
+              <div className="relative py-2">
+                <div className="absolute inset-0 flex items-center">
+                  <div className="w-full border-t border-brand-border"></div>
+                </div>
+                <div className="relative flex justify-center text-[10px] uppercase font-bold">
+                  <span className="bg-brand-card px-2 text-brand-muted">OR</span>
+                </div>
+              </div>
+
+              <div className="flex flex-col items-center gap-3">
+                <input 
+                  type="file" 
+                  id="skill-file-upload" 
+                  className="hidden" 
+                  accept=".md"
+                  onChange={async (e) => {
+                    const file = e.target.files?.[0];
+                    if (file) {
+                      setIsImportingSkill(true);
+                      try {
+                        await uploadSkill(file);
+                        setIsSkillModalOpen(false);
+                      } catch {
+                        // toast.error already fired by store — modal stays open so user can try again
+                      } finally {
+                        setIsImportingSkill(false);
+                        e.target.value = '';
+                      }
+                    }
+                  }}
+                  disabled={isImportingSkill}
+                />
+                <label 
+                  htmlFor="skill-file-upload"
+                  className={`w-full flex items-center justify-center gap-2 px-4 py-4 border-2 border-dashed border-brand-border rounded-2xl cursor-pointer hover:border-indigo-500 hover:bg-indigo-50 dark:hover:bg-indigo-900/10 transition-all group ${isImportingSkill ? 'opacity-50 cursor-wait' : ''}`}
+                >
+                  <div className="w-10 h-10 bg-brand-bg rounded-xl flex items-center justify-center text-brand-muted group-hover:text-indigo-500 transition-colors">
+                    <UploadCloud className="w-6 h-6" />
+                  </div>
+                  <div className="text-left">
+                    <p className="text-xs font-bold text-brand-text">Upload Local .md File</p>
+                    <p className="text-[10px] text-brand-muted">Must include YAML frontmatter</p>
+                  </div>
+                </label>
+              </div>
+
+              <div className="pt-4 flex gap-4 border-t border-brand-border/50">
+                <button 
+                  disabled={isImportingSkill}
+                  onClick={() => setIsSkillModalOpen(false)}
+                  className="flex-1 py-3 bg-brand-bg border border-brand-border text-brand-text rounded-xl font-bold hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors disabled:opacity-50"
+                >
+                  Cancel
+                </button>
+                <button 
+                  disabled={!newSkillUrl || isImportingSkill}
+                  onClick={async () => {
+                    setIsImportingSkill(true);
+                    try {
+                      await importSkill(newSkillUrl);
+                      setIsSkillModalOpen(false);
+                      setNewSkillUrl('');
+                    } catch {
+                      // toast.error already fired by store — modal stays open so user can correct the URL
+                    } finally {
+                      setIsImportingSkill(false);
+                    }
+                  }}
+                  className="flex-1 py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold shadow-lg shadow-indigo-600/20 transition-all active:scale-95 disabled:opacity-50 flex items-center justify-center gap-2"
+                >
+                  {isImportingSkill ? (
+                    <>
+                      <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                      Processing...
+                    </>
+                  ) : (
+                    'Import URL'
+                  )}
+                </button>
+              </div>
+            </div>
+
+          </div>
+        </div>
+      )}
+
       {/* Delete Confirmation Modal */}
+
       <ConfirmationModal 
         isOpen={deleteConfirm.isOpen}
         onClose={() => setDeleteConfirm({ ...deleteConfirm, isOpen: false })}

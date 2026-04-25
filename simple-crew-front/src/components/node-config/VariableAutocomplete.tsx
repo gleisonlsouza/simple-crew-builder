@@ -39,6 +39,7 @@ export const VariableAutocomplete: React.FC<VariableAutocompleteProps> = ({
             level = 'nested';
         } else {
             // Path broken, stay at current level
+            console.log(`[VariableAutocomplete] Path broken at ${part}, keeping root.`);
             break;
         }
     }
@@ -52,10 +53,11 @@ export const VariableAutocomplete: React.FC<VariableAutocompleteProps> = ({
         info
       }));
 
+    console.log(`[VariableAutocomplete] Generated ${filteredItems.length} items. Filter: "${filter}", Variables keys: ${Object.keys(variables).join(', ')}`);
     return { items: filteredItems, currentLevel: level };
   }, [filter, variables]);
 
-  if (!isOpen || items.length === 0) return null;
+  if (!isOpen) return null;
 
   const getPosition = () => {
     // Priority 1: Use specific cursor coordinates
@@ -99,36 +101,44 @@ export const VariableAutocomplete: React.FC<VariableAutocompleteProps> = ({
       </div>
       
       <div className="overflow-y-auto max-h-[160px] custom-scrollbar">
-        {items.map((item, idx) => (
-          <button
-            key={item.path}
-            onMouseDown={(e) => {
-              e.preventDefault();
-              onSelect(item.path);
-            }}
-            onMouseEnter={() => setSelectedIndex(idx)}
-            className={`w-full flex items-center gap-2.5 px-3 py-2 text-xs transition-all duration-200 group ${
-              idx === selectedIndex 
-                ? 'bg-indigo-500/10 text-indigo-500' 
-                : 'text-brand-text hover:bg-brand-bg'
-            }`}
-          >
-            <div className={`p-1 rounded-md transition-colors ${idx === selectedIndex ? 'bg-indigo-500/20' : 'bg-brand-bg'}`}>
-              {getIcon(item.info)}
-            </div>
-            
-            <div className="flex flex-col items-start overflow-hidden flex-1">
-              <span className="truncate font-medium">{item.key}</span>
-              <span className="text-[9px] opacity-60 font-mono truncate">{item.info.type}</span>
-            </div>
-
-            {item.info.children ? (
-                <ChevronRight className={`w-3 h-3 transition-transform ${idx === selectedIndex ? 'translate-x-0.5 opacity-100' : 'opacity-30'}`} />
-            ) : (
-                <Plus className={`w-3 h-3 transition-transform ${idx === selectedIndex ? 'opacity-100' : 'opacity-0'}`} />
-            )}
-          </button>
-        ))}
+        {items.length === 0 ? (
+          <div className="px-4 py-8 text-center" data-testid="no-suggestions">
+            <Braces className="w-8 h-8 text-brand-border mx-auto mb-2 opacity-20" />
+            <p className="text-[10px] text-brand-muted">No variables found</p>
+          </div>
+        ) : (
+          items.map((item, idx) => (
+            <button
+              key={item.path}
+              data-testid={`suggestion-item-${item.key}`}
+              onMouseDown={(e) => {
+                e.preventDefault();
+                onSelect(item.path);
+              }}
+              onMouseEnter={() => setSelectedIndex(idx)}
+              className={`w-full flex items-center gap-2.5 px-3 py-2 text-xs transition-all duration-200 group ${
+                idx === selectedIndex 
+                  ? 'bg-indigo-500/10 text-indigo-500' 
+                  : 'text-brand-text hover:bg-brand-bg'
+              }`}
+            >
+              <div className={`p-1 rounded-md transition-colors ${idx === selectedIndex ? 'bg-indigo-500/20' : 'bg-brand-bg'}`}>
+                {getIcon(item.info)}
+              </div>
+              
+              <div className="flex flex-col items-start overflow-hidden flex-1">
+                <span className="truncate font-medium">{item.key}</span>
+                <span className="text-[9px] opacity-60 font-mono truncate">{item.info.type}</span>
+              </div>
+  
+              {item.info.children ? (
+                  <ChevronRight className={`w-3 h-3 transition-transform ${idx === selectedIndex ? 'translate-x-0.5 opacity-100' : 'opacity-30'}`} />
+              ) : (
+                  <Plus className={`w-3 h-3 transition-transform ${idx === selectedIndex ? 'opacity-100' : 'opacity-0'}`} />
+              )}
+            </button>
+          ))
+        )}
       </div>
 
       <div className="px-3 py-1.5 border-t border-brand-border mt-1 flex items-center gap-2 text-[9px] text-brand-muted italic">

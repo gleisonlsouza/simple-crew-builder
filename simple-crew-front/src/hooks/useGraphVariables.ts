@@ -16,6 +16,7 @@ export const useGraphVariables = () => {
 
   const variables = useMemo((): VariableTree => {
     const tree: VariableTree = {};
+    console.log(`[useGraphVariables] Calculating variables for framework: ${framework}. Nodes: ${nodes.length}`);
 
     if (framework === 'langgraph') {
       const stateNode = nodes.find(n => n.type === 'state');
@@ -59,14 +60,16 @@ export const useGraphVariables = () => {
       if (crewNode) {
         const crewData = crewNode.data as CrewNodeData;
         const inputs = crewData.inputs || {};
-        Object.keys(inputs).forEach(key => {
-          if (!key.startsWith('input_')) {
-            tree[key] = {
-              type: 'string',
-              children: null
-            };
-          }
+        const keys = Object.keys(inputs).filter(k => !k.startsWith('input_'));
+        console.log(`[useGraphVariables] CrewAI mode: found crew node, inputs count: ${Object.keys(inputs).length}, valid variables: ${keys.join(', ')}`);
+        keys.forEach(key => {
+          tree[key] = {
+            type: 'string',
+            children: null
+          };
         });
+      } else {
+        console.log('[useGraphVariables] CrewAI mode: NO crew node found');
       }
     }
 

@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import { Toaster } from 'react-hot-toast';
 import Dashboard from './pages/Dashboard';
 import Builder from './pages/Builder';
 import SettingsPage from './pages/Settings';
@@ -40,6 +41,14 @@ function App() {
       </Routes>
       <WorkspaceExplorer />
       <Toast />
+      <Toaster
+        position="bottom-right"
+        toastOptions={{
+          duration: 5000,
+          style: { maxWidth: '480px' },
+          error: { duration: 7000 },
+        }}
+      />
     </BrowserRouter>
   );
 }

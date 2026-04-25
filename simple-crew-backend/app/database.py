@@ -3,7 +3,7 @@ import uuid
 from sqlalchemy import text
 from sqlmodel import create_engine, SQLModel, Session, select
 from dotenv import load_dotenv
-from .models import User, CrewProject, Credential, LLMModel, AppSettings, CustomTool, Workspace
+from .models import User, CrewProject, Credential, LLMModel, AppSettings, CustomTool, Workspace, AgentSkill
 
 load_dotenv()
 

@@ -21,6 +21,7 @@ vi.mock('lucide-react', () => ({
   Settings: () => <div data-testid="icon-settings" />,
   Clock: () => <div data-testid="icon-clock" />,
   AlertCircle: () => <div data-testid="icon-alert-circle" />,
+  Server: () => <div data-testid="icon-server" />,
 }));
 
 // Mock Handle component
@@ -64,6 +65,8 @@ describe('CrewNode', () => {
     edges: [],
     nodeStatuses: {},
     nodeErrors: {},
+    currentProjectFramework: 'crewai',
+    layout: 'vertical',
   };
 
   beforeEach(() => {
@@ -108,6 +111,12 @@ describe('CrewNode', () => {
   });
 
   it('contains target handles on top and source handle on right-source', () => {
+    (useStore as unknown as Mock).mockImplementation((selector: any) => 
+        selector({ 
+            ...defaultState, 
+            currentProjectFramework: 'langgraph' 
+        })
+    );
     const { container } = render(wrap(<CrewNode {...defaultProps} />));
     
     const targets = container.querySelectorAll('.react-flow__handle-target');
@@ -143,6 +152,12 @@ describe('CrewNode', () => {
   });
 
   it('toggles collapse state', async () => {
+    (useStore as unknown as Mock).mockImplementation((selector: any) => 
+        selector({ 
+            ...defaultState, 
+            currentProjectFramework: 'custom' 
+        })
+    );
     const user = userEvent.setup();
     render(wrap(<CrewNode {...defaultProps} />));
     

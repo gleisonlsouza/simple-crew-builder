@@ -28,7 +28,7 @@ from contextlib import ExitStack
 from mcp import StdioServerParameters
 
 from app.schemas import GraphData, Node, Edge, CustomTool, ToolConfig
-from app.models import LLMModel, Credential, Execution, ExecutionStatus, MCPServer
+from app.models import LLMModel, Credential, Execution, ExecutionStatus, MCPServer, AgentSkill
 from mcp_adapter import MCPServerAdapter
 
 # ─────────────────────────────── safety utils ───────────────────────────────
@@ -353,7 +353,7 @@ class LangGraphCompiler:
         mcp_server_map = {sid: None for sid in (getattr(data, 'mcpServerIds', []) or [])}
 
         for edge in self.edges:
-            if edge.source == node.id and edge.sourceHandle in ['out-tool', 'tools', 'out-mcp', 'mcp']:
+            if edge.source == node.id and edge.sourceHandle in ['out-tool', 'tools', 'out-mcp', 'mcp', 'out-custom-tool']:
                 target_node = self.nodes_map.get(edge.target)
                 if not target_node:
                     continue
@@ -621,6 +621,30 @@ class LangGraphCompiler:
             if ws_record and getattr(ws_record, 'path', None):
                 ws_path = ws_record.path
 
+        # --- PRE-RESOLVE SKILLS (Phase A: session is still open here) ---
+        # IMPORTANT: agent_fn runs in Phase B where the DB session is CLOSED.
+        # We must fetch skill content NOW and store it as plain strings so the
+        # closure can inject them safely without touching self.session.
+        resolved_skill_content: str = ""
+        skill_ids = getattr(node.data, 'identitySkillIds', []) or []
+        if skill_ids:
+            resolved_skills = []
+            for sid in skill_ids:
+                try:
+                    import uuid as _uuid
+                    skill_record = self.session.get(AgentSkill, _uuid.UUID(str(sid)))
+                    if skill_record:
+                        resolved_skills.append((skill_record.name, skill_record.content))
+                    else:
+                        logger.warning(f"[Skill] ID {sid} not found in database.")
+                except Exception as e:
+                    logger.error(f"[Skill] Error fetching skill {sid}: {e}")
+            if resolved_skills:
+                resolved_skill_content = "\n\n[MANDATORY CONTEXT: AGENT SKILLS]\n"
+                resolved_skill_content += "The following XML blocks contain specialized rules and guidelines. You must internalize these rules, but your PRIMARY directive is always to complete your ACTIVE TASK using your available TOOLS.\n\n"
+                for skill_name, skill_content in resolved_skills:
+                    resolved_skill_content += f'<agent_skill name="{skill_name}">\n{skill_content}\n</agent_skill>\n\n'
+
         node_tools = self._resolve_node_tools(node)
         if node_tools:
             logger.info(f"Detected {len(node_tools)} tools for agent {node.id}")
@@ -724,6 +748,10 @@ class LangGraphCompiler:
             if backstory:
                 system_content += f"Backstory: {backstory}\n"
 
+            # --- SKILL INJECTION (using pre-resolved strings from build time) ---
+            if resolved_skill_content:
+                system_content += resolved_skill_content
+
             # INJECT WORKSPACE DIRECTORY
             if ws_path:
                 system_content += f"\n[WORKSPACE CONTEXT]\n"
@@ -748,6 +776,8 @@ class LangGraphCompiler:
                     
                     task_content += f"### CURRENT TASK\nInstruction: {desc}\n"
                     if exp: task_content += f"Expected Output: {exp}\n\n"
+                    
+                    task_content += "\nCRITICAL: Review the tools available to you. You MUST use the appropriate tools to execute this task. Do not just reply with text if a tool is required to take action."
 
             if task_content:
                 system_content += f"\n\n[YOUR ACTIVE TASK]\n{task_content}"
@@ -756,6 +786,15 @@ class LangGraphCompiler:
                 system_content += f"\n\n[ACTIVE INSTRUCTIONS]\n{fallback_prompt}"
 
             sys_msg = SystemMessage(content=system_content)
+
+            # --- LOGGING: PROMPTS ---
+            log_msg = f"\n{'─'*10} [SYSTEM PROMPT: {node.data.name or node.id}] {'─'*10}\n{system_content}\n{'─'*50}\n"
+            self._emit({"type": "log", "data": log_msg})
+            logger.info(log_msg)
+            
+            history_msg = f"[CONTEXT] History contains {len(history)} messages.\n"
+            self._emit({"type": "log", "data": history_msg})
+            logger.info(history_msg)
 
             # ── 3. Invoke LLM with Full Context ───────────────────────────────
             # Prepare updates dictionary (using State structure)
@@ -806,8 +845,12 @@ class LangGraphCompiler:
                 if schema_model:
                     try:
                         extractor = base_model.with_structured_output(schema_model)
+                        extraction_prompt = f"Extract the following into the schema:\n\n{final_text}"
+                        extract_log = f"\n{'─'*10} [EXTRACTION PROMPT] {'─'*10}\n{extraction_prompt}\n{'─'*50}\n"
+                        self._emit({"type": "log", "data": extract_log})
+                        logger.info(extract_log)
                         parsed_data = extractor.invoke([
-                            HumanMessage(content=f"Extract the following into the schema:\n\n{final_text}")
+                            HumanMessage(content=extraction_prompt)
                         ])
                         output_update[target_state_key or "agent_output"] = parsed_data
                     except Exception as e:
@@ -884,6 +927,8 @@ class LangGraphCompiler:
 
                 str_actual = str(actual_value).strip().lower() if actual_value is not None else ""
                 str_cond = str(cond_value).strip().lower()
+                
+                self._emit({"type": "log", "data": f"  ├─ [ROUTER] '{cond_dict.get('field')}' ({str_actual}) {operator_str} '{str_cond}'\n"})
 
                 match = False
                 if operator_str in ['is_equal', '==', 'equals']:
@@ -1160,6 +1205,16 @@ def run_langgraph_stream(
     # ── Emitter: called from inside the worker thread ──────────────────────
     def emit(event_dict: Dict) -> None:
         event_queue.put(json.dumps(event_dict) + "\n")
+        
+        # Mirror logs to backend stdout for Docker/Terminal visibility
+        if event_dict.get("type") == "log":
+            try:
+                data = event_dict.get("data", "")
+                if sys.__stdout__:
+                    sys.__stdout__.write(data)
+                    sys.__stdout__.flush()
+            except:
+                pass
 
     def log(msg: str) -> None:
         emit({"type": "log", "data": msg})

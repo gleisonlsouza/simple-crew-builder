@@ -12,8 +12,10 @@ import {
   type ToolConfig, 
   type CustomTool, 
   type MCPServer, 
-  type Credential 
+  type Credential,
+  type AgentSkill
 } from './config.types';
+
 
 export type NodeStatus = 'idle' | 'running' | 'success' | 'error' | 'waiting';
 
@@ -203,7 +205,9 @@ export interface ConfigSlice {
   globalTools: ToolConfig[];
   customTools: CustomTool[];
   mcpServers: MCPServer[];
+  skills: AgentSkill[];
   systemAiModelId: string | null;
+
   embeddingModelId: string | null;
   defaultModel: string;
   fetchCredentials: () => Promise<void>;
@@ -228,7 +232,13 @@ export interface ConfigSlice {
   addMCPServer: (server: Omit<MCPServer, 'id'>) => Promise<void>;
   updateMCPServer: (id: string, server: Partial<MCPServer>) => Promise<void>;
   deleteMCPServer: (id: string) => Promise<void>;
+  fetchSkills: () => Promise<void>;
+  importSkill: (url: string) => Promise<void>;
+  uploadSkill: (file: File) => Promise<void>;
+  deleteSkill: (id: string) => Promise<void>;
+
   fetchSettings: () => Promise<void>;
+
   updateSettings: (settings: { active_workspace_id?: string | null; system_ai_model_id?: string | null; embedding_model_id?: string | null }) => Promise<void>;
 }
 

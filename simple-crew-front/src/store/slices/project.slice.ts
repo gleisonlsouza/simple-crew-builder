@@ -1,7 +1,7 @@
 import type { StateCreator } from 'zustand';
 import toast from 'react-hot-toast';
 import type { NodeStatus, AppState, ProjectSlice, ExportedProject } from '../../types/store.types';
-import type { AppNode } from '../../types/nodes.types';
+import type { AppNode, AgentNodeData, TaskNodeData, CustomToolNodeData } from '../../types/nodes.types';
 import type { MCPServer, CustomTool } from '../../types/config.types';
 import { migrateEdges, migrateNodes, validateDependencies } from '../helpers';
 import { migrateLegacyWorkflow } from '../../utils/workflowAdapter';
@@ -154,7 +154,11 @@ export const createProjectSlice: StateCreator<AppState, [], [], ProjectSlice> = 
   },
 
   loadProject: async (projectId: string) => {
-    if (projectId === get().currentProjectId) return;
+    console.log(`[ProjectSlice] loadProject called for: ${projectId}. Current ID in store: ${get().currentProjectId}`);
+    if (projectId === get().currentProjectId) {
+      console.log(`[ProjectSlice] loadProject early return - already loaded.`);
+      return;
+    }
     try {
       await Promise.all([
         get().fetchModels(),
@@ -162,7 +166,8 @@ export const createProjectSlice: StateCreator<AppState, [], [], ProjectSlice> = 
         get().fetchCustomTools(),
         get().fetchCredentials(),
         get().fetchWorkspaces(),
-        get().fetchSettings()
+        get().fetchSettings(),
+        get().fetchSkills()
       ]);
 
       const response = await fetch(`${API_URL}/api/v1/projects/${projectId}`);
@@ -178,11 +183,11 @@ export const createProjectSlice: StateCreator<AppState, [], [], ProjectSlice> = 
         if (!mergedMcp.some((m) => m.id === p.id)) mergedMcp.push(p);
       });
 
-      const globalTools = get().customTools;
-      const projectTools: CustomTool[] = canvas_data.customTools || [];
-      const mergedTools = [...globalTools];
-      projectTools.forEach((p) => {
-        if (!mergedTools.some(m => m.id === p.id)) mergedTools.push(p);
+      const globalCustomTools = get().customTools;
+      const projectCustomTools: CustomTool[] = canvas_data.customTools || [];
+      const mergedCustomTools = [...globalCustomTools];
+      projectCustomTools.forEach((p) => {
+        if (!mergedCustomTools.some(m => m.id === p.id)) mergedCustomTools.push(p);
       });
 
       const { migratedNodes: legacyNodes, migratedEdges: legacyEdges } = migrateLegacyWorkflow(
@@ -204,7 +209,7 @@ export const createProjectSlice: StateCreator<AppState, [], [], ProjectSlice> = 
       set({
         nodes: migratedNodes,
         edges: migrateEdges(legacyEdges, migratedNodes),
-        customTools: mergedTools,
+        customTools: mergedCustomTools,
         mcpServers: mergedMcp,
         currentProjectId: project.id,
         currentProjectName: project.name,
@@ -239,6 +244,7 @@ export const createProjectSlice: StateCreator<AppState, [], [], ProjectSlice> = 
       if (!response.ok) throw new Error('Failed to delete project');
 
       if (get().currentProjectId === projectId) {
+        console.log('[ProjectSlice] Resetting project state');
         get().resetProject();
       }
 
@@ -272,6 +278,7 @@ export const createProjectSlice: StateCreator<AppState, [], [], ProjectSlice> = 
       if (!response.ok) throw new Error('Failed to create project');
       const saved = await response.json();
 
+      console.log(`[ProjectSlice] Project created. Saved Name: ${saved.name}, ID: ${saved.id}`);
       set((state: AppState) => ({
         savedProjects: [...state.savedProjects, saved],
         currentProjectId: saved.id,
@@ -432,11 +439,11 @@ export const createProjectSlice: StateCreator<AppState, [], [], ProjectSlice> = 
       projectMcp.forEach((p) => {
         if (!mergedMcp.some(m => m.id === p.id)) mergedMcp.push(p);
       });
-      const globalTools = get().customTools;
-      const projectTools: CustomTool[] = project.customTools || [];
-      const mergedTools = [...globalTools];
-      projectTools.forEach((p) => {
-        if (!mergedTools.some(m => m.id === p.id)) mergedTools.push(p);
+      const globalCustomTools = get().customTools;
+      const projectCustomTools: CustomTool[] = project.customTools || [];
+      const mergedCustomTools = [...globalCustomTools];
+      projectCustomTools.forEach((p) => {
+        if (!mergedCustomTools.some(m => m.id === p.id)) mergedCustomTools.push(p);
       });
 
       const { migratedNodes: legacyNodes, migratedEdges: legacyEdges } = migrateLegacyWorkflow(
@@ -467,7 +474,7 @@ export const createProjectSlice: StateCreator<AppState, [], [], ProjectSlice> = 
       set({
         nodes: migratedNodes,
         edges: migrateEdges(legacyEdges, migratedNodes),
-        customTools: mergedTools,
+        customTools: mergedCustomTools,
         mcpServers: mergedMcp,
         currentProjectName: project.name || null,
         currentProjectDescription: project.description || null,
@@ -558,17 +565,27 @@ export const createProjectSlice: StateCreator<AppState, [], [], ProjectSlice> = 
     });
     // Identify active custom tools (LangGraph nodes + CrewAI agent/task data)
     const activeToolIds = new Set<string>();
-    state.nodes.forEach(node => {
-      const data = node.data as { toolId?: string; customToolIds?: string[] };
-      if (node.type === 'customTool' && data?.toolId) {
-        activeToolIds.add(data.toolId);
+    const currentNodes = get().nodes;
+
+    currentNodes.forEach(node => {
+      // LangGraph Pattern: Standalone custom tool node
+      if (node.type === 'customTool' && (node.data as CustomToolNodeData)?.toolId) {
+        activeToolIds.add((node.data as CustomToolNodeData).toolId);
       }
-      if (data?.customToolIds && Array.isArray(data.customToolIds)) {
-        data.customToolIds.forEach((id: string) => activeToolIds.add(id));
+      // CrewAI Pattern: Tools assigned directly inside an Agent's configuration
+      if (node.type === 'agent' && Array.isArray((node.data as AgentNodeData)?.customToolIds)) {
+        (node.data as AgentNodeData).customToolIds?.forEach((id: string) => activeToolIds.add(id));
+      }
+      // CrewAI Pattern: Tools assigned directly to a Task node
+      if (node.type === 'task' && Array.isArray((node.data as TaskNodeData)?.customToolIds)) {
+        (node.data as TaskNodeData).customToolIds?.forEach((id: string) => activeToolIds.add(id));
       }
     });
 
-    const activeCustomToolsFull = state.customTools.filter(tool => activeToolIds.has(tool.id));
+    // Get full objects from global state
+    const allCustomTools = get().customTools || [];
+    const activeCustomToolsFull = allCustomTools.filter(tool => activeToolIds.has(tool.id));
+
 
     const payload = {
       version: "1.0",

@@ -87,6 +87,7 @@ class AgentNodeData(BaseNodeData):
     customToolIds: Optional[List[str]] = None
     globalToolIds: Optional[List[Any]] = None
     disabledToolIds: Optional[List[str]] = None
+    identitySkillIds: Optional[List[str]] = Field(default_factory=list)
     taskOrder: Optional[List[str]] = None
 
 class TaskNodeData(BaseNodeData):
@@ -552,4 +553,25 @@ class ExecutionRead(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+# --- Agent Skill Library Schemas ---
+class AgentSkillBase(BaseModel):
+    name: str
+    description: Optional[str] = None
+    content: str
+    source_url: Optional[str] = None
+
+class AgentSkillCreate(AgentSkillBase):
+    pass
+
+class AgentSkillRead(AgentSkillBase):
+    id: Any # UUID
+    created_at: Any
+
+    class Config:
+        from_attributes = True
+
+class SkillImportRequest(BaseModel):
+    url: str
 

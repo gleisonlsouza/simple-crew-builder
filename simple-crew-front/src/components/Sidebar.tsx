@@ -229,6 +229,7 @@ export function Sidebar() {
                   }}
                   className="p-1.5 hover:bg-amber-100 dark:hover:bg-amber-900/50 rounded-md text-amber-600 dark:text-amber-400 transition-colors"
                   aria-label="Add State to canvas"
+                  data-testid="btn-add-state"
                 >
                   <PlusCircle className="w-4 h-4" />
                 </button>
@@ -259,6 +260,7 @@ export function Sidebar() {
                   }}
                   className="p-1.5 hover:bg-cyan-100 dark:hover:bg-cyan-900/50 rounded-md text-cyan-600 dark:text-cyan-400 transition-colors"
                   aria-label="Add Router to canvas"
+                  data-testid="btn-add-router"
                 >
                   <PlusCircle className="w-4 h-4" />
                 </button>
@@ -289,6 +291,7 @@ export function Sidebar() {
                   }}
                   className="p-1.5 hover:bg-purple-100 dark:hover:bg-purple-900/50 rounded-md text-purple-600 dark:text-purple-400 transition-colors"
                   aria-label="Add Schema to canvas"
+                  data-testid="btn-add-schema"
                 >
                   <PlusCircle className="w-4 h-4" />
                 </button>

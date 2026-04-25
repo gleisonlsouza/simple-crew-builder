@@ -24,10 +24,30 @@ export const AgentNode = memo(({ id, data }: NodeProps<Node<AgentNodeData, 'agen
   const models = useStore((state) => state.models);
   const status = useStore((state) => (state.nodeStatuses[id] as NodeStatus) || 'idle');
   const errors = useStore((state) => state.nodeErrors[id]);
-  const nodes = useStore((state) => state.nodes);
-  const edges = useStore((state) => state.edges);
+  
+  // Use targeted selectors to avoid re-rendering on every nodes/edges change
   const currentProjectFramework = useStore((state) => state.currentProjectFramework);
   const layout = useStore(state => state.canvasLayout);
+  
+  // Only subscribe to edges relevant to this node's count
+  const tasksCount = useStore((state) => state.edges.filter(e => e.source === id && e.sourceHandle === 'out-task').length);
+  const toolsCount = useStore((state) => state.edges.filter(e => e.source === id && (e.sourceHandle === 'out-tool' || e.sourceHandle === 'out-custom-tool')).length);
+  const mcpCount = useStore((state) => state.edges.filter(e => e.source === id && e.sourceHandle === 'out-mcp').length);
+  
+  // For the state connection sync, we only need to know if there's a state edge
+  const stateEdgeInfo = useStore((state) => {
+    const edge = state.edges.find(e => e.source === id && state.nodes.find(n => n.id === e.target)?.type === 'state');
+    if (!edge) return null;
+    return { target: edge.target, targetHandle: edge.targetHandle };
+  }, (a, b) => JSON.stringify(a) === JSON.stringify(b));
+
+  const stateNodesOptions = useStore((state) => 
+    state.nodes
+      .filter(n => n.type === 'state')
+      .map(n => ({ id: n.id, name: (n.data as StateNodeData).name, fields: (n.data as StateNodeData).fields })),
+    (a, b) => JSON.stringify(a) === JSON.stringify(b)
+  );
+
   const updateNodeInternals = useUpdateNodeInternals();
 
   useEffect(() => {
@@ -38,28 +58,21 @@ export const AgentNode = memo(({ id, data }: NodeProps<Node<AgentNodeData, 'agen
     Object.values(state.nodeStatuses || {}).some(s => s === 'running')
   );
 
-  const tasksCount = edges.filter(e => e.source === id && e.sourceHandle === 'out-task').length;
-  const toolsCount = edges.filter(e => e.source === id && (e.sourceHandle === 'out-tool' || e.sourceHandle === 'out-custom-tool')).length;
-  const mcpCount = edges.filter(e => e.source === id && e.sourceHandle === 'out-mcp').length;
-
   // Sync selectedStateId with existing edges if not already set
   useEffect(() => {
     if (data.isSnapshot) return;
-    if (!data.selectedStateId && currentProjectFramework === 'langgraph') {
-      const stateEdge = edges.find(e => e.source === id && nodes.find(n => n.id === e.target)?.type === 'state');
-      if (stateEdge) {
-        let fieldKey = null;
-        if (stateEdge.targetHandle?.startsWith('field-in-')) {
-          fieldKey = stateEdge.targetHandle.replace('field-in-', '');
-        }
-        
-        const timer = setTimeout(() => {
-          updateStateConnection(id, stateEdge.target, data.showStateConnections ?? true, fieldKey);
-        }, 100);
-        return () => clearTimeout(timer);
+    if (!data.selectedStateId && currentProjectFramework === 'langgraph' && stateEdgeInfo) {
+      let fieldKey = null;
+      if (stateEdgeInfo.targetHandle?.startsWith('field-in-')) {
+        fieldKey = stateEdgeInfo.targetHandle.replace('field-in-', '');
       }
+      
+      const timer = setTimeout(() => {
+        updateStateConnection(id, stateEdgeInfo.target, data.showStateConnections ?? true, fieldKey);
+      }, 100);
+      return () => clearTimeout(timer);
     }
-  }, [id, data.selectedStateId, currentProjectFramework, edges, nodes, updateStateConnection, data.showStateConnections, data.isSnapshot]);
+  }, [id, data.selectedStateId, currentProjectFramework, stateEdgeInfo, updateStateConnection, data.showStateConnections, data.isSnapshot]);
 
 
 
@@ -77,7 +90,7 @@ export const AgentNode = memo(({ id, data }: NodeProps<Node<AgentNodeData, 'agen
 
   return (
     <div
-      data-testid="node-agent"
+      data-testid={`node-agent-${id}`}
       onClick={(e) => { e.stopPropagation(); focusNodeTree(id); }}
       className={`group relative bg-white dark:bg-slate-900 rounded-xl shadow-sm hover:shadow-md dark:shadow-none border border-slate-200 dark:border-slate-700 w-64 overflow-visible cursor-pointer ${statusClasses} ${status === 'running' ? 'running node-running-active' : ''} ${
         (data.isDimmed || (isAnyNodeRunning && status !== 'running'))
@@ -193,39 +206,43 @@ export const AgentNode = memo(({ id, data }: NodeProps<Node<AgentNodeData, 'agen
                }>MCP</span>
             </Handle>
 
-            {/* Data Output Handle */}
-            <Handle 
-              type="source" 
-              position={isHorizontal ? Position.Right : Position.Bottom} 
-              id="data-out" 
-              className="!w-3 !h-3 !border-2 !border-white dark:!border-slate-900 !cursor-crosshair pointer-events-auto group/h-data-out z-10" 
-              style={{ 
-                backgroundColor: '#a855f7', 
-                ...(isHorizontal ? { top: '80%', right: '-6px', left: 'auto' } : { left: '80%' }) 
-              }} 
-            >
-               <span className={isHorizontal
-                 ? "absolute left-4 top-1/2 -translate-y-1/2 text-[9px] font-bold text-purple-600 bg-white dark:bg-slate-900 px-1 rounded shadow-sm opacity-0 group-hover/h-data-out:opacity-100 transition-opacity whitespace-nowrap border border-purple-100 dark:border-purple-900/30 pointer-events-none uppercase"
-                 : "absolute top-4 left-1/2 -translate-x-1/2 text-[9px] font-bold text-purple-600 bg-white dark:bg-slate-900 px-1 rounded shadow-sm opacity-0 group-hover/h-data-out:opacity-100 transition-opacity whitespace-nowrap border border-purple-100 dark:border-purple-900/30 pointer-events-none uppercase"
-               }>Data Out</span>
-            </Handle>
+            {/* Data Output Handle - LangGraph only */}
+            {currentProjectFramework === 'langgraph' && (
+              <Handle 
+                type="source" 
+                position={isHorizontal ? Position.Right : Position.Bottom} 
+                id="data-out" 
+                className="!w-3 !h-3 !border-2 !border-white dark:!border-slate-900 !cursor-crosshair pointer-events-auto group/h-data-out z-10" 
+                style={{ 
+                  backgroundColor: '#a855f7', 
+                  ...(isHorizontal ? { top: '80%', right: '-6px', left: 'auto' } : { left: '80%' }) 
+                }} 
+              >
+                 <span className={isHorizontal
+                   ? "absolute left-4 top-1/2 -translate-y-1/2 text-[9px] font-bold text-purple-600 bg-white dark:bg-slate-900 px-1 rounded shadow-sm opacity-0 group-hover/h-data-out:opacity-100 transition-opacity whitespace-nowrap border border-purple-100 dark:border-purple-900/30 pointer-events-none uppercase"
+                   : "absolute top-4 left-1/2 -translate-x-1/2 text-[9px] font-bold text-purple-600 bg-white dark:bg-slate-900 px-1 rounded shadow-sm opacity-0 group-hover/h-data-out:opacity-100 transition-opacity whitespace-nowrap border border-purple-100 dark:border-purple-900/30 pointer-events-none uppercase"
+                 }>Data Out</span>
+              </Handle>
+            )}
 
-            {/* Execution Output Handle */}
-            <Handle 
-              type="source" 
-              position={isHorizontal ? Position.Right : Position.Bottom} 
-              id="agent-out" 
-              className="!w-3 !h-3 !border-2 !border-white dark:!border-slate-900 !cursor-crosshair pointer-events-auto group/h-agent-out z-10 font-bold" 
-              style={{ 
-                backgroundColor: '#2563eb', 
-                ...(isHorizontal ? { top: '92%', right: '-6px', left: 'auto' } : { left: '92%' }) 
-              }} 
-            >
-               <span className={isHorizontal
-                 ? "absolute left-4 top-1/2 -translate-y-1/2 text-[9px] font-bold text-blue-600 bg-white dark:bg-slate-900 px-1 rounded shadow-sm opacity-0 group-hover/h-agent-out:opacity-100 transition-opacity whitespace-nowrap border border-blue-100 dark:border-blue-900/30 pointer-events-none uppercase"
-                 : "absolute top-4 left-1/2 -translate-x-1/2 text-[9px] font-bold text-blue-600 bg-white dark:bg-slate-900 px-1 rounded shadow-sm opacity-0 group-hover/h-agent-out:opacity-100 transition-opacity whitespace-nowrap border border-blue-100 dark:border-blue-900/30 pointer-events-none uppercase"
-               }>Execution Out</span>
-            </Handle>
+            {/* Execution Output Handle - LangGraph only */}
+            {currentProjectFramework === 'langgraph' && (
+              <Handle 
+                type="source" 
+                position={isHorizontal ? Position.Right : Position.Bottom} 
+                id="agent-out" 
+                className="!w-3 !h-3 !border-2 !border-white dark:!border-slate-900 !cursor-crosshair pointer-events-auto group/h-agent-out z-10 font-bold" 
+                style={{ 
+                  backgroundColor: '#2563eb', 
+                  ...(isHorizontal ? { top: '92%', right: '-6px', left: 'auto' } : { left: '92%' }) 
+                }} 
+              >
+                 <span className={isHorizontal
+                   ? "absolute left-4 top-1/2 -translate-y-1/2 text-[9px] font-bold text-blue-600 bg-white dark:bg-slate-900 px-1 rounded shadow-sm opacity-0 group-hover/h-agent-out:opacity-100 transition-opacity whitespace-nowrap border border-blue-100 dark:border-blue-900/30 pointer-events-none uppercase"
+                   : "absolute top-4 left-1/2 -translate-x-1/2 text-[9px] font-bold text-blue-600 bg-white dark:bg-slate-900 px-1 rounded shadow-sm opacity-0 group-hover/h-agent-out:opacity-100 transition-opacity whitespace-nowrap border border-blue-100 dark:border-blue-900/30 pointer-events-none uppercase"
+                 }>Execution Out</span>
+              </Handle>
+            )}
           </>
         );
       })()}
@@ -308,12 +325,13 @@ export const AgentNode = memo(({ id, data }: NodeProps<Node<AgentNodeData, 'agen
             </select>
           </div>
 
-          <div className="pt-3 border-t border-slate-100 dark:border-slate-800">
-            <div className="flex items-center gap-2 mb-1.5">
-              <Server className="w-3.5 h-3.5 text-purple-500" />
-              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">State Connection</span>
-            </div>
-            <div className="space-y-2">
+          {currentProjectFramework === 'langgraph' && (
+            <div className="pt-3 border-t border-slate-100 dark:border-slate-800">
+              <div className="flex items-center gap-2 mb-1.5">
+                <Server className="w-3.5 h-3.5 text-purple-500" />
+                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">State Connection</span>
+              </div>
+              <div className="space-y-2">
               <select
                 value={data.selectedStateId ? `${data.selectedStateId}${data.selectedStateKey ? `:${data.selectedStateKey}` : ''}` : ''}
                 onChange={(e) => {
@@ -329,12 +347,9 @@ export const AgentNode = memo(({ id, data }: NodeProps<Node<AgentNodeData, 'agen
                 className="w-full bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-lg px-2 py-1.5 text-[11px] font-medium text-slate-700 dark:text-slate-300 outline-none focus:ring-1 focus:ring-purple-500 transition-all shadow-sm"
               >
                 <option value="">No State Connected</option>
-                {nodes
-                  .filter(n => n.type === 'state')
-                  .flatMap(stateNode => {
-                    const stateData = stateNode.data as StateNodeData;
-                    const fields = stateData.fields || [];
-                    const stateName = stateData.name || `State #${stateNode.id.slice(-4)}`;
+                {stateNodesOptions.flatMap(stateNode => {
+                    const fields = stateNode.fields || [];
+                    const stateName = stateNode.name || `State #${stateNode.id.slice(-4)}`;
                     
                     if (fields.length === 0) {
                       return [<option key={stateNode.id} value={stateNode.id}>{stateName} (Entire State)</option>];
@@ -349,17 +364,20 @@ export const AgentNode = memo(({ id, data }: NodeProps<Node<AgentNodeData, 'agen
                 }
               </select>
 
-              <label className="flex items-center gap-2 cursor-pointer group/toggle nodrag" onClick={(e) => e.stopPropagation()}>
-                <input
-                  type="checkbox"
-                  checked={data.showStateConnections ?? true}
-                  onChange={(e) => updateStateConnection(id, data.selectedStateId || null, e.target.checked, data.selectedStateKey || null)}
-                  className="w-3.5 h-3.5 rounded border-slate-300 text-purple-600 focus:ring-purple-500 cursor-pointer"
-                />
-                <span className="text-[10px] font-medium text-slate-500 dark:text-slate-400 group-hover/toggle:text-slate-700 dark:group-hover/toggle:text-slate-200 transition-colors">
-                  Show Connection Line
-                </span>
-              </label>
+                <label className="flex items-center gap-2 cursor-pointer group/toggle nodrag" onClick={(e) => e.stopPropagation()}>
+                  <input
+                    type="checkbox"
+                    checked={data.showStateConnections ?? true}
+                    onChange={(e) => updateStateConnection(id, data.selectedStateId || null, e.target.checked, data.selectedStateKey || null)}
+                    className="w-3.5 h-3.5 rounded border-slate-300 text-purple-600 focus:ring-purple-500 cursor-pointer"
+                  />
+                  <span className="text-[10px] font-medium text-slate-500 dark:text-slate-400 group-hover/toggle:text-slate-700 dark:group-hover/toggle:text-slate-200 transition-colors">
+                    Show Connection Line
+                  </span>
+                </label>
+              </div>
+            </div>
+          )}
 
           {data.isCollapsed && (currentProjectFramework === 'langgraph' || currentProjectFramework === 'crewai') && (tasksCount > 0 || toolsCount > 0 || mcpCount > 0) && (
             <div className="pt-3 mt-3 border-t border-slate-100 dark:border-slate-800 animate-in fade-in slide-in-from-top-1 duration-200">
@@ -388,8 +406,6 @@ export const AgentNode = memo(({ id, data }: NodeProps<Node<AgentNodeData, 'agen
         </div>
       </div>
 
-    </div>
-  </div>
 
       <button
         onClick={(e) => { 

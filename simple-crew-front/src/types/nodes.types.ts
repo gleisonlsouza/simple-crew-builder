@@ -38,7 +38,9 @@ export interface AgentNodeData extends Record<string, unknown> {
   selectedStateId?: string;
   selectedStateKey?: string;
   showStateConnections?: boolean;
+  identitySkillIds?: string[];
 }
+
 
 export interface LangGraphAgentData extends Record<string, unknown> {
   name: string;
@@ -49,7 +51,9 @@ export interface LangGraphAgentData extends Record<string, unknown> {
   selectedStateId?: string;
   selectedStateKey?: string;
   showStateConnections?: boolean;
+  identitySkillIds?: string[];
 }
+
 
 export interface LangGraphTaskData extends Record<string, unknown> {
   name: string;

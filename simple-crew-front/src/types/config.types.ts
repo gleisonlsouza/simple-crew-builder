@@ -65,3 +65,13 @@ export interface MCPServer {
   url?: string;
   headers?: Record<string, string>;
 }
+
+export interface AgentSkill {
+  id: string;
+  name: string;
+  description?: string;
+  content: string;
+  source_url?: string;
+  created_at: string;
+}
+

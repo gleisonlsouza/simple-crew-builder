@@ -22,7 +22,8 @@ test('Frontend Smoke Test - Core Flow (POM Refactored)', async ({ page }) => {
   await builder.expectLoaded(project.name);
   
   // 6. Interaction: Open Node Configuration
-  await builder.openNodeConfig('Test Agent'); // Agent Node
+  await builder.openNodeConfig('Agent'); // Agent Node
+
   await builder.expectConfigDrawerOpen();
 
   // 7. Interaction: Close Configuration Drawer

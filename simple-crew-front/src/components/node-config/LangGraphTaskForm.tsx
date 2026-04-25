@@ -46,6 +46,7 @@ export const LangGraphTaskForm: React.FC<LangGraphTaskFormProps> = memo(({
           onChange={(e) => onFieldChange(e, 'description', (val) => updateNodeData(nodeId, { description: val }))}
           placeholder="What should be done?"
           rows={4}
+          data-testid="input-description"
         />
       </div>
 
@@ -71,6 +72,7 @@ export const LangGraphTaskForm: React.FC<LangGraphTaskFormProps> = memo(({
           onChange={(e) => onFieldChange(e, 'expected_output', (val) => updateNodeData(nodeId, { expected_output: val }))}
           placeholder="What should the result look like?"
           rows={3}
+          data-testid="input-expected-output"
         />
       </div>
     </div>

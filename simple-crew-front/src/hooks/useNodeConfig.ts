@@ -1,25 +1,28 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { toast } from 'react-hot-toast';
 import { arrayMove } from '@dnd-kit/sortable';
 import type { DragEndEvent } from '@dnd-kit/core';
 import { useStore } from '../store/index';
 import type { AppState } from '../types/store.types';
-import type { AppNode, AppEdge } from '../types/nodes.types';
+import type { AppNode } from '../types/nodes.types';
 import type { ToolConfig } from '../types/config.types';
 import { useGraphVariables } from './useGraphVariables';
 
 export const useNodeConfig = () => {
   const activeNodeId = useStore((state: AppState) => state.activeNodeId);
-  const nodes = useStore((state: AppState) => state.nodes, (oldNodes: AppNode[], newNodes: AppNode[]) => {
-    if (oldNodes.length !== newNodes.length) return false;
-    for (let i = 0; i < oldNodes.length; i++) {
-      if (oldNodes[i].id !== newNodes[i].id) return false;
-      if (oldNodes[i].type !== newNodes[i].type) return false;
-      if (JSON.stringify(oldNodes[i].data) !== JSON.stringify(newNodes[i].data)) return false;
-    }
-    return true;
-  });
-  const edges = useStore((state: AppState) => state.edges, (oldEdges: AppEdge[], newEdges: AppEdge[]) => JSON.stringify(oldEdges) === JSON.stringify(newEdges));
+  
+  // Use a stable selector for the active node to avoid re-rendering on every nodes change
+  const activeNode = useStore(useCallback((state: AppState) => 
+    state.nodes.find((n) => n.id === state.activeNodeId), []
+  ));
+
+  // Only expose a stable list of nodes for forms that need it (like TaskForm context)
+  const nodes = useStore((state: AppState) => 
+    state.nodes.map(n => ({ id: n.id, type: n.type, data: { name: (n.data as { name?: string }).name, inputs: (n.data as { inputs?: Record<string, string> }).inputs } })),
+    (a, b) => JSON.stringify(a) === JSON.stringify(b)
+  );
+
+  const edges = useStore((state: AppState) => state.edges);
   const setActiveNode = useStore((state: AppState) => state.setActiveNode);
   const updateNodeData = useStore((state: AppState) => state.updateNodeData);
   const deleteNode = useStore((state: AppState) => state.deleteNode);
@@ -34,7 +37,9 @@ export const useNodeConfig = () => {
   const suggestTaskBulkAiContent = useStore((state: AppState) => state.suggestTaskBulkAiContent);
   const customTools = useStore((state: AppState) => state.customTools);
   const globalTools = useStore((state: AppState) => state.globalTools);
+  const skills = useStore((state: AppState) => state.skills);
   const nodeWarningsStore = useStore((state: AppState) => state.nodeWarnings);
+
 
   const { variables, framework } = useGraphVariables();
 
@@ -49,6 +54,46 @@ export const useNodeConfig = () => {
 
   const [isToolConfigModalOpen, setIsToolConfigModalOpen] = useState(false);
   const [toolToConfigure, setToolToConfigure] = useState<ToolConfig | null>(null);
+
+  // Simple debounce implementation to avoid lodash dependency
+  const debounce = useCallback(<T extends unknown[]>(fn: (...args: T) => void, ms: number) => {
+    let timeoutId: ReturnType<typeof setTimeout>;
+    return function(...args: T) {
+      clearTimeout(timeoutId);
+      timeoutId = setTimeout(() => fn(...args), ms);
+    };
+  }, []);
+
+  // Accumulate updates to avoid losing data when multiple fields are updated within the debounce window
+  const pendingUpdatesRef = useRef<Record<string, Record<string, unknown>>>({});
+
+  // Debounced update to avoid re-rendering the whole canvas on every keystroke
+  const debouncedUpdateRef = useRef(
+    debounce((id: string) => {
+      const data = pendingUpdatesRef.current[id];
+      if (data) {
+        delete pendingUpdatesRef.current[id];
+        useStore.getState().updateNodeData(id, data);
+      }
+    }, 500)
+  );
+
+  const updateNodeDataDebounced = useCallback((id: string, data: Record<string, unknown>) => {
+    // For some fields we want immediate update, for others we debounce
+    const immediateFields = ['isCollapsed', 'modelId', 'selectedStateId', 'showStateConnections', 'inputs'];
+    const hasImmediate = Object.keys(data).some(k => immediateFields.includes(k));
+    
+    if (hasImmediate) {
+      updateNodeData(id, data);
+    } else {
+      // Merge into pending updates for this specific node
+      pendingUpdatesRef.current[id] = { 
+        ...(pendingUpdatesRef.current[id] || {}), 
+        ...data 
+      };
+      debouncedUpdateRef.current(id);
+    }
+  }, [updateNodeData]);
 
   const [suggestionState, setSuggestionState] = useState<{
     isOpen: boolean;
@@ -68,7 +113,6 @@ export const useNodeConfig = () => {
     selectedIndex: 0
   });
 
-  const activeNode = nodes.find((n: AppNode) => n.id === activeNodeId);
   const isCrew = activeNode?.type === 'crew';
   const isAgent = activeNode?.type === 'agent';
   const isTask = activeNode?.type === 'task';
@@ -76,10 +120,8 @@ export const useNodeConfig = () => {
   const isWebhook = activeNode?.type === 'webhook';
 
   useEffect(() => {
-    if (activeNodeId) {
-      const node = nodes.find((n) => n.id === activeNodeId);
-      if (node) {
-        const data = node.data;
+    if (activeNodeId && activeNode) {
+        const data = activeNode.data;
         setLocalName((data as { name?: string }).name || '');
         setNameError(false);
         setIsContextSelectorOpen(false);
@@ -87,32 +129,32 @@ export const useNodeConfig = () => {
         setIsCustomToolSelectorOpen(false);
         setIsGlobalToolSelectorOpen(false);
         setIsChatMappingSelectorOpen(false);
-      }
     }
-  }, [activeNodeId, nodes]);
+  }, [activeNodeId, activeNode]);
 
   const connectedAgents = useMemo(() => {
     if (!isCrew || !activeNodeId) return [];
     return edges
       .filter((e) => e.source === activeNodeId)
-      .map((e) => nodes.find((n) => n.id === e.target))
+      .map((e) => useStore.getState().nodes.find((n) => n.id === e.target))
       .filter((n) => n?.type === 'agent') as AppNode[];
-  }, [isCrew, activeNodeId, edges, nodes]);
+  }, [isCrew, activeNodeId, edges]);
 
   const connectedTasks = useMemo(() => {
     if (!activeNodeId) return [];
+    const allNodes = useStore.getState().nodes;
     if (isAgent) {
       return edges
         .filter((e) => e.source === activeNodeId)
-        .map((e) => nodes.find((n) => n.id === e.target))
+        .map((e) => allNodes.find((n) => n.id === e.target))
         .filter((n) => n?.type === 'task') as AppNode[];
     }
     if (isCrew) {
       const agentIds = new Set(connectedAgents.map(a => a.id));
-      return nodes.filter(n => n.type === 'task' && edges.some(e => e.target === n.id && agentIds.has(e.source))) as AppNode[];
+      return allNodes.filter(n => n.type === 'task' && edges.some(e => e.target === n.id && agentIds.has(e.source))) as AppNode[];
     }
     return [];
-  }, [activeNodeId, isAgent, isCrew, edges, nodes, connectedAgents]);
+  }, [activeNodeId, isAgent, isCrew, edges, connectedAgents]);
 
   const renderableAgents = useMemo(() => {
     const list = [...connectedAgents];
@@ -208,14 +250,17 @@ export const useNodeConfig = () => {
     const value = e.target.value;
     setLocalName(value);
     if (!activeNode) return;
-    const isDuplicate = nodes.some(
+    
+    // Perform duplicate check against all nodes (expensive, but only on name change)
+    const allNodes = useStore.getState().nodes;
+    const isDuplicate = allNodes.some(
       (n) => n.id !== activeNode.id && n.type === activeNode.type && (n.data as { name?: string }).name === value
     );
     setNameError(isDuplicate);
     if (!isDuplicate && activeNodeId) {
       updateNodeData(activeNodeId, { name: value });
     }
-  }, [activeNode, nodes, activeNodeId, updateNodeData]);
+  }, [activeNode, activeNodeId, updateNodeData]);
 
   const handleAiSuggest = useCallback(async (field: string) => {
     if (!activeNodeId) return;
@@ -333,8 +378,15 @@ export const useNodeConfig = () => {
     updateFn: (val: string) => void
   ) => {
     const value = e.target.value;
-    const target = e.target as (HTMLTextAreaElement | HTMLInputElement) & { cursorRect?: { top: number; left: number; height: number } };
-    const cursorPos = typeof target.selectionStart === 'number' ? target.selectionStart : value.length;
+    const target = e.target as { 
+      value: string; 
+      selectionStart?: number; 
+      cursorRect?: { top: number; left: number; height: number };
+      getBoundingClientRect?: () => DOMRect;
+    };
+    const cursorPos = (typeof target.selectionStart === 'number' && target.selectionStart > 0) 
+      ? target.selectionStart 
+      : value.length;
     const cursorRect = target.cursorRect || null;
 
     updateFn(value);
@@ -362,9 +414,10 @@ export const useNodeConfig = () => {
 
   const allProjectVariables = useMemo(() => {
     const vars = new Set<string>();
+    const allNodes = useStore.getState().nodes;
     
     // 1. Inputs from Crew Node
-    const crewNode = nodes.find(n => n.type === 'crew');
+    const crewNode = allNodes.find(n => n.type === 'crew');
     if (crewNode) {
       const inputs = (crewNode.data as { inputs?: Record<string, string> })?.inputs || {};
       Object.keys(inputs).forEach(k => {
@@ -374,7 +427,7 @@ export const useNodeConfig = () => {
 
     // 2. Scan all nodes for {variable} patterns
     const variableRegex = /\{([a-zA-Z0-9_-]+)\}/g;
-    nodes.forEach(node => {
+    allNodes.forEach(node => {
       const data = node.data as Record<string, string>;
       const fieldsToScan = [
         data.role, data.goal, data.backstory,
@@ -393,7 +446,7 @@ export const useNodeConfig = () => {
     });
 
     return Array.from(vars).sort();
-  }, [nodes]);
+  }, []); // Only compute once or when needed via a different trigger
 
   let connectedCrewInputs: string[] = [];
   let isChatConnected = false;
@@ -411,21 +464,23 @@ export const useNodeConfig = () => {
   const currentProjectFramework = useStore((state: AppState) => state.currentProjectFramework);
 
   // Maintain backward compatibility for state nodes/fields
-  const stateNodesRaw = nodes.filter(n => n.type === 'state');
-  const stateNodes = useMemo(() => stateNodesRaw.map(n => ({
-    id: n.id,
-    name: (n.data as { name?: string }).name || 'State',
-    fields: ((n.data as { fields?: { key: string; type: string }[] }).fields || []).map(f => {
-      // Find corresponding schema children from our new tree
-      const treeField = variables[f.key];
-      const childrenKeys = treeField?.children ? Object.keys(treeField.children) : undefined;
-      return {
-        key: f.key,
-        type: f.type,
-        subKeys: childrenKeys ? childrenKeys.map(sk => `${f.key}.${sk}`) : undefined,
-      };
-    }),
-  })), [stateNodesRaw, variables]);
+  const stateNodes = useMemo(() => {
+    const allNodes = useStore.getState().nodes;
+    return allNodes.filter(n => n.type === 'state').map(n => ({
+      id: n.id,
+      name: (n.data as { name?: string }).name || 'State',
+      fields: ((n.data as { fields?: { key: string; type: string }[] }).fields || []).map(f => {
+        // Find corresponding schema children from our new tree
+        const treeField = variables[f.key];
+        const childrenKeys = treeField?.children ? Object.keys(treeField.children) : undefined;
+        return {
+          key: f.key,
+          type: f.type,
+          subKeys: childrenKeys ? childrenKeys.map(sk => `${f.key}.${sk}`) : undefined,
+        };
+      }),
+    }));
+  }, [variables]);
 
   const stateFields = useMemo(() =>
     stateNodes.flatMap(s =>
@@ -439,7 +494,7 @@ export const useNodeConfig = () => {
     nodes,
     edges,
     setActiveNode,
-    updateNodeData,
+    updateNodeData: updateNodeDataDebounced,
     deleteNode,
     updateCrewAgentOrder,
     updateAgentTaskOrder,
@@ -447,7 +502,9 @@ export const useNodeConfig = () => {
     mcpServers,
     customTools,
     globalTools,
+    skills,
     localName,
+
     nameError,
     isContextSelectorOpen,
     setIsContextSelectorOpen,

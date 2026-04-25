@@ -8,6 +8,7 @@ dependencies = [
     "crewai-tools[mcp]>=1.10.1",
     "crewai[google-genai,tools]>=1.10.1",
     "fastapi[standard]>=0.135.1",
+    "httpx>=0.28.1",
     "langchain>=0.3.28",
     "langchain-anthropic>=0.3.22",
     "langchain-google-genai>=2.1.12",
@@ -21,6 +22,7 @@ dependencies = [
     "pypdf>=6.9.2",
     "python-docx>=1.2.0",
     "python-dotenv>=1.1.1",
+    "pyyaml>=6.0.3",
     "sqlmodel>=0.0.37",
 ]
 

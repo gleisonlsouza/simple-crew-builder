@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, memo } from 'react';
 import {
   BaseEdge,
   EdgeLabelRenderer,
@@ -10,7 +10,7 @@ import { useShallow } from 'zustand/shallow';
 import { useStore } from '../store/index';
 import type { NodeStatus } from '../types/store.types';
 
-export function DeletableEdge({
+export const DeletableEdge = memo(({
   id,
   source,
   target,
@@ -23,7 +23,7 @@ export function DeletableEdge({
   style = {},
   markerEnd,
   data,
-}: EdgeProps) {
+}: EdgeProps) => {
   const [edgePath, labelX, labelY] = getSmoothStepPath({
     sourceX,
     sourceY,
@@ -108,4 +108,4 @@ export function DeletableEdge({
       </EdgeLabelRenderer>
     </>
   );
-}
+});

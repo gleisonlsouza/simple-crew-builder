@@ -18,6 +18,9 @@ vi.mock('lucide-react', () => ({
   ToggleRight: () => <div data-testid="icon-toggle-right" />,
   ChevronDown: () => <div data-testid="icon-chevron-down" />,
   ChevronUp: () => <div data-testid="icon-chevron-up" />,
+  Search: () => <div data-testid="icon-search" />,
+  BookOpen: () => <div data-testid="icon-book-open" />,
+  Eye: () => <div data-testid="icon-eye" />,
 }));
 
 // Mock @dnd-kit

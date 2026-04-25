@@ -17,7 +17,7 @@ import {
 import {
   sortableKeyboardCoordinates,
 } from '@dnd-kit/sortable';
-import type { AgentNodeData, TaskNodeData, CrewNodeData, ChatNodeData, WebhookNodeData, LangGraphAgentData, LangGraphTaskData } from '../types/nodes.types';
+import type { AppNode, AgentNodeData, TaskNodeData, CrewNodeData, ChatNodeData, WebhookNodeData, LangGraphAgentData, LangGraphTaskData } from '../types/nodes.types';
 import { LangGraphAgentForm } from './node-config/LangGraphAgentForm';
 import { LangGraphTaskForm } from './node-config/LangGraphTaskForm';
 import { VariableAutocomplete } from './node-config/VariableAutocomplete';
@@ -36,7 +36,9 @@ export function NodeConfigDrawer() {
     mcpServers,
     customTools,
     globalTools,
+    skills,
     localName,
+
     nameError,
     isContextSelectorOpen,
     setIsContextSelectorOpen,
@@ -161,7 +163,7 @@ export function NodeConfigDrawer() {
 
       <div className="p-6 flex-1 overflow-y-auto">
         {(type === 'agent' || type === 'task') && (
-          <div className="flex flex-col gap-2 mb-6 pb-6 border-b border-brand-border/50">
+          <div className="flex flex-col gap-2 mb-6 pb-6 border-b border-brand-border/50" data-testid="input-node-name">
             <label className="text-xs font-bold text-brand-muted uppercase tracking-wider">Name</label>
             <input
               className={`border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 transition-all duration-200 ${
@@ -188,7 +190,9 @@ export function NodeConfigDrawer() {
               nodeId={activeNode.id}
               updateNodeData={updateNodeData}
               models={models}
+              skills={skills}
               loadingFields={loadingFields}
+
               onAiSuggest={handleAiSuggest}
               onFieldKeyDown={handleFieldKeyDown}
               onFieldChange={handleFieldChange}
@@ -204,7 +208,9 @@ export function NodeConfigDrawer() {
               mcpServers={mcpServers}
               globalTools={globalTools}
               customTools={customTools}
+              skills={skills}
               loadingFields={loadingFields}
+
               onAiSuggest={handleAiSuggest}
               onFieldKeyDown={handleFieldKeyDown}
               onFieldChange={handleFieldChange}
@@ -239,7 +245,7 @@ export function NodeConfigDrawer() {
               data={data as TaskNodeData}
               nodeId={activeNode.id}
               updateNodeData={updateNodeData}
-              nodes={nodes}
+              nodes={nodes as unknown as AppNode[]}
               loadingFields={loadingFields}
               onAiSuggest={handleAiSuggest}
               onFieldKeyDown={handleFieldKeyDown}

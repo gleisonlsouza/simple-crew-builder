@@ -52,6 +52,7 @@ describe('projectSlice - Elite Coverage Max', () => {
             models: [],
             credentials: [],
             savedProjects: [],
+            skills: [],
             workspaces: [
                 { id: 'ws-1', name: 'WS1', path: '/path/1' },
                 { id: 'ws-2', name: 'WS2', path: '/path/2' }
@@ -170,6 +171,10 @@ describe('projectSlice - Elite Coverage Max', () => {
             fetchExecutions: vi.fn(),
             fetchExecutionDetails: vi.fn(),
             reRunExecution: vi.fn(),
+            fetchSkills: vi.fn().mockResolvedValue(undefined),
+            importSkill: vi.fn().mockResolvedValue(undefined),
+            uploadSkill: vi.fn().mockResolvedValue(undefined),
+            deleteSkill: vi.fn().mockResolvedValue(undefined),
         } as unknown as AppState;
 
         set = vi.fn((update) => {

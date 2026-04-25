@@ -4,14 +4,13 @@ import { useShallow } from 'zustand/shallow';
 import { Users, Trash2, ChevronDown, ChevronUp, Loader2, CheckCircle2, Link, Settings, Clock, AlertCircle, Server } from 'lucide-react';
 import { useStore } from '../store/index';
 import { FRAMEWORK_CONFIG } from '../config/frameworks.config';
-import type { CrewNodeData, AgentNodeData } from '../types/nodes.types';
+import type { CrewNodeData, AgentNodeData, StateNodeData } from '../types/nodes.types';
 
 export const CrewNode = memo(({ id, data }: NodeProps<Node<CrewNodeData, 'crew'>>) => {
-  const { deleteNode, toggleCollapse, nodes, onConnect, setActiveNode, focusNodeTree, currentProjectFramework, updateStateConnection } = useStore(
+  const { deleteNode, toggleCollapse, onConnect, setActiveNode, focusNodeTree, currentProjectFramework, updateStateConnection } = useStore(
     useShallow((state) => ({
       deleteNode: state.deleteNode,
       toggleCollapse: state.toggleCollapse,
-      nodes: state.nodes,
       onConnect: state.onConnect,
       setActiveNode: state.setActiveNode,
       focusNodeTree: state.focusNodeTree,
@@ -23,9 +22,32 @@ export const CrewNode = memo(({ id, data }: NodeProps<Node<CrewNodeData, 'crew'>
   const [isConnectMenuOpen, setIsConnectMenuOpen] = useState(false);
   const status = useStore((state) => state.nodeStatuses[id] || 'idle');
   const errors = useStore((state) => state.nodeErrors[id]);
-  const edges = useStore((state) => state.edges);
-
+  
+  // Use targeted selectors to avoid re-rendering on every nodes/edges change
   const layout = useStore(state => state.canvasLayout);
+  
+  const childCount = useStore((state) => state.edges.filter((edge) => edge.source === id).length);
+  
+  const stateEdgeInfo = useStore((state) => {
+    const edge = state.edges.find(e => e.target === id && state.nodes.find(n => n.id === e.source)?.type === 'state');
+    if (!edge) return null;
+    return { source: edge.source };
+  }, (a, b) => JSON.stringify(a) === JSON.stringify(b));
+
+  const stateNodesOptions = useStore((state) => 
+    state.nodes
+      .filter(n => n.type === 'state')
+      .map(n => ({ id: n.id, name: (n.data as StateNodeData).name })),
+    (a, b) => JSON.stringify(a) === JSON.stringify(b)
+  );
+  
+  const agentNodesForConnect = useStore((state) => 
+    state.nodes
+      .filter(n => n.id !== id && n.type === 'agent')
+      .map(n => ({ id: n.id, type: n.type, name: (n.data as AgentNodeData).name })),
+    (a, b) => JSON.stringify(a) === JSON.stringify(b)
+  );
+
   const updateNodeInternals = useUpdateNodeInternals();
 
   useEffect(() => {
@@ -36,22 +58,17 @@ export const CrewNode = memo(({ id, data }: NodeProps<Node<CrewNodeData, 'crew'>
     Object.values(state.nodeStatuses || {}).some(s => s === 'running')
   );
 
-  const childCount = edges.filter((edge) => edge.source === id).length;
-
   // Sync selectedStateId with existing edges if not already set
   useEffect(() => {
     if (data.isSnapshot) return;
-    if (!data.selectedStateId && currentProjectFramework === 'langgraph') {
-      const stateEdge = edges.find(e => e.target === id && nodes.find(n => n.id === e.source)?.type === 'state');
-      if (stateEdge) {
-        // Use a timeout to avoid collision with other state updates during initial load
-        const timer = setTimeout(() => {
-          updateStateConnection(id, stateEdge.source, data.showStateConnections ?? true);
-        }, 100);
-        return () => clearTimeout(timer);
-      }
+    if (!data.selectedStateId && currentProjectFramework === 'langgraph' && stateEdgeInfo) {
+      // Use a timeout to avoid collision with other state updates during initial load
+      const timer = setTimeout(() => {
+        updateStateConnection(id, stateEdgeInfo.source, data.showStateConnections ?? true);
+      }, 100);
+      return () => clearTimeout(timer);
     }
-  }, [id, data.selectedStateId, currentProjectFramework, edges, nodes, updateStateConnection, data.showStateConnections, data.isSnapshot]);
+  }, [id, data.selectedStateId, currentProjectFramework, stateEdgeInfo, updateStateConnection, data.showStateConnections, data.isSnapshot]);
 
   // Close menus when clicking outside
   useEffect(() => {
@@ -75,7 +92,7 @@ export const CrewNode = memo(({ id, data }: NodeProps<Node<CrewNodeData, 'crew'>
 
   return (
     <div 
-      data-testid="node-crew"
+      data-testid={`node-crew-${id}`}
       onClick={(e) => { e.stopPropagation(); focusNodeTree(id); }}
       className={`group relative bg-white dark:bg-slate-900 rounded-xl shadow-sm hover:shadow-md dark:shadow-none border border-slate-200 dark:border-slate-700 w-64 overflow-visible cursor-pointer ${statusClasses} ${status === 'running' ? 'running node-running-active' : ''} ${
         (data.isDimmed || (isAnyNodeRunning && status !== 'running'))
@@ -147,8 +164,8 @@ export const CrewNode = memo(({ id, data }: NodeProps<Node<CrewNodeData, 'crew'>
           <button
             onClick={(e) => { e.stopPropagation(); setActiveNode(id); }}
             className="p-1 rounded hover:bg-white/20 transition-colors text-white/70 hover:text-white nodrag"
-            title="Configurar Crew"
-            aria-label="Configurar Crew"
+            title="Config Crew"
+            aria-label="Config Crew"
           >
             <Settings className="w-4 h-4" />
           </button>
@@ -160,9 +177,7 @@ export const CrewNode = memo(({ id, data }: NodeProps<Node<CrewNodeData, 'crew'>
             onClick={(e) => e.stopPropagation()}
           >
             <div className="max-h-32 overflow-y-auto space-y-1 custom-scrollbar">
-              {nodes
-                .filter(n => n.id !== id && n.type === 'agent')
-                .map(targetNode => (
+              {agentNodesForConnect.map(targetNode => (
                 <button
                   key={targetNode.id}
                   onClick={() => {
@@ -177,10 +192,10 @@ export const CrewNode = memo(({ id, data }: NodeProps<Node<CrewNodeData, 'crew'>
                   className="w-full text-left px-2 py-1.5 text-[11px] font-medium text-slate-700 dark:text-slate-300 hover:bg-violet-50 dark:hover:bg-violet-900/30 rounded transition-colors truncate flex items-center gap-2"
                 >
                   <div className="w-1.5 h-1.5 rounded-full bg-blue-500" />
-                  {(targetNode.data as AgentNodeData).name || `${targetNode.type} #${targetNode.id.slice(-4)}`}
+                  {targetNode.name || `${targetNode.type} #${targetNode.id.slice(-4)}`}
                 </button>
               ))}
-              {nodes.filter(n => n.id !== id && n.type === 'agent').length === 0 && (
+              {agentNodesForConnect.length === 0 && (
                 <p className="text-[10px] text-slate-400 italic text-center py-2">No agents available.</p>
               )}
             </div>
@@ -222,11 +237,9 @@ export const CrewNode = memo(({ id, data }: NodeProps<Node<CrewNodeData, 'crew'>
                   className="w-full bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-lg px-2 py-1.5 text-[11px] font-medium text-slate-700 dark:text-slate-300 outline-none focus:ring-1 focus:ring-purple-500 transition-all shadow-sm"
                 >
                   <option value="">No State Connected</option>
-                  {nodes
-                    .filter(n => n.type === 'state')
-                    .map(stateNode => (
+                  {stateNodesOptions.map(stateNode => (
                       <option key={stateNode.id} value={stateNode.id}>
-                        {stateNode.data.name || `State #${stateNode.id.slice(-4)}`}
+                        {stateNode.name || `State #${stateNode.id.slice(-4)}`}
                       </option>
                     ))
                   }
@@ -280,20 +293,22 @@ export const CrewNode = memo(({ id, data }: NodeProps<Node<CrewNodeData, 'crew'>
                 />
             </div>
 
-            {/* State Input Handle */}
-            <div className={isHorizontal
-              ? "absolute top-[60%] -left-[1px] -translate-y-1/2 flex items-center gap-2 group/h-state -translate-x-full pointer-events-none"
-              : "absolute left-[60%] -top-[1px] -translate-x-1/2 flex flex-col items-center gap-2 group/h-state -translate-y-full pointer-events-none"
-            }>
-               <span className="text-[9px] font-bold text-purple-500 bg-white dark:bg-slate-900 px-1 rounded shadow-sm opacity-0 group-hover/h-state:opacity-100 transition-opacity whitespace-nowrap border border-purple-100 dark:border-purple-900/30">State In</span>
-                <Handle 
-                  type="target" 
-                  position={isHorizontal ? Position.Left : Position.Top} 
-                  id="state-in"
-                  className="!w-3 !h-3 !border-2 !border-white dark:!border-slate-900 !static !translate-x-0 !translate-y-0 !cursor-crosshair pointer-events-auto shadow-sm" 
-                  style={{ backgroundColor: '#a855f7' }} 
-                />
-            </div>
+            {/* State Input Handle - LangGraph only */}
+            {currentProjectFramework === 'langgraph' && (
+              <div className={isHorizontal
+                ? "absolute top-[60%] -left-[1px] -translate-y-1/2 flex items-center gap-2 group/h-state -translate-x-full pointer-events-none"
+                : "absolute left-[60%] -top-[1px] -translate-x-1/2 flex flex-col items-center gap-2 group/h-state -translate-y-full pointer-events-none"
+              }>
+                 <span className="text-[9px] font-bold text-purple-500 bg-white dark:bg-slate-900 px-1 rounded shadow-sm opacity-0 group-hover/h-state:opacity-100 transition-opacity whitespace-nowrap border border-purple-100 dark:border-purple-900/30">State In</span>
+                  <Handle 
+                    type="target" 
+                    position={isHorizontal ? Position.Left : Position.Top} 
+                    id="state-in"
+                    className="!w-3 !h-3 !border-2 !border-white dark:!border-slate-900 !static !translate-x-0 !translate-y-0 !cursor-crosshair pointer-events-auto shadow-sm" 
+                    style={{ backgroundColor: '#a855f7' }} 
+                  />
+              </div>
+            )}
 
             {/* Exec Flow Output Handle */}
             <div className={isHorizontal

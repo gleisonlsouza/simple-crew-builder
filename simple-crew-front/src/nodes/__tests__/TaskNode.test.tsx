@@ -114,13 +114,12 @@ describe('TaskNode', () => {
     const { container } = render(wrap(<TaskNode {...defaultProps} />));
     const handles = container.querySelectorAll('.react-flow__handle-source');
     
-    // out-tool, out-custom-tool, out-mcp
-    expect(handles.length).toBe(3);
+    // out-tool, out-custom-tool
+    expect(handles.length).toBe(2);
     
     const handleIds = Array.from(handles).map(h => h.getAttribute('data-handleid'));
     expect(handleIds).toContain('out-tool');
     expect(handleIds).toContain('out-custom-tool');
-    expect(handleIds).toContain('out-mcp');
   });
 
   describe('Status Visuals', () => {
@@ -160,7 +159,7 @@ describe('TaskNode', () => {
         const collapseBtn = buttons.find(b => b.className.includes('absolute -bottom-3'));
         if (collapseBtn) {
             await user.click(collapseBtn);
-            expect(mockToggleCollapse).toHaveBeenCalledWith('task-1', ['out-tool', 'out-custom-tool', 'out-mcp']);
+            expect(mockToggleCollapse).toHaveBeenCalledWith('task-1', ['out-tool', 'out-custom-tool']);
         } else {
             throw new Error('Collapse button not found');
         }

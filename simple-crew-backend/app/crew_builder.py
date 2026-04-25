@@ -13,7 +13,7 @@ from crewai.tools import tool, BaseTool
 from crewai.llm import LLM
 import os
 from pydantic import BaseModel, Field
-from .models import LLMModel, Credential, MCPServer, AppSettings, Workspace, Execution, ExecutionStatus
+from .models import LLMModel, Credential, MCPServer, AppSettings, Workspace, Execution, ExecutionStatus, AgentSkill
 from .schemas import GraphData
 from mcp import StdioServerParameters
 from crewai_tools import (
@@ -875,6 +875,28 @@ def run_crew_stream(graph_data: GraphData, workspace_id: Optional[Any] = None, i
                                     if fc_config.base_url and fc_config.base_url != "default": llm_params["base_url"] = fc_config.base_url
                                     if credential.provider: llm_params["provider"] = credential.provider
                                     fc_llm = LLM(**llm_params)
+                                    
+                        # --- SKILL INJECTION ---
+                        skill_ids = getattr(node.data, 'identitySkillIds', []) or []
+                        skill_content_to_inject = ""
+                        if skill_ids:
+                            resolved_skills = []
+                            for sid in skill_ids:
+                                try:
+                                    import uuid as _uuid
+                                    skill_record = session.get(AgentSkill, _uuid.UUID(str(sid)))
+                                    if skill_record:
+                                        resolved_skills.append(skill_record)
+                                    else:
+                                        log_debug(f"Skill ID {sid} not found in database.")
+                                except Exception as se:
+                                    log_debug(f"Error fetching skill {sid}: {se}")
+                            
+                            if resolved_skills:
+                                skill_content_to_inject = "\n\n[MANDATORY CONTEXT: AGENT SKILLS]\n"
+                                skill_content_to_inject += "The following XML blocks contain specialized rules and guidelines. You must internalize these rules, but your PRIMARY directive is always to complete your ACTIVE TASK using your available TOOLS.\n\n"
+                                for skill in resolved_skills:
+                                    skill_content_to_inject += f"<agent_skill name=\"{skill.name}\">\n{skill.content}\n</agent_skill>\n\n"
 
                     # Injeção de Prompt: Força o Agente a respeitar o Workspace (como restrição, não como ordem)
                     workspace_instruction = (
@@ -895,7 +917,7 @@ def run_crew_stream(graph_data: GraphData, workspace_id: Optional[Any] = None, i
                     agent_kwargs = {
                         "role": role,
                         "goal": goal,
-                        "backstory": backstory + workspace_instruction,
+                        "backstory": backstory + skill_content_to_inject + workspace_instruction,
                         "step_callback": make_agent_step_callback(node.id),
                         "llm": agent_llm,
                         "tools": this_agent_tools,
@@ -947,8 +969,13 @@ def run_crew_stream(graph_data: GraphData, workspace_id: Optional[Any] = None, i
                     if code_exec_mode in ("safe", "unsafe") and getattr(node.data, 'allow_code_execution', False):
                         agent_kwargs["code_execution_mode"] = code_exec_mode
 
+                    agent_kwargs["verbose"] = True
                     agent = Agent(**agent_kwargs)
                     agents_map[node.id] = agent
+                    
+                    # Log Agent identity for observability
+                    identity_log = f"\n{'─'*10} [AGENT IDENTITY: {name}] {'─'*10}\nRole: {agent.role}\nGoal: {agent.goal}\nBackstory: {agent.backstory}\n{'─'*50}\n"
+                    print(identity_log)
                     
                     tool_names = [getattr(t, 'name', str(t)) for t in this_agent_tools]
                     log_debug(f"Agent {name} (ID: {node.id}) successfully initialized with {len(this_agent_tools)} tools: {tool_names}")

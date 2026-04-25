@@ -154,6 +154,10 @@ describe('AgentNode', () => {
   });
 
   it('contains the expected handles for the vertical architecture', () => {
+    (useStore as unknown as Mock).mockImplementation((selector: any) => selector({ 
+        ...defaultState, 
+        currentProjectFramework: 'langgraph' 
+    }));
     const { container } = render(wrap(<AgentNode {...defaultProps} />));
     
     // Check for handles using their data attributes or class names

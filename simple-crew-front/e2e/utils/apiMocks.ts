@@ -10,6 +10,7 @@ export async function setupBaseApiMocks(page: Page, mockDataOverrides: any = {})
     id: 'smoke-test-id',
     name: 'Smoke Test Project',
     description: 'A project for E2E testing',
+    framework: 'crewai',
     updated_at: new Date().toISOString(),
     canvas_data: {
       nodes: [
@@ -17,28 +18,23 @@ export async function setupBaseApiMocks(page: Page, mockDataOverrides: any = {})
           id: 'agent-1',
           type: 'agent',
           position: { x: 100, y: 100 },
-          data: {
-            name: 'Test Agent',
-            role: 'Tester',
-            goal: 'Wait for nodes',
-            backstory: 'Expert in synchronization',
-            temperature: 0.7,
-            code_execution_mode: 'disabled'
-          }
+          data: { name: 'Test Agent', role: 'Researcher', goal: 'Find info', backstory: 'Expert' }
         },
         {
           id: 'task-1',
           type: 'task',
           position: { x: 400, y: 100 },
-          data: {
-            name: 'Test Task',
-            description: 'Verify node presence',
-            expected_output: 'Success'
-          }
+          data: { name: 'Test Task', description: 'Do work', expected_output: 'Done' }
+        },
+        {
+          id: 'state-singleton',
+          type: 'state',
+          position: { x: 50, y: 300 },
+          data: { name: 'State', fields: [{ id: 'f1', key: 'output', type: 'string', description: 'Main output' }] }
         }
       ],
       edges: [
-        { id: 'e1-2', source: 'agent-1', target: 'task-1', type: 'deletable', sourceHandle: 'right-source', targetHandle: 'left-target' }
+        { id: 'e1-2', source: 'agent-1', target: 'task-1', type: 'deletable', sourceHandle: 'out-task', targetHandle: 'left-target' }
       ],
       customTools: [],
       mcpServers: [],
@@ -49,6 +45,11 @@ export async function setupBaseApiMocks(page: Page, mockDataOverrides: any = {})
   const project = { ...baseProject, ...mockDataOverrides.project };
   const projects = mockDataOverrides.projects !== undefined ? mockDataOverrides.projects : [project];
 
+  // Store created project name to reflect it back on load
+  let lastCreatedProjectName = 'Mocked Workflow';
+  let lastCreatedProjectFramework = 'crewai';
+  let lastCreatedCanvasData = project.canvas_data;
+
   // Mock project list and creation
   await page.route('**/api/v1/projects', async (route) => {
     const method = route.request().method();
@@ -56,14 +57,33 @@ export async function setupBaseApiMocks(page: Page, mockDataOverrides: any = {})
       await route.fulfill({ json: projects });
     } else if (method === 'POST') {
       const payload = route.request().postDataJSON();
+      if (payload) {
+        lastCreatedProjectName = payload.name;
+        lastCreatedProjectFramework = payload.framework || 'crewai';
+        lastCreatedCanvasData = payload.canvas_data || { nodes: [], edges: [] };
+        console.log(`[Mock API] Project created: ${lastCreatedProjectName} (${lastCreatedProjectFramework})`);
+      }
+      
+      // Ensure state node is ALWAYS there if it's langgraph
+      if (lastCreatedProjectFramework === 'langgraph' && !lastCreatedCanvasData.nodes.some((n: any) => n.type === 'state')) {
+        lastCreatedCanvasData.nodes.push({
+          id: 'state-singleton',
+          type: 'state',
+          position: { x: 50, y: 300 },
+          data: { name: 'State', fields: [{ id: 'f1', key: 'output', type: 'string', description: 'Main output' }] }
+        });
+        console.log(`[Mock API] Injected State node for LangGraph`);
+      }
+
       await route.fulfill({ 
         status: 201,
         json: { 
           id: 'test-mock-id-123', 
-          name: payload?.name || 'Mocked Workflow',
+          name: lastCreatedProjectName,
           description: payload?.description || '',
+          framework: lastCreatedProjectFramework,
           updated_at: new Date().toISOString(),
-          canvas_data: { nodes: [], edges: [], customTools: [], mcpServers: [], version: '1.0' }
+          canvas_data: lastCreatedCanvasData
         } 
       });
     } else {
@@ -73,11 +93,23 @@ export async function setupBaseApiMocks(page: Page, mockDataOverrides: any = {})
 
   // Mock specific project load (matches any UUID-like or test ID)
   await page.route(/\/api\/v1\/projects\/[a-zA-Z0-9_-]+$/, async (route) => {
-    // Return either the base project or a fresh one if it's the newly created one
-    const isNew = route.request().url().includes('test-mock-id-123');
-    await route.fulfill({ 
-      json: isNew ? { ...project, id: 'test-mock-id-123', canvas_data: { nodes: [], edges: [], customTools: [], mcpServers: [], version: '1.0' } } : project 
-    });
+    const url = route.request().url();
+    const isNew = url.includes('test-mock-id-123');
+    const id = url.split('/').pop();
+    
+    if (isNew) {
+      console.log(`[MockAPI] GET /api/v1/projects/${id} - Returning Name: ${lastCreatedProjectName}`);
+      await route.fulfill({ json: { 
+        id: id,
+        name: lastCreatedProjectName,
+        framework: lastCreatedProjectFramework,
+        canvas_data: lastCreatedCanvasData,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      }});
+    } else {
+      await route.fulfill({ json: project });
+    }
   });
 
   // Mock secondary dependencies
@@ -136,6 +168,9 @@ export async function mockRunCrewSuccess(page: Page, delay: number = 0) {
       // This is the critical event that marks the task as done in the UI (0/1 -> 1/1)
       sseEvents.push(JSON.stringify({ type: 'task_completed', task_id: taskNode.id }));
       sseEvents.push(JSON.stringify({ type: 'status', nodeId: taskNode.id, status: 'success' }));
+      if (agentNode) {
+        sseEvents.push(JSON.stringify({ type: 'status', nodeId: agentNode.id, status: 'success' }));
+      }
       sseEvents.push(JSON.stringify({ type: 'log', data: '✅ Task completed successfully.\n' }));
     }
 

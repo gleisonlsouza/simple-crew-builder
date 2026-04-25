@@ -1,6 +1,5 @@
 import React, { useCallback, useRef, useEffect } from 'react';
 import { v4 as uuidv4 } from 'uuid';
-import { Toaster } from 'react-hot-toast';
 import {
   ReactFlow,
   Background,
@@ -42,7 +41,6 @@ import { SchemaNodeModal } from '../components/modals/SchemaNodeModal';
 import { RouterNodeModal } from '../components/modals/RouterNodeModal';
 import { DeletableEdge } from '../nodes/DeletableEdge';
 import { ExportDropdown } from '../components/ExportDropdown';
-import { Toast } from '../components/Toast';
 import { ConsoleDrawer } from '../components/ConsoleDrawer';
 import { SettingsDrawer } from '../components/SettingsDrawer';
 import { UsabilityCardsDrawer } from '../components/UsabilityCardsDrawer';
@@ -85,8 +83,8 @@ const FlowCanvas = () => {
   const { screenToFlowPosition, getNode, fitView } = useReactFlow();
 
   // 2. SELETORES ATÔMICOS: Fim do useShallow gigante. Acesso rápido à memória.
-  const nodes = useStore((state) => state.nodes);
-  const edges = useStore((state) => state.edges);
+  const nodes = useStore(useShallow((state) => state.nodes));
+  const edges = useStore(useShallow((state) => state.edges));
   const onNodesChange = useStore((state) => state.onNodesChange);
   const onEdgesChange = useStore((state) => state.onEdgesChange);
   const onConnect = useStore((state) => state.onConnect);
@@ -101,6 +99,13 @@ const FlowCanvas = () => {
     style: { strokeWidth: 2, stroke: theme === 'dark' ? '#334155' : '#94a3b8' },
     animated: true
   }), [theme]);
+
+  const focusEdge = useStore((state) => state.focusEdge);
+
+  // CORREÇÃO 1: Memoizando as funções de clique para não quebrar a performance do React Flow
+  const handlePaneClick = useCallback(() => focusEdge(null), [focusEdge]);
+  const handleNodeClick = useCallback(() => focusEdge(null), [focusEdge]);
+  const handleEdgeClick = useCallback((_: React.MouseEvent, edge: Edge) => focusEdge(edge.id), [focusEdge]);
 
   const isValidConnection = useCallback((connection: Connection | Edge) => {
     const sourceNode = getNode(connection.source);
@@ -155,6 +160,7 @@ const FlowCanvas = () => {
 
     if (sourceNode.type === 'task') {
       if (['tool', 'customTool'].includes(targetNode.type)) return connection.sourceHandle === 'out-tool';
+      if (targetNode.type === 'state') return connection.sourceHandle === 'data-out';
     }
 
     // RULE: Router Connections (Source)
@@ -173,11 +179,15 @@ const FlowCanvas = () => {
     return false;
   }, [getNode, edges]);
 
+  // CORREÇÃO 2: Revisar a lógica do fitView. 
+  // Removi o isDirty da dependência para evitar que a câmera tente focar
+  // no exato momento em que o usuário arrasta um nó pela primeira vez.
   useEffect(() => {
-    if (isDirty && nodes.length > 0) {
+    // Recomendo ter uma flag no store tipo 'hasLoaded' em vez de usar isDirty para isso
+    if (nodes.length > 0 && !isDirty) { 
       setTimeout(() => fitView({ duration: 800, padding: 0.3 }), 100);
     }
-  }, [isDirty, nodes.length, fitView]);
+  }, [nodes.length, fitView, isDirty]); // Adicionado isDirty para silenciar o lint, mas a lógica de !isDirty garante que só rode no início
 
   const onDragOver = useCallback((event: React.DragEvent) => {
     event.preventDefault();
@@ -201,7 +211,7 @@ const FlowCanvas = () => {
     else if (type === 'tool') data = { name: 'New Tool', toolId: '' };
     else if (type === 'customTool') data = { name: 'New Custom Tool', toolId: '' };
     else if (type === 'mcp') data = { name: 'New MCP Server', serverId: '' };
-    else if (type === 'state') data = { name: 'State', fields: [] };
+    else if (type === 'state') data = { name: 'State', fields: [{ id: 'f1', key: 'output', type: 'string', description: 'Main output' }] };
     else if (type === 'schema') data = { name: 'Schema', fields: [] };
     else if (type === 'router') data = { name: 'Conditional Router', conditions: [], defaultRouteLabel: 'Default' };
     else return;
@@ -211,14 +221,14 @@ const FlowCanvas = () => {
     useStore.getState().setIsUsabilityDrawerOpen(false);
   }, [screenToFlowPosition, addNode, validateGraph]);
 
-    const focusEdge = useStore((state) => state.focusEdge);
+
   
     return (
       <ReactFlow
         nodes={nodes} edges={edges} onNodesChange={onNodesChange} onEdgesChange={onEdgesChange} onConnect={onConnect}
-        onPaneClick={() => focusEdge(null)}
-        onNodeClick={() => focusEdge(null)}
-        onEdgeClick={(_, edge) => focusEdge(edge.id)}
+        onPaneClick={handlePaneClick}
+        onNodeClick={handleNodeClick}
+        onEdgeClick={handleEdgeClick}
         nodeTypes={nodeTypes} edgeTypes={edgeTypes} isValidConnection={isValidConnection}
         onDragOver={onDragOver} onDrop={onDrop}
         fitViewOptions={FIT_VIEW_OPTIONS}
@@ -236,6 +246,7 @@ const FlowCanvas = () => {
 // 2. Componente Pai (Fica 100% estático durante o drag)
 function FlowBuilder() {
   const { id } = useParams();
+  console.log(`[Builder] Rendering FlowBuilder with id param: ${id}`);
   const navigate = useNavigate();
   const reactFlowWrapper = useRef<HTMLDivElement>(null);
 
@@ -246,28 +257,31 @@ function FlowBuilder() {
     showNotification, updateProjectMetadata, currentProjectName, currentProjectDescription,
     canvasLayout, setCanvasLayout
   } = useStore(
-    useShallow((state) => ({
-      isExecuting: state.isExecuting,
-      startRealExecution: state.startRealExecution,
-      executionResult: state.executionResult,
-      setIsConsoleExpanded: state.setIsConsoleExpanded,
-      setIsConsoleOpen: state.setIsConsoleOpen,
-      isChatVisible: state.isChatVisible,
-      setIsChatVisible: state.setIsChatVisible,
-      resetUIState: state.resetUIState,
-      loadProject: state.loadProject,
-      saveProject: state.saveProject,
-      currentProjectId: state.currentProjectId,
-      isSaving: state.isSaving,
-      resetProject: state.resetProject,
-      validateGraph: state.validateGraph,
-      showNotification: state.showNotification,
-      updateProjectMetadata: state.updateProjectMetadata,
-      currentProjectName: state.currentProjectName,
-      currentProjectDescription: state.currentProjectDescription,
-      canvasLayout: state.canvasLayout,
-      setCanvasLayout: state.setCanvasLayout
-    }))
+    useShallow((state) => {
+      console.log(`[Builder] Store State - Name: ${state.currentProjectName}, ID: ${state.currentProjectId}`);
+      return {
+        isExecuting: state.isExecuting,
+        startRealExecution: state.startRealExecution,
+        executionResult: state.executionResult,
+        setIsConsoleExpanded: state.setIsConsoleExpanded,
+        setIsConsoleOpen: state.setIsConsoleOpen,
+        isChatVisible: state.isChatVisible,
+        setIsChatVisible: state.setIsChatVisible,
+        resetUIState: state.resetUIState,
+        loadProject: state.loadProject,
+        saveProject: state.saveProject,
+        currentProjectId: state.currentProjectId,
+        isSaving: state.isSaving,
+        resetProject: state.resetProject,
+        validateGraph: state.validateGraph,
+        showNotification: state.showNotification,
+        updateProjectMetadata: state.updateProjectMetadata,
+        currentProjectName: state.currentProjectName,
+        currentProjectDescription: state.currentProjectDescription,
+        canvasLayout: state.canvasLayout,
+        setCanvasLayout: state.setCanvasLayout
+      };
+    })
   );
 
   const lastLoadedId = useRef<string | null>(null);
@@ -301,9 +315,9 @@ function FlowBuilder() {
   useEffect(() => {
     return () => {
       resetUIState();
-      resetProject();
+      // REMOVED: resetProject(); - This was causing race conditions during navigation resets
     };
-  }, [resetUIState, resetProject]);
+  }, [resetUIState]);
 
   const [activeView, setActiveView] = React.useState<'editor' | 'animation' | 'executions'>('editor');
   const [isEditingTitle, setIsEditingTitle] = React.useState(false);
@@ -512,8 +526,6 @@ function FlowBuilder() {
         <StateNodeModal />
         <SchemaNodeModal />
         <RouterNodeModal />
-        <Toast />
-        <Toaster position="bottom-right" />
         <ResizableChatPanel />
       </div>
     </div>

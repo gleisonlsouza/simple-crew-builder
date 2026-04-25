@@ -51,7 +51,7 @@ def extract_placeholders(text: str) -> List[str]:
         return []
     return re.findall(r'\{([a-zA-Z0-9_]+)\}', text)
 
-def generate_python_project(graph_data: GraphData, project_name: str, author_name: str = "SimpleCrew", author_email: str = "admin@simplecrew.ai", mcp_servers: List[Dict[str, Any]] = None, project_description: str = "", agent_llms: Dict[str, Dict[str, Any]] = None, providers: List[str] = None, workspace_path: str = None) -> bytes:
+def generate_python_project(graph_data: GraphData, project_name: str, author_name: str = "SimpleCrew", author_email: str = "admin@simplecrew.ai", mcp_servers: List[Dict[str, Any]] = None, project_description: str = "", agent_llms: Dict[str, Dict[str, Any]] = None, providers: List[str] = None, workspace_path: str = None, resolved_skills: Dict[str, str] = None) -> bytes:
     """
     Transforma GraphData em um arquivo ZIP contendo um projeto CrewAI completo.
     """
@@ -352,10 +352,21 @@ def normalize_command(command: str) -> str:
             # Exporter: Força o Agente a respeitar o Workspace (Caminho relativo padronizado para o export)
             workspace_instruction = "\n\nIMPORTANT: Your current working directory is './workspace'. All file operations MUST be relative to this path. Never write or read files outside of this directory."
             
+            # Skill Injection
+            skill_content_to_inject = ""
+            skill_ids = getattr(node.data, 'identitySkillIds', []) or []
+            if skill_ids and resolved_skills:
+                skill_content_to_inject += "\n\n[MANDATORY CONTEXT: AGENT SKILLS]\n"
+                skill_content_to_inject += "The following XML blocks contain specialized rules and guidelines. You must internalize these rules, but your PRIMARY directive is always to complete your ACTIVE TASK using your available TOOLS.\n\n"
+                for sid in skill_ids:
+                    skill_data = resolved_skills.get(str(sid))
+                    if skill_data:
+                        skill_content_to_inject += f"<agent_skill name=\"{skill_data['name']}\">\n{skill_data['content']}\n</agent_skill>\n\n"
+
             agent_data = {
                 "role": BlockStr(role + "\n"),
                 "goal": BlockStr(goal + "\n"),
-                "backstory": BlockStr(backstory + workspace_instruction + "\n")
+                "backstory": BlockStr(backstory + workspace_instruction + skill_content_to_inject + "\n")
             }
             
             # Add LLM config if available
@@ -911,7 +922,7 @@ class {class_name}():
     return content
 
 
-def generate_langgraph_project(graph_data: GraphData, project_name: str, author_name: str = "SimpleCrew", author_email: str = "admin@simplecrew.ai", mcp_servers: List[Dict[str, Any]] = None, project_description: str = "", agent_llms: Dict[str, Dict[str, Any]] = None, providers: List[str] = None, workspace_path: str = None) -> bytes:
+def generate_langgraph_project(graph_data: GraphData, project_name: str, author_name: str = "SimpleCrew", author_email: str = "admin@simplecrew.ai", mcp_servers: List[Dict[str, Any]] = None, project_description: str = "", agent_llms: Dict[str, Dict[str, Any]] = None, providers: List[str] = None, workspace_path: str = None, resolved_skills: Dict[str, str] = None) -> bytes:
     """
     Transforma GraphData em um arquivo ZIP contendo um projeto LangGraph completo.
     """
@@ -1076,7 +1087,7 @@ def interpolate_prompt(text: str, state: dict) -> str:
 
         # State, Nodes, Graph, Main
         zip_file.writestr(f"{package_path}/state.py", generate_langgraph_state_py(graph_data))
-        zip_file.writestr(f"{package_path}/nodes.py", generate_langgraph_nodes_py(graph_data, agent_llms, used_tool_imports))
+        zip_file.writestr(f"{package_path}/nodes.py", generate_langgraph_nodes_py(graph_data, agent_llms, used_tool_imports, resolved_skills))
         zip_file.writestr(f"{package_path}/graph.py", generate_langgraph_graph_py(graph_data))
         zip_file.writestr(f"{package_path}/main.py", generate_langgraph_main_py(folder_name, graph_data, mcp_servers))
 
@@ -1116,7 +1127,7 @@ def generate_langgraph_state_py(graph_data: GraphData) -> str:
 
     return "\n".join(imports) + "\n" + schemas_code + "\nclass State(TypedDict):\n" + "\n".join(fields) + "\n"
 
-def generate_langgraph_nodes_py(graph_data: GraphData, agent_llms: Dict[str, Any], tool_imports: List[tuple]) -> str:
+def generate_langgraph_nodes_py(graph_data: GraphData, agent_llms: Dict[str, Any], tool_imports: List[tuple], resolved_skills: Dict[str, str] = None) -> str:
     content = "import operator\nfrom typing import Dict, Any, List, Annotated\nfrom langchain_core.messages import SystemMessage, HumanMessage, AIMessage\n"
     content += "from langchain_openai import ChatOpenAI\nfrom langchain_anthropic import ChatAnthropic\nfrom langchain_google_genai import ChatGoogleGenerativeAI\n"
     content += "from langgraph.prebuilt import ToolNode\n"
@@ -1187,11 +1198,25 @@ def {name}_node(state: State, config: Dict[str, Any] = None):
     backstory = interpolate_prompt(\"\"\"{node.data.backstory}\"\"\", state)
     
     sys_content = f"Role: {{role}}\\nGoal: {{goal}}\\nBackstory: {{backstory}}"
-    
+"""
+            # Skill Injection
+            skill_ids = getattr(node.data, 'identitySkillIds', []) or []
+            if skill_ids and resolved_skills:
+                content += "    sys_content += \"\\n\\n[MANDATORY CONTEXT: AGENT SKILLS]\\n\"\n"
+                content += "    sys_content += \"The following XML blocks contain specialized rules and guidelines. You must internalize these rules, but your PRIMARY directive is always to complete your ACTIVE TASK using your available TOOLS.\\n\\n\"\n"
+                for sid in skill_ids:
+                    skill_data = resolved_skills.get(str(sid))
+                    if skill_data:
+                        s_name = skill_data['name']
+                        s_content = skill_data['content'].replace("\\", "\\\\").replace("\"", "\\\"").replace("\n", "\\n")
+                        content += f"    sys_content += \"<agent_skill name=\\\"{s_name}\\\">\\n{s_content}\\n</agent_skill>\\n\\n\"\n"
+
+            content += f"""
     task_ids = {getattr(node.data, 'taskOrder', [])}
     progress = state.get("task_progress", {{}}).get("{node.id}", 0)
     if task_ids and progress < len(task_ids):
         sys_content += f"\\n\\nActive Task: {{task_ids[progress]}}"
+        sys_content += \"\\nCRITICAL: Review the tools available to you. You MUST use the appropriate tools to execute this task. Do not just reply with text if a tool is required to take action.\"
     
     messages = [SystemMessage(content=sys_content)] + state['messages']
     response = model.invoke(messages)

@@ -35,7 +35,8 @@ from .exporter import generate_python_project, generate_langgraph_project
 from .ai_service import generate_suggestion, generate_bulk_suggestion, generate_task_bulk_suggestion
 from .core.database.neo4j_db import neo4j_manager, get_neo4j_session
 from neo4j import Session as Neo4jSession
-from .routes import knowledge_base
+from .routes import knowledge_base, skills
+
 from .utils import normalize_command
 
 @asynccontextmanager
@@ -64,6 +65,8 @@ app = FastAPI(
     lifespan=lifespan
 )
 app.include_router(knowledge_base.router)
+app.include_router(skills.router, prefix="/api/v1/skills", tags=["Skills"])
+
 
 # Setup CORS para permitir conexão com o Servidor Vite do Frontend (React)
 app.add_middleware(
@@ -255,6 +258,25 @@ def resolve_custom_tools(graph_data: GraphData, session: Session):
     graph_data.customTools = final_tools
     return graph_data
 
+def resolve_skills(graph_data: GraphData, session: Session):
+    """
+    Busca no banco de dados todas as Skills referenciadas pelos agentes no grafo.
+    Retorna um dicionário de {skill_id: {"name": name, "content": content}}.
+    """
+    used_skill_ids = set()
+    for node in graph_data.nodes:
+        if node.type == 'agent' and hasattr(node.data, 'identitySkillIds') and node.data.identitySkillIds:
+            for sid in node.data.identitySkillIds:
+                used_skill_ids.add(sid)
+    
+    if not used_skill_ids:
+        return {}
+    
+    statement = select(AgentSkill).where(AgentSkill.id.in_(list(used_skill_ids)))
+    db_skills = session.exec(statement).all()
+    
+    return {str(s.id): {"name": s.name, "content": s.content} for s in db_skills}
+
 @app.post("/api/v1/projects", response_model=ProjectRead)
 async def create_project(project: ProjectCreate, session: Session = Depends(get_session)):
     new_project = CrewProject(
@@ -315,8 +337,9 @@ async def export_project_python(project_id: str, session: Session = Depends(get_
         # Reconstrói GraphData a partir do canvas_data persistido
         graph_data = GraphData(**project.canvas_data)
         
-        # Resolve Custom Tools vinculadas
+        # Resolve Custom Tools e Skills vinculadas
         graph_data = resolve_custom_tools(graph_data, session)
+        resolved_skills_dict = resolve_skills(graph_data, session)
         
         # Obtém autor do projeto (usuário vinculado)
         author_name = "SimpleCrew"
@@ -446,7 +469,8 @@ async def export_project_python(project_id: str, session: Session = Depends(get_
                 project_description=project.description or "",
                 agent_llms=agent_llms_data,
                 providers=list(unique_providers),
-                workspace_path=workspace_path
+                workspace_path=workspace_path,
+                resolved_skills=resolved_skills_dict
             )
             suffix = "langgraph"
         else:
@@ -459,7 +483,8 @@ async def export_project_python(project_id: str, session: Session = Depends(get_
                 project_description=project.description or "",
                 agent_llms=agent_llms_data,
                 providers=list(unique_providers),
-                workspace_path=workspace_path
+                workspace_path=workspace_path,
+                resolved_skills=resolved_skills_dict
             )
             suffix = "crew"
         

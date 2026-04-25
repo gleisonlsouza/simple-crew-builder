@@ -16,8 +16,14 @@ export const TaskNode = memo(({ id, data }: NodeProps<Node<TaskNodeData, 'task'>
       framework: state.currentProjectFramework,
     }))
   );
-  const edges = useStore((state) => state.edges);
+  
+  // Use targeted selectors to avoid re-rendering on every nodes/edges change
   const layout = useStore(state => state.canvasLayout);
+  
+  // Only subscribe to edges relevant to this node's count
+  const toolsCount = useStore((state) => state.edges.filter(e => e.source === id && (e.sourceHandle === 'out-tool' || e.sourceHandle === 'out-custom-tool')).length);
+  const mcpCount = useStore((state) => state.edges.filter(e => e.source === id && e.sourceHandle === 'out-mcp').length);
+  
   const updateNodeInternals = useUpdateNodeInternals();
 
   useEffect(() => {
@@ -30,9 +36,6 @@ export const TaskNode = memo(({ id, data }: NodeProps<Node<TaskNodeData, 'task'>
   const isAnyNodeRunning = useStore((state) => 
     Object.values(state.nodeStatuses || {}).some(s => s === 'running')
   );
-
-  const toolsCount = edges.filter(e => e.source === id && (e.sourceHandle === 'out-tool' || e.sourceHandle === 'out-custom-tool')).length;
-  const mcpCount = edges.filter(e => e.source === id && e.sourceHandle === 'out-mcp').length;
 
   const statusClasses = errors?.length
     ? 'ring-2 ring-red-400 ring-offset-2'
@@ -48,7 +51,7 @@ export const TaskNode = memo(({ id, data }: NodeProps<Node<TaskNodeData, 'task'>
 
   return (
     <div
-      data-testid="node-task"
+      data-testid={`node-task-${id}`}
       onClick={(e) => { e.stopPropagation(); focusNodeTree(id); }}
       className={`group relative bg-white dark:bg-slate-900 rounded-xl shadow-sm hover:shadow-md dark:shadow-none border border-slate-200 dark:border-slate-700 w-56 overflow-visible cursor-pointer ${statusClasses} ${status === 'running' ? 'running node-running-active' : ''} ${
         (data.isDimmed || (isAnyNodeRunning && status !== 'running'))
@@ -147,7 +150,7 @@ export const TaskNode = memo(({ id, data }: NodeProps<Node<TaskNodeData, 'task'>
           onClick={(e) => { 
             e.stopPropagation(); 
             const allowedHandles = (framework === 'langgraph' || framework === 'crewai')
-              ? ['out-tool', 'out-custom-tool', 'out-mcp'] 
+              ? ['out-tool', 'out-custom-tool'] 
               : undefined;
             toggleCollapse(id, allowedHandles); 
           }}
@@ -173,7 +176,7 @@ export const TaskNode = memo(({ id, data }: NodeProps<Node<TaskNodeData, 'task'>
                   className="!w-3 !h-3 !border-2 !border-white dark:!border-slate-900 !cursor-crosshair pointer-events-auto group/h-tool z-10" 
                   style={{ 
                     backgroundColor: '#f97316', 
-                    ...(isHorizontal ? { top: '25%', right: '-6px', left: 'auto' } : { left: '25%' }) 
+                    ...(isHorizontal ? { top: '33%', right: '-6px', left: 'auto' } : { left: '33%' }) 
                   }} 
                 >
                    <span className={isHorizontal
@@ -189,29 +192,13 @@ export const TaskNode = memo(({ id, data }: NodeProps<Node<TaskNodeData, 'task'>
                   className="!w-3 !h-3 !border-2 !border-white dark:!border-slate-900 !cursor-crosshair pointer-events-auto group/h-custom-tool z-10" 
                   style={{ 
                     backgroundColor: '#fbbf24', 
-                    ...(isHorizontal ? { top: '50%', right: '-6px', left: 'auto' } : { left: '50%' }) 
+                    ...(isHorizontal ? { top: '66%', right: '-6px', left: 'auto' } : { left: '66%' }) 
                   }} 
                 >
                    <span className={isHorizontal
                      ? "absolute left-4 top-1/2 -translate-y-1/2 text-[9px] font-bold text-amber-500 bg-white dark:bg-slate-900 px-1 rounded shadow-sm opacity-0 group-hover/h-custom-tool:opacity-100 transition-opacity whitespace-nowrap border border-amber-100 dark:border-amber-900/30 pointer-events-none"
                      : "absolute top-4 left-1/2 -translate-x-1/2 text-[9px] font-bold text-amber-500 bg-white dark:bg-slate-900 px-1 rounded shadow-sm opacity-0 group-hover/h-custom-tool:opacity-100 transition-opacity whitespace-nowrap border border-amber-100 dark:border-amber-900/30 pointer-events-none"
                    }>Custom Tools</span>
-                </Handle>
-
-                <Handle 
-                  type="source" 
-                  position={isHorizontal ? Position.Right : Position.Bottom} 
-                  id="out-mcp" 
-                  className="!w-3 !h-3 !border-2 !border-white dark:!border-slate-900 !cursor-crosshair pointer-events-auto group/h-mcp z-10" 
-                  style={{ 
-                    backgroundColor: '#ec4899', 
-                    ...(isHorizontal ? { top: '75%', right: '-6px', left: 'auto' } : { left: '75%' }) 
-                  }} 
-                >
-                   <span className={isHorizontal
-                     ? "absolute left-4 top-1/2 -translate-y-1/2 text-[9px] font-bold text-pink-500 bg-white dark:bg-slate-900 px-1 rounded shadow-sm opacity-0 group-hover/h-mcp:opacity-100 transition-opacity whitespace-nowrap border border-pink-100 dark:border-pink-900/30 pointer-events-none"
-                     : "absolute top-4 left-1/2 -translate-x-1/2 text-[9px] font-bold text-pink-500 bg-white dark:bg-slate-900 px-1 rounded shadow-sm opacity-0 group-hover/h-mcp:opacity-100 transition-opacity whitespace-nowrap border border-pink-100 dark:border-pink-900/30 pointer-events-none"
-                   }>MCP</span>
                 </Handle>
               </>
             )}
@@ -230,6 +217,8 @@ export const TaskNode = memo(({ id, data }: NodeProps<Node<TaskNodeData, 'task'>
                   style={{ backgroundColor: '#3b82f6' }} 
                 />
             </div>
+
+
           </>
         );
       })()}
