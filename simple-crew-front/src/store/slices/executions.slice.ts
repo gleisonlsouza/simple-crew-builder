@@ -1,6 +1,6 @@
 import type { StateCreator } from 'zustand';
 import { v4 as uuidv4 } from 'uuid';
-import type { AppState, ExecutionSlice, Execution } from '../../types/store.types';
+import type { AppState, ExecutionSlice, Execution, ChatMessage } from '../../types/store.types';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
 
@@ -55,7 +55,7 @@ export const createExecutionSlice: StateCreator<
         ? execution.input_data 
         : JSON.stringify(execution.input_data, null, 2);
       
-      state.setMessages((prev: any) => [
+      state.setMessages((prev: ChatMessage[]) => [
         ...prev,
         { id: uuidv4(), role: 'user', content: `Re-running with input: ${input}` }
       ]);

@@ -1,10 +1,12 @@
 import { useEffect } from 'react';
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import { Toaster } from 'react-hot-toast';
 import Dashboard from './pages/Dashboard';
 import Builder from './pages/Builder';
 import SettingsPage from './pages/Settings';
 import { useStore } from './store/index';
 import { WorkspaceExplorer } from './components/WorkspaceExplorer';
+import { Toast } from './components/Toast';
 
 function App() {
   const theme = useStore((state) => state.theme);
@@ -28,7 +30,7 @@ function App() {
     } else {
       document.documentElement.classList.remove('dark');
     }
-  }, [theme, fetchModels, fetchCredentials, fetchMCPServers, fetchWorkspaces, fetchSettings]);
+  }, [theme, fetchModels, fetchCredentials, fetchMCPServers, fetchCustomTools, fetchWorkspaces, fetchSettings]);
 
   return (
     <BrowserRouter>
@@ -38,6 +40,15 @@ function App() {
         <Route path="/settings" element={<SettingsPage />} />
       </Routes>
       <WorkspaceExplorer />
+      <Toast />
+      <Toaster
+        position="bottom-right"
+        toastOptions={{
+          duration: 5000,
+          style: { maxWidth: '480px' },
+          error: { duration: 7000 },
+        }}
+      />
     </BrowserRouter>
   );
 }

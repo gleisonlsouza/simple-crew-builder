@@ -1,16 +1,14 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { useShallow } from 'zustand/react/shallow';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
-  Coffee, 
-  Cpu,
-  Play, 
-  Gamepad2, 
+  Coffee,
+  Gamepad2,
   BatteryCharging,
-  Search,
+  Play,
+  Sparkles,
   Type,
   Layout,
-  Code,
-  Sparkles,
   FileText,
   Globe,
   Database,
@@ -23,29 +21,54 @@ import {
   Award,
   BarChart3,
   Activity,
-  Monitor
+  Monitor,
+  PenTool,
+  Brain,
+  Search as SearchIcon,
+  Code as CodeIcon,
+  Ghost,
+  User,
+  Settings,
+  Cpu as CpuIcon
 } from 'lucide-react';
-import type { Robot, Station as StationType, LogEntry } from '../components/Animation/types';
+import type { Robot, RobotState, Station as StationType, LogEntry } from '../components/Animation/types';
 import { RobotIcon } from '../components/Animation/RobotIcon';
 import { Station } from '../components/Animation/Station';
 import { SimulationLog } from '../components/Animation/SimulationLog';
 import { ResultComputerScreen } from '../components/Animation/ResultComputerScreen';
 import { useStore } from '../store/index';
+import type { AgentNodeData, TaskNodeData } from '../types/nodes.types';
 
 // --- Helpers ---
 
 const getTaskIcon = (name: string, description: string) => {
   const text = (name + ' ' + description).toLowerCase();
-  if (text.includes('code') || text.includes('dev')) return <Code size={20} />;
+  if (text.includes('code') || text.includes('dev')) return <CodeIcon size={20} />;
   if (text.includes('design') || text.includes('ui') || text.includes('layout')) return <Layout size={20} />;
   if (text.includes('write') || text.includes('copy') || text.includes('text')) return <Type size={20} />;
-  if (text.includes('search') || text.includes('find') || text.includes('research')) return <Search size={20} />;
+  if (text.includes('search') || text.includes('find') || text.includes('research')) return <SearchIcon size={20} />;
   if (text.includes('data') || text.includes('base') || text.includes('sql')) return <Database size={20} />;
   if (text.includes('web') || text.includes('site') || text.includes('internet')) return <Globe size={20} />;
   if (text.includes('file') || text.includes('read') || text.includes('write')) return <FileText size={20} />;
   if (text.includes('term') || text.includes('cmd') || text.includes('shell')) return <Terminal size={20} />;
   if (text.includes('chat') || text.includes('prompt') || text.includes('message')) return <MessageSquare size={20} />;
   return <Sparkles size={20} />;
+};
+
+const getAgentIcon = (role: string, name: string, color: string) => {
+  const text = (role + ' ' + name).toLowerCase();
+  const props = { size: 32, style: { color } };
+  
+  if (text.includes('writer') || text.includes('editor') || text.includes('copy')) return <PenTool {...props} />;
+  if (text.includes('analyst') || text.includes('brain') || text.includes('strategic')) return <Brain {...props} />;
+  if (text.includes('search') || text.includes('research')) return <SearchIcon {...props} />;
+  if (text.includes('dev') || text.includes('code') || text.includes('engineer')) return <CodeIcon {...props} />;
+  if (text.includes('ghost') || text.includes('silent')) return <Ghost {...props} />;
+  if (text.includes('manager') || text.includes('lead') || text.includes('boss')) return <User {...props} />;
+  if (text.includes('tool') || text.includes('utility')) return <Settings {...props} />;
+  if (text.includes('tech') || text.includes('cpu') || text.includes('hardware')) return <CpuIcon {...props} />;
+  
+  return <Bot {...props} />;
 };
 
 const REST_STATIONS: StationType[] = [
@@ -60,20 +83,43 @@ const RESTING_THOUGHTS = ["Task done!", "GG WP", "Recharging...", "Livin' the li
 const WORKING_THOUGHTS = ["Full focus!", "Processing...", "AI > Human", "Almost there...", "Debugging...", "Compiling..."];
 const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#f43f5e', '#06b6d4'];
 
+
 const CONFETTI_PARTICLES = [...Array(15)].map((_, i) => ({
   id: i,
-  x: Math.random() * 100,
-  delay: Math.random() * 2
+  x: (i * 7) % 100, // Deterministic spread
+  delay: (i * 0.13) % 2 // Deterministic delay
+}));
+
+const generateRainConfig = () => [...Array(15)].map((_, i) => ({
+  id: i,
+  duration: 5 + Math.random() * 10,
+  delay: Math.random() * 5,
+  content: Math.random().toString(2).substring(2, 15)
+}));
+
+const generateConfettiConfig = () => CONFETTI_PARTICLES.map((p, i) => ({
+  ...p,
+  duration: 2 + Math.random() * 2,
+  content: i % 2 === 0 ? '1' : '0'
 }));
 
 export default function AnimationView() {
   const { 
     nodes, edges, currentProjectName, isExecuting, 
     startRealExecution, validateGraph, showNotification,
-    executionResult
-  } = useStore();
-  const [robots, setRobots] = useState<Robot[]>([]);
-  const [stations, setStations] = useState<StationType[]>([]);
+    executionResult, nodeStatuses
+  } = useStore(useShallow(state => ({
+    nodes: state.nodes,
+    edges: state.edges,
+    currentProjectName: state.currentProjectName,
+    isExecuting: state.isExecuting,
+    startRealExecution: state.startRealExecution,
+    validateGraph: state.validateGraph,
+    showNotification: state.showNotification,
+    executionResult: state.executionResult,
+    nodeStatuses: state.nodeStatuses
+  })));
+  
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [isRunning, setIsRunning] = useState<boolean>(false);
   const [selectedRobotId, setSelectedRobotId] = useState<string | null>(null);
@@ -84,12 +130,19 @@ export default function AnimationView() {
   
   // Refs for tracking sync
   const lastLogLength = useRef<number>(0);
+  const wasExecuting = useRef<boolean>(false);
   
   // Zoom and Pan State
   const [viewState, setViewState] = useState({ x: 0, y: 0, scale: 1 });
   const [isDragging, setIsDragging] = useState(false);
   const dragStart = useRef({ x: 0, y: 0 });
   const containerRef = useRef<HTMLDivElement>(null);
+  // Initialize Random Configs
+  const [restStations] = useState<StationType[]>(REST_STATIONS);
+
+  // 1. STABLE CONFIGS: Initialize rain/confetti once using state initializers (Purity)
+  const [rainConfig] = useState(generateRainConfig);
+  const [confettiConfig] = useState(generateConfettiConfig);
 
   // Derive Simulation Graph from Store
   const crewGraph = useMemo(() => {
@@ -105,14 +158,11 @@ export default function AnimationView() {
   }, [nodes]);
 
   const totalTasks = crewGraph.tasks.length;
-  const completedTasks = useMemo(() => stations.filter((s: StationType) => s.status === 'done').length, [stations]);
-  const progressPercent = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
 
-  // Initialize from Actual Workspace
-  useEffect(() => {
+  const initialStations = useMemo(() => {
     const taskStations: StationType[] = crewGraph.tasks.map((t, i) => {
       const angle = (i / Math.max(1, crewGraph.tasks.length)) * Math.PI * 2;
-      const data = t.data as any;
+      const data = t.data as TaskNodeData;
       return {
         id: t.id,
         name: data.name || 'Untitled Task',
@@ -122,10 +172,12 @@ export default function AnimationView() {
         status: 'pending'
       };
     });
-    setStations([...taskStations, ...REST_STATIONS]);
+    return [...taskStations, ...restStations];
+  }, [crewGraph.tasks, restStations]);
 
-    const initialRobots: Robot[] = crewGraph.agents.map((node, i) => {
-      const data = node.data as any;
+  const initialRobots = useMemo(() => {
+    return crewGraph.agents.map((node, i) => {
+      const data = node.data as AgentNodeData;
       
       const assignedTaskIds = edges
         .filter(e => e.source === node.id)
@@ -144,24 +196,111 @@ export default function AnimationView() {
         y: 105,
         targetX: startX,
         targetY: 105,
-        state: 'idle',
+        state: 'idle' as RobotState,
         currentTask: null,
+        progress: 0,
         color: COLORS[i % COLORS.length],
+        icon: getAgentIcon(data.role || '', data.name || '', COLORS[i % COLORS.length]),
         assignedTasks: assignedTaskIds.length > 0 ? assignedTaskIds : (data.taskOrder || []),
         thought: null,
         energy: 100,
-        efficiency: 85 + Math.random() * 15,
+        efficiency: 90,
         mood: 'Ready',
         tasksCompleted: 0,
         trail: []
       };
     });
-    setRobots(initialRobots);
-  }, [crewGraph, edges]);
+  }, [crewGraph.agents, crewGraph.tasks, edges]);
+
+  // Dynamic local state for things that cannot be derived (random thoughts, trails)
+  const [robotExtras, setRobotExtras] = useState<Record<string, { thought: string | null }>>({});
+
+  // Derive current state from base data and live statuses (Pure Derivation)
+  const stations = useMemo<StationType[]>(() => {
+    return initialStations.map(s => {
+      const status = nodeStatuses[s.id];
+      let displayStatus = s.status;
+      if (status === 'running') displayStatus = 'active';
+      else if (status === 'success') displayStatus = 'done';
+      return { ...s, status: displayStatus };
+    });
+  }, [initialStations, nodeStatuses]);
+
+  const robots = useMemo<Robot[]>(() => {
+    return initialRobots.map((robot, i) => {
+      const nodeStatus = nodeStatuses[robot.id];
+      
+      // Find active task (running or waiting)
+      const activeTaskId = robot.assignedTasks.find(tid => 
+        nodeStatuses[tid] === 'running' || nodeStatuses[tid] === 'waiting'
+      );
+
+      let targetX = robot.targetX;
+      let targetY = robot.targetY;
+      let nextState = robot.state;
+      let nextMood = robot.mood;
+      let nextCurrentTask: string | null = robot.currentTask;
+
+      // Deriving tasksCompleted from statuses
+      const tasksCompleted = robot.assignedTasks.filter(tid => nodeStatuses[tid] === 'success').length;
+      
+      if (activeTaskId) {
+        const station = initialStations.find(s => s.id === activeTaskId);
+        if (station) {
+          const angle = (i / Math.max(1, initialRobots.length)) * Math.PI * 2;
+          const radius = 4;
+          const offsetX = Math.cos(angle) * radius;
+          const offsetY = Math.sin(angle) * radius;
+          
+          targetX = (station.x || 50) + offsetX;
+          targetY = (station.y || 50) + offsetY;
+          nextState = nodeStatuses[activeTaskId] === 'running' ? 'working' : 'moving';
+          nextCurrentTask = station.name;
+          nextMood = nextState === 'working' ? 'Full Focus!' : 'On my way...';
+        }
+      } else if (nodeStatus === 'success' || tasksCompleted > 0 || robot.state === 'completed') {
+        // Move to rest station if mission is over or tasks are done
+        const restIndex = (robot.id.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0)) % restStations.length;
+        const restStation = restStations[restIndex];
+        const angle = (i / Math.max(1, initialRobots.length)) * Math.PI * 2;
+        const radius = 3;
+        
+        targetX = (restStation?.x || 50) + Math.cos(angle) * radius;
+        targetY = (restStation?.y || 50) + Math.sin(angle) * radius;
+        nextState = nodeStatus === 'success' ? 'completed' : 'resting';
+        nextCurrentTask = null;
+        nextMood = nodeStatus === 'success' ? 'Mission accomplished!' : 'Recharging...';
+      }
+
+      // Merge with dynamic extras (thoughts)
+      const extra = robotExtras[robot.id];
+
+      return {
+        ...robot,
+        targetX,
+        targetY,
+        x: targetX,
+        y: targetY,
+        state: nextState,
+        currentTask: nextCurrentTask,
+        mood: nextMood,
+        tasksCompleted,
+        thought: extra?.thought || null
+      };
+    });
+  }, [initialRobots, nodeStatuses, initialStations, restStations, robotExtras]);
+  
+  const robotsRef = useRef<Robot[]>(robots);
+  useEffect(() => {
+    robotsRef.current = robots;
+  }, [robots]);
+
+  const completedTasks = useMemo(() => stations.filter((s: StationType) => s.status === 'done').length, [stations]);
+  const progressPercent = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
 
   const addLog = useCallback((message: string, type: LogEntry['type'] = 'info', agentName?: string) => {
     const newLog: LogEntry = {
-      id: Math.random().toString(36).substr(2, 9),
+      id: `log-${Date.now()}-${(Math.floor(Math.random() * 1000000)).toString(36)}`,
       timestamp: new Date().toLocaleTimeString(),
       message,
       type,
@@ -174,7 +313,7 @@ export default function AnimationView() {
   useEffect(() => {
     if (!executionResult) {
       if (lastLogLength.current > 0) {
-        setLogs([]);
+        Promise.resolve().then(() => setLogs([]));
         lastLogLength.current = 0;
       }
       return;
@@ -185,114 +324,21 @@ export default function AnimationView() {
       const newLines = newContent.split('\n').filter(line => line.trim().length > 0);
       
       newLines.forEach(line => {
-        // Strip box-drawing characters and clean up
-        const cleanLine = line.replace(/[─╰╯│╭╮┬┴┤├┼═║╔╗╚╝]/g, '').trim();
+        // eslint-disable-next-line no-control-regex
+        const cleanLine = line.replace(/[\u001b\u009b][[()#;?]*(?:[0-9]{1,4}(?:;[0-9]{0,4})*)?[0-9A-ORZcf-nqry=><]/g, '').trim();
         if (cleanLine.length === 0) return;
 
-        // Simple heuristic to detect agent name or type
         let type: LogEntry['type'] = 'info';
-        let agentName: string | undefined = undefined;
-
         if (cleanLine.includes('Success') || cleanLine.includes('Finished')) type = 'success';
         if (cleanLine.includes('Warning') || cleanLine.includes('Error')) type = 'warning';
         if (cleanLine.includes('working on')) type = 'ai';
 
-        addLog(cleanLine, type, agentName);
+        Promise.resolve().then(() => addLog(cleanLine, type));
       });
 
       lastLogLength.current = executionResult.length;
     }
   }, [executionResult, addLog]);
-
-  // 2. SYNC ROBOT STATES: Monitor nodeStatuses from store
-  useEffect(() => {
-    if (!isExecuting) return;
-
-    setRobots((prevRobots: Robot[]) => {
-      return prevRobots.map((robot, i) => {
-        const status = useStore.getState().nodeStatuses[robot.id];
-        
-        // If agent is running, find which task it's working on
-        if (status === 'running') {
-          // Find connected tasks that are currently running
-          const activeTaskId = robot.assignedTasks.find(tid => 
-            useStore.getState().nodeStatuses[tid] === 'running'
-          );
-
-          if (activeTaskId) {
-            const station = stations.find(s => s.id === activeTaskId);
-              const angle = (i / prevRobots.length) * Math.PI * 2;
-              const radius = 4;
-              const offsetX = Math.cos(angle) * radius;
-              const offsetY = Math.sin(angle) * radius;
-
-              if (station) {
-                return {
-                  ...robot,
-                  state: 'working',
-                  x: station.x + offsetX,
-                  y: station.y + offsetY,
-                  currentTask: station.name
-                };
-              }
-          } else {
-            // If agent is running but no specific task is 'running' yet, maybe it's moving
-            const nextTaskId = robot.assignedTasks.find(tid => 
-                useStore.getState().nodeStatuses[tid] === 'waiting' || 
-                useStore.getState().nodeStatuses[tid] === 'running'
-            );
-            if (nextTaskId) {
-                const station = stations.find(s => s.id === nextTaskId);
-                if (station) {
-                    const angle = (i / prevRobots.length) * Math.PI * 2;
-                    const radius = 4;
-                    const offsetX = Math.cos(angle) * radius;
-                    const offsetY = Math.sin(angle) * radius;
-
-                    return {
-                        ...robot,
-                        state: 'moving',
-                        targetX: station.x + offsetX,
-                        targetY: station.y + offsetY,
-                        currentTask: station.name
-                    };
-                }
-            }
-          }
-        }
-
-        if (status === 'success' && robot.state !== 'completed') {
-            const restStation = REST_STATIONS[Math.floor(Math.random() * REST_STATIONS.length)];
-            const angle = (i / prevRobots.length) * Math.PI * 2;
-            const radius = 3; 
-            const offsetX = Math.cos(angle) * radius;
-            const offsetY = Math.sin(angle) * radius;
-
-            return { 
-                ...robot, 
-                state: 'completed', 
-                currentTask: `Resting in ${restStation.name}`,
-                tasksCompleted: robot.tasksCompleted + 1,
-                x: restStation.x + offsetX,
-                y: restStation.y + offsetY
-            };
-        }
-
-        return robot;
-      });
-    });
-
-    // Sync Stations
-    setStations((prevStations: StationType[]) => {
-        return prevStations.map(station => {
-            const status = useStore.getState().nodeStatuses[station.id];
-            if (status === 'success') return { ...station, status: 'done' };
-            if (status === 'running') return { ...station, status: 'active' };
-            return station;
-        });
-    });
-
-  }, [isExecuting, nodes, stations]); // Watch nodes/stations for change to re-map
 
   const startCrew = () => {
     if (isExecuting || crewGraph.agents.length === 0) return;
@@ -302,7 +348,6 @@ export default function AnimationView() {
       return;
     }
 
-    // Reset local log tracking
     lastLogLength.current = 0;
     setLogs([]);
     setIsRunning(true);
@@ -313,26 +358,41 @@ export default function AnimationView() {
     addLog(`🚀 Starting Real Crew Execution`, 'ai');
   };
 
-  // Sync animation with real execution status
   useEffect(() => {
-    if (!isExecuting && isRunning) {
-      setIsRunning(false);
-      addLog("✅ Crew execution finished.", "success");
-      
-      // Select winner for the modal
-      const winner = [...robots].sort((a, b) => (b.tasksCompleted * b.efficiency) - (a.tasksCompleted * a.efficiency))[0];
-      setEmployeeOfMonth(winner || null);
-      setShowSuccessModal(true);
+    // Only show modal if we transitioned from executing=true to executing=false
+    if (wasExecuting.current && !isExecuting && isRunning) {
+      Promise.resolve().then(() => {
+        setIsRunning(false);
+        addLog("✅ Crew execution finished.", "success");
+        
+        // Restore winner selection logic
+        const winner = [...robots].sort((a, b) => (b.tasksCompleted * b.efficiency) - (a.tasksCompleted * a.efficiency))[0];
+        setEmployeeOfMonth(winner || null);
+        setShowSuccessModal(true);
+      });
     }
+    wasExecuting.current = isExecuting;
   }, [isExecuting, isRunning, addLog, robots]);
 
-  // Zoom and Pan Handlers
-  const handleWheel = (e: React.WheelEvent) => {
+  const handleWheel = useCallback((e: WheelEvent) => {
     e.preventDefault();
     const zoomSpeed = 0.001;
-    const newScale = Math.min(Math.max(viewState.scale - e.deltaY * zoomSpeed, 0.4), 4);
-    setViewState((prev) => ({ ...prev, scale: newScale }));
-  };
+    setViewState((prev) => {
+      const newScale = Math.min(Math.max(prev.scale - e.deltaY * zoomSpeed, 0.4), 4);
+      return { ...prev, scale: newScale };
+    });
+  }, []);
+
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+
+    // Attach wheel event manually to allow e.preventDefault() (non-passive)
+    container.addEventListener('wheel', handleWheel, { passive: false });
+    return () => {
+      container.removeEventListener('wheel', handleWheel);
+    };
+  }, [handleWheel]);
 
   const handleMouseDown = (e: React.MouseEvent) => {
     if (e.button !== 0 && e.button !== 1) return;
@@ -368,25 +428,53 @@ export default function AnimationView() {
     };
   }, [isDragging, handleMouseMove, handleMouseUp]);
 
-  // Thought Generator Loop
+  // Thought Generator
   useEffect(() => {
-    const interval = setInterval(() => {
-      setRobots((prev: Robot[]) => prev.map((robot: Robot) => {
-        if (robot.thought) {
-          return Math.random() > 0.7 ? { ...robot, thought: null } : robot;
-        } else if (Math.random() > 0.95) {
-          let pool = WAITING_THOUGHTS;
-          if (robot.state === 'working') pool = WORKING_THOUGHTS;
-          if (robot.state === 'resting' || robot.state === 'completed') pool = RESTING_THOUGHTS;
-          return { ...robot, thought: pool[Math.floor(Math.random() * pool.length)] };
-        }
-        return robot;
-      }));
+    const logInterval = setInterval(() => {
+      const activeRobot = robotsRef.current.find((r: Robot) => r.state === 'working');
+      if (activeRobot) {
+        const agentName = activeRobot.name;
+        setLogs((prev: LogEntry[]) => {
+          const newLog: LogEntry = {
+            id: `log-${Date.now()}-${(Math.floor(Math.random() * 1000000)).toString(36)}`,
+            timestamp: new Date().toLocaleTimeString(),
+            message: `[${new Date().toLocaleTimeString()}] ${agentName} processing task...`,
+            type: 'info'
+          };
+          return [newLog, ...prev].slice(0, 50);
+        });
+      }
+    }, 3000);
+    
+    const thoughtInterval = setInterval(() => {
+      setRobotExtras(prev => {
+        const next = { ...prev };
+        let changed = false;
+        
+        robotsRef.current.forEach(robot => {
+          const currentExtra = next[robot.id];
+          if (currentExtra?.thought) {
+            if (Math.random() > 0.7) {
+              next[robot.id] = { ...currentExtra, thought: null };
+              changed = true;
+            }
+          } else if (Math.random() > 0.95) {
+            let pool = WAITING_THOUGHTS;
+            if (robot.state === 'working') pool = WORKING_THOUGHTS;
+            if (robot.state === 'resting' || robot.state === 'completed') pool = RESTING_THOUGHTS;
+            next[robot.id] = { thought: pool[Math.floor(Math.random() * pool.length)] };
+            changed = true;
+          }
+        });
+        
+        return changed ? next : prev;
+      });
     }, 1000);
-    return () => clearInterval(interval);
-  }, []);
-
-  // Legacy simulation logic removed in favor of real-time sync with nodeStatuses
+    return () => {
+      clearInterval(logInterval);
+      clearInterval(thoughtInterval);
+    };
+  }, []); // Empty dependency array - intervals are stable
 
   return (
     <div className="flex-1 relative bg-[#0a0a0f] text-white font-sans overflow-hidden flex flex-col animate-in fade-in duration-500">
@@ -397,7 +485,6 @@ export default function AnimationView() {
         {/* Simulation Area (Canvas) - Flexible */}
         <div 
           ref={containerRef}
-          onWheel={handleWheel}
           onMouseDown={handleMouseDown}
           className="flex-grow h-full relative overflow-hidden bg-black/20 transition-all duration-300 ease-in-out cursor-grab active:cursor-grabbing"
           style={{
@@ -415,21 +502,21 @@ export default function AnimationView() {
                {/* Digital Rain Background */}
                <div className="absolute inset-0 opacity-10 pointer-events-none">
                 <div className="flex justify-around h-full w-full">
-                  {[...Array(15)].map((_, i) => ( // Reduced to 15 for better perf
+                  {rainConfig.map((config: { id: number; duration: number; delay: number; content: string }) => (
                     <motion.div
-                      key={i}
+                      key={config.id}
                       initial={{ y: -100 }}
                       animate={{ y: 1000 }}
                       transition={{ 
-                        duration: 5 + Math.random() * 10, 
+                        duration: config.duration, 
                         repeat: Infinity, 
                         ease: "linear",
-                        delay: Math.random() * 5
+                        delay: config.delay
                       }}
                       className="text-[10px] font-mono text-indigo-500 whitespace-nowrap"
                       style={{ writingMode: 'vertical-rl' }}
                     >
-                      {Math.random().toString(2).substring(2, 15)}
+                      {config.content}
                     </motion.div>
                   ))}
                 </div>
@@ -556,7 +643,7 @@ export default function AnimationView() {
           {/* Technical Sub-header */}
           <div className="absolute top-6 left-1/2 -translate-x-1/2 z-40 bg-black/40 backdrop-blur-md px-6 py-2 rounded-full border border-white/10 flex items-center gap-4 pointer-events-auto shadow-2xl">
             <div className="flex items-center gap-2">
-              <Cpu size={14} className="text-indigo-400" />
+              <CpuIcon size={14} className="text-indigo-400" />
               <span className="text-[10px] font-mono font-bold text-white uppercase tracking-tight">Simple Crew Builder</span>
             </div>
             <div className="h-3 w-[1px] bg-white/10" />
@@ -614,10 +701,10 @@ export default function AnimationView() {
           {/* View Controls */}
           <div className="absolute bottom-6 left-6 z-40 flex gap-2">
               <button onClick={() => setViewState((prev) => ({ ...prev, scale: Math.min(prev.scale + 0.2, 4) }))} className="p-2 bg-black/60 backdrop-blur-md border border-white/10 rounded-lg hover:bg-white/10 transition-colors text-white">
-                  <Search size={16} className="rotate-90" />
+                  <SearchIcon size={16} className="rotate-90" />
               </button>
               <button onClick={() => setViewState((prev) => ({ ...prev, scale: Math.max(prev.scale - 0.2, 0.4) }))} className="p-2 bg-black/60 backdrop-blur-md border border-white/10 rounded-lg hover:bg-white/10 transition-colors text-white">
-                  <Search size={16} />
+                  <SearchIcon size={16} />
               </button>
               <button onClick={() => setViewState({ x: 0, y: 0, scale: 1 })} className="p-2 bg-black/60 backdrop-blur-md border border-white/10 rounded-lg hover:bg-white/10 transition-colors text-white text-[10px] font-bold">1:1</button>
           </div>
@@ -728,7 +815,7 @@ export default function AnimationView() {
                 <div className="grid grid-cols-2 gap-6">
                   <div className="space-y-2">
                     <div className="flex justify-between items-center text-[9px] font-mono text-gray-500 uppercase font-bold">
-                      <div className="flex items-center gap-1"><Zap size={10} /> Energia</div>
+                      <div className="flex items-center gap-1"><Zap size={10} /> Energy</div>
                       <span className="text-white">{Math.round(robots.find(r => r.id === selectedRobotId)?.energy || 0)}%</span>
                     </div>
                     <div className="h-1.5 w-full bg-white/5 rounded-full overflow-hidden">
@@ -804,12 +891,13 @@ export default function AnimationView() {
             <motion.div
               initial={{ scale: 0.9, opacity: 0, y: 20 }}
               animate={{ scale: 1, opacity: 1, y: 0 }}
+              data-testid="mission-success-modal"
               className="bg-[#0f172a] border-2 border-indigo-500/50 rounded-none p-10 max-w-xl w-full shadow-[0_0_50px_rgba(79,70,229,0.3)] text-center relative overflow-hidden"
               style={{ clipPath: 'polygon(0 0, 95% 0, 100% 5%, 100% 100%, 5% 100%, 0 95%)' }}
             >
               <div className="absolute inset-0 opacity-10 pointer-events-none" style={{ backgroundImage: 'linear-gradient(#4f46e5 1px, transparent 1px), linear-gradient(90deg, #4f46e5 1px, transparent 1px)', backgroundSize: '20px 20px' }} />
               
-              {CONFETTI_PARTICLES.map(p => (
+              {confettiConfig.map((p: { id: number; x: number; delay: number; duration: number; content: string }) => (
                 <motion.div
                   key={p.id}
                   initial={{ y: -20, opacity: 0 }}
@@ -818,7 +906,7 @@ export default function AnimationView() {
                     opacity: [0, 1, 1, 0],
                   }}
                   transition={{ 
-                    duration: 2 + Math.random() * 2, 
+                    duration: p.duration, 
                     repeat: Infinity, 
                     delay: p.delay,
                     ease: "linear"
@@ -826,7 +914,7 @@ export default function AnimationView() {
                   className="absolute top-0 pointer-events-none font-mono text-[10px] text-indigo-400/40"
                   style={{ left: `${p.x}%` }}
                 >
-                  {Math.random() > 0.5 ? '1' : '0'}
+                  {p.content}
                 </motion.div>
               ))}
 
@@ -934,7 +1022,7 @@ export default function AnimationView() {
           SYNC: REAL-TIME
         </div>
         <div className="flex items-center gap-2 uppercase">
-          PROJETO: {currentProjectName || 'ACTIVE'}
+          PROJECT: {currentProjectName || 'ACTIVE'}
         </div>
       </footer>
     </div>

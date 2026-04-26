@@ -1,6 +1,7 @@
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { WebhookMapperModal } from '../WebhookMapperModal';
 import { vi, describe, it, expect, beforeEach } from 'vitest';
+import type { WebhookNodeData } from '../../../types/nodes.types';
 
 // Mock lucide-react
 vi.mock('lucide-react', () => ({
@@ -15,7 +16,7 @@ vi.mock('lucide-react', () => ({
 
 // Mock dnd-kit (since dragging is hard to simulate in JSDOM)
 vi.mock('@dnd-kit/core', () => ({
-  DndContext: ({ children }: any) => <div data-testid="dnd-context">{children}</div>,
+  DndContext: ({ children, onDragEnd }: { children: React.ReactNode, onDragEnd?: (event: { active: { data: { current: { path: string } } }, over: { id: string } | null }) => void }) => <div data-testid="dnd-context" onClick={() => onDragEnd && onDragEnd({ active: { data: { current: { path: 'user.name' } } }, over: { id: 'topic' } })}>{children}</div>,
   useDraggable: () => ({
     attributes: {},
     listeners: {},
@@ -30,7 +31,16 @@ vi.mock('@dnd-kit/core', () => ({
 }));
 
 describe('WebhookMapperModal', () => {
-  let mockProps: any;
+  interface WebhookMapperModalTestProps {
+    isOpen: boolean;
+    onClose: () => void;
+    data: WebhookNodeData;
+    nodeId: string;
+    updateNodeData: (id: string, data: Partial<WebhookNodeData>) => void;
+    allProjectVariables: string[];
+  }
+
+  let mockProps: WebhookMapperModalTestProps;
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -39,7 +49,7 @@ describe('WebhookMapperModal', () => {
       onClose: vi.fn(),
       data: {
         fieldMappings: { 'topic': '{{ $json.subject }}' }
-      },
+      } as unknown as WebhookNodeData,
       nodeId: 'node-1',
       updateNodeData: vi.fn(),
       allProjectVariables: ['topic', 'language', 'city']
@@ -117,5 +127,54 @@ describe('WebhookMapperModal', () => {
     render(<WebhookMapperModal {...mockProps} />);
     fireEvent.click(screen.getByText('Done'));
     expect(mockProps.onClose).toHaveBeenCalled();
+  });
+
+  it('triggers onDragEnd mapping update', () => {
+    render(<WebhookMapperModal {...mockProps} />);
+    // Our mock DndContext triggers onDragEnd on click
+    fireEvent.click(screen.getByTestId('dnd-context'));
+    
+    expect(mockProps.updateNodeData).toHaveBeenCalledWith('node-1', expect.objectContaining({
+      fieldMappings: expect.objectContaining({
+        'topic': '{{ $json.user.name }}'
+      })
+    }));
+  });
+
+  it('renders JSON arrays correctly', async () => {
+    render(<WebhookMapperModal {...mockProps} />);
+    const textarea = screen.getByPlaceholderText(/Paste a sample JSON/i);
+    
+    const validJsonWithArray = '{"users": [{"name": "Gleison"}]}';
+    fireEvent.change(textarea, { target: { value: validJsonWithArray } });
+    
+    await waitFor(() => {
+      expect(screen.getByText('root')).toBeInTheDocument();
+      expect(screen.getByText('users')).toBeInTheDocument();
+      expect(screen.getByText('[0]')).toBeInTheDocument();
+      expect(screen.getByText('name')).toBeInTheDocument();
+    });
+  });
+
+  it('expands and collapses JSON tree nodes', async () => {
+    render(<WebhookMapperModal {...mockProps} />);
+    const textarea = screen.getByPlaceholderText(/Paste a sample JSON/i);
+    
+    const validJson = '{"user": {"name": "Gleison"}}';
+    fireEvent.change(textarea, { target: { value: validJson } });
+    
+    await waitFor(() => {
+      expect(screen.getByText('name')).toBeInTheDocument();
+    });
+
+    // Find the ChevronDown icon, which is rendered when expanded
+    const chevronDown = screen.getAllByTestId('icon-chevron-down')[0];
+    // The button wraps the chevron
+    const toggleButton = chevronDown.parentElement!;
+    
+    fireEvent.click(toggleButton);
+    
+    // After collapsing, 'name' should be hidden because it's inside 'user' or 'root'
+    expect(screen.queryByText('name')).not.toBeInTheDocument();
   });
 });

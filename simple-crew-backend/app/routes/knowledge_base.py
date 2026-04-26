@@ -75,7 +75,10 @@ async def list_documents(kb_id: str, session: Neo4jSession = Depends(get_neo4j_s
     """Lista documentos de uma base."""
     query = """
     MATCH (d:Document)-[:BELONGS_TO]->(kb:KnowledgeBase {id: $kb_id})
-    RETURN d.id AS id, d.filename AS filename, d.size AS size, d.created_at AS created_at
+    RETURN d.id AS id, d.filename AS filename, d.size AS size, 
+           COALESCE(d['status'], 'success') AS status, 
+           COALESCE(d['error'], null) AS error, 
+           d.created_at AS created_at
     ORDER BY d.created_at DESC
     """
     try:
@@ -86,6 +89,8 @@ async def list_documents(kb_id: str, session: Neo4jSession = Depends(get_neo4j_s
                 id=record["id"],
                 filename=record["filename"],
                 size=record.get("size"),
+                status=record.get("status", "success"),
+                error=record.get("error"),
                 created_at=str(record["created_at"])
             ))
         return docs
@@ -137,9 +142,10 @@ async def upload_documents(
             id: randomUUID(),
             filename: $filename,
             size: $size,
+            status: 'indexing',
             created_at: datetime()
         })-[:BELONGS_TO]->(kb)
-        RETURN d.id AS id, d.filename AS filename, d.size AS size, d.created_at AS created_at
+        RETURN d.id AS id, d.filename AS filename, d.size AS size, d.status AS status, d.created_at AS created_at
         """
         try:
             result = session.run(query, kb_id=kb_id, filename=file.filename, size=file_size)
@@ -149,6 +155,7 @@ async def upload_documents(
                     id=record["id"],
                     filename=record["filename"],
                     size=record["size"],
+                    status=record["status"],
                     created_at=str(record["created_at"])
                 ))
                 
@@ -179,13 +186,27 @@ async def upload_documents(
                         )
                         
                         # Indexa o arquivo individualmente
-                        process_document(kb_id, f_info['abs_path'], doc_id=f_doc_id)
+                        try:
+                            process_document(kb_id, f_info['abs_path'], doc_id=f_doc_id)
+                            session.run("MATCH (d:Document {id: $doc_id}) SET d.status = 'success'", doc_id=f_doc_id)
+                        except Exception as e:
+                            session.run("MATCH (d:Document {id: $doc_id}) SET d.status = 'failed', d.error = $error", 
+                                        doc_id=f_doc_id, error=str(e))
+                            raise HTTPException(status_code=500, detail=f"Indexing failed: {str(e)}")
                 else:
                     # Inicia o Indexador Padrão
-                    process_document(kb_id, file_path, doc_id=record["id"])
+                    try:
+                        process_document(kb_id, file_path, doc_id=record["id"])
+                        session.run("MATCH (d:Document {id: $doc_id}) SET d.status = 'success'", doc_id=record["id"])
+                    except Exception as e:
+                        session.run("MATCH (d:Document {id: $doc_id}) SET d.status = 'failed', d.error = $error", 
+                                    doc_id=record["id"], error=str(e))
+                        raise HTTPException(status_code=500, detail=f"Indexing failed: {str(e)}")
+        except HTTPException:
+            raise
         except Exception as e:
             # Em produção aqui removeríamos o arquivo físico se o Neo4j falhar
-            print(f"Erro ao salvar no Neo4j: {e}")
+            print(f"Error saving to Neo4j: {e}")
             continue
 
     return saved_docs

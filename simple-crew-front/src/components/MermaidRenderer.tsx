@@ -95,7 +95,7 @@ export const MermaidRenderer = React.memo(({ chart }: MermaidRendererProps) => {
                   allowRightClickPan: true 
                 }}
               >
-                {({ zoomIn, zoomOut, resetTransform }: any) => (
+                {({ zoomIn, zoomOut, resetTransform }: { zoomIn: (step?: number) => void; zoomOut: (step?: number) => void; resetTransform: () => void }) => (
                   <>
                     <TransformComponent
                       wrapperStyle={{ width: '100%', height: '100%' }}

@@ -1,5 +1,6 @@
 import json
 import uuid
+from uuid import UUID
 import io
 import os
 import shutil
@@ -12,8 +13,10 @@ from fastapi import FastAPI, HTTPException, Depends, Header, Request, Background
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, StreamingResponse
 from sqlmodel import Session, select
+from sqlalchemy import text
 from .crew_builder import run_crew_stream
-from .database import init_db, get_session
+from .services.langgraph_engine import run_langgraph_stream
+from .database import init_db, get_session, engine
 from .models import CrewProject, User, Credential, LLMModel, MCPServer, AppSettings, CustomTool, Workspace, Execution, ExecutionStatus
 from .schemas import (
     GraphData, ProjectCreate, ProjectRead, ProjectUpdate, 
@@ -28,17 +31,21 @@ from .schemas import (
     AiTaskBulkSuggestionRequest, AiTaskBulkSuggestionResponse,
     ExecutionRead
 )
-from .exporter import generate_python_project
+from .exporter import generate_python_project, generate_langgraph_project
 from .ai_service import generate_suggestion, generate_bulk_suggestion, generate_task_bulk_suggestion
 from .core.database.neo4j_db import neo4j_manager, get_neo4j_session
 from neo4j import Session as Neo4jSession
-from .routes import knowledge_base
+from .routes import knowledge_base, skills
+
 from .utils import normalize_command
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Inicializa o banco SQL (SQLModel) e o usuário seed no startup
     init_db()
+    
+    # Safe Tool Migration
+    run_safe_migrations(engine)
     
     # Inicializa o driver do Neo4j
     neo4j_manager.init_driver()
@@ -58,6 +65,8 @@ app = FastAPI(
     lifespan=lifespan
 )
 app.include_router(knowledge_base.router)
+app.include_router(skills.router, prefix="/api/v1/skills", tags=["Skills"])
+
 
 # Setup CORS para permitir conexão com o Servidor Vite do Frontend (React)
 app.add_middleware(
@@ -145,22 +154,62 @@ async def execute_crew(
             crew_inputs = {k: v for k, v in crew_inputs.items() if not k.startswith('input_')}
             execution_inputs.update(crew_inputs)
             
-        # Se mesmo após tudo estiver vazio, para chat o histórico ficaria vazio, mas tentamos nosso melhor
-        # 3. Create Execution record
-        execution = Execution(
-            project_id=uuid.UUID(project_id) if project_id else uuid.UUID(ROOT_USER_ID),
-            status=ExecutionStatus.RUNNING,
-            trigger_type="chat",
-            input_data=execution_inputs,
-            graph_snapshot=graph_data.model_dump()
-        )
-        session.add(execution)
-        session.commit()
-        session.refresh(execution)
+        # --- Framework Detection Logic (Strict Order) ---
+        framework = "crewai" # Default
+        
+        # 1. Primary: Explicit choice from frontend payload
+        if graph_data.framework:
+            framework = graph_data.framework
+            print(f"--- Routing: Framework from Payload: {framework} ---")
+            
+        # 2. Secondary: If project_id exists, check DB record (if not already set by payload)
+        elif project_id:
+            try:
+                db_project = session.get(CrewProject, project_id)
+                if db_project and db_project.framework:
+                    framework = db_project.framework
+                    print(f"--- Routing: Framework from DB: {framework} ---")
+            except Exception:
+                pass
+        
+        # 3. Fallback: Structural check (if 'state' node exists, it's likely LangGraph)
+        if framework == 'crewai' and any(n.type == 'state' for n in graph_data.nodes):
+            framework = 'langgraph'
+            print(f"--- Routing: Framework fallback to LangGraph (State node detected) ---")
 
-        # Despacha as dependências e payload JSON para a magia do nosso Parser local CrewAI Stream
+        is_langgraph = (framework == 'langgraph')
+
+        # --- DB Bypass: Create Execution record ONLY if project_id is valid ---
+        execution_id = None
+        if project_id:
+            try:
+                # Validate project_id is a real UUID and exists in DB
+                pid_uuid = uuid.UUID(project_id)
+                db_p = session.get(CrewProject, pid_uuid)
+                
+                if db_p:
+                    execution = Execution(
+                        project_id=pid_uuid,
+                        status=ExecutionStatus.RUNNING,
+                        trigger_type="chat",
+                        input_data=execution_inputs,
+                        graph_snapshot=graph_data.model_dump()
+                    )
+                    session.add(execution)
+                    session.commit()
+                    session.refresh(execution)
+                    execution_id = execution.id
+                    print(f"--- Execution {execution_id} recorded for project {project_id} ---")
+            except (ValueError, Exception) as db_err:
+                print(f"--- WARNING: Skipping Execution Record (Project ID invalid or not found): {db_err} ---")
+        else:
+            print("--- Execution started without project_id (Unsaved project). Skipping DB record. ---")
+
+        # Despacha as dependências e payload JSON para o engine correto
+        engine_func = run_langgraph_stream if is_langgraph else run_crew_stream
+        
         return StreamingResponse(
-            run_crew_stream(graph_data, workspace_id=active_workspace_id, inputs=execution_inputs, execution_id=execution.id), 
+            engine_func(graph_data, workspace_id=active_workspace_id, inputs=execution_inputs, execution_id=execution_id), 
             media_type="text/event-stream"
         )
     except ValueError as ve:
@@ -208,6 +257,25 @@ def resolve_custom_tools(graph_data: GraphData, session: Session):
             
     graph_data.customTools = final_tools
     return graph_data
+
+def resolve_skills(graph_data: GraphData, session: Session):
+    """
+    Busca no banco de dados todas as Skills referenciadas pelos agentes no grafo.
+    Retorna um dicionário de {skill_id: {"name": name, "content": content}}.
+    """
+    used_skill_ids = set()
+    for node in graph_data.nodes:
+        if node.type == 'agent' and hasattr(node.data, 'identitySkillIds') and node.data.identitySkillIds:
+            for sid in node.data.identitySkillIds:
+                used_skill_ids.add(sid)
+    
+    if not used_skill_ids:
+        return {}
+    
+    statement = select(AgentSkill).where(AgentSkill.id.in_(list(used_skill_ids)))
+    db_skills = session.exec(statement).all()
+    
+    return {str(s.id): {"name": s.name, "content": s.content} for s in db_skills}
 
 @app.post("/api/v1/projects", response_model=ProjectRead)
 async def create_project(project: ProjectCreate, session: Session = Depends(get_session)):
@@ -269,8 +337,9 @@ async def export_project_python(project_id: str, session: Session = Depends(get_
         # Reconstrói GraphData a partir do canvas_data persistido
         graph_data = GraphData(**project.canvas_data)
         
-        # Resolve Custom Tools vinculadas
+        # Resolve Custom Tools e Skills vinculadas
         graph_data = resolve_custom_tools(graph_data, session)
+        resolved_skills_dict = resolve_skills(graph_data, session)
         
         # Obtém autor do projeto (usuário vinculado)
         author_name = "SimpleCrew"
@@ -387,20 +456,40 @@ async def export_project_python(project_id: str, session: Session = Depends(get_
                     "env_vars": rec.env_vars
                 })
 
-        zip_bytes = generate_python_project(
-            graph_data, 
-            project.name,
-            author_name=author_name,
-            author_email=author_email,
-            mcp_servers=mcp_servers_data,
-            project_description=project.description or "",
-            agent_llms=agent_llms_data,
-            providers=list(unique_providers),
-            workspace_path=workspace_path
-        )
+        # Detect Framework
+        is_langgraph = project.framework == 'langgraph' or any(n.type == 'state' for n in graph_data.nodes)
+        
+        if is_langgraph:
+            zip_bytes = generate_langgraph_project(
+                graph_data, 
+                project.name,
+                author_name=author_name,
+                author_email=author_email,
+                mcp_servers=mcp_servers_data,
+                project_description=project.description or "",
+                agent_llms=agent_llms_data,
+                providers=list(unique_providers),
+                workspace_path=workspace_path,
+                resolved_skills=resolved_skills_dict
+            )
+            suffix = "langgraph"
+        else:
+            zip_bytes = generate_python_project(
+                graph_data, 
+                project.name,
+                author_name=author_name,
+                author_email=author_email,
+                mcp_servers=mcp_servers_data,
+                project_description=project.description or "",
+                agent_llms=agent_llms_data,
+                providers=list(unique_providers),
+                workspace_path=workspace_path,
+                resolved_skills=resolved_skills_dict
+            )
+            suffix = "crew"
         
         # Nome do arquivo sanitizado para o header de download
-        filename = f"{project.name.lower().replace(' ', '_')}_crew.zip"
+        filename = f"{project.name.lower().replace(' ', '_')}_{suffix}.zip"
         
         return StreamingResponse(
             io.BytesIO(zip_bytes),
@@ -635,6 +724,20 @@ async def delete_mcp_server(mcp_id: str, session: Session = Depends(get_session)
     
 # --- CRUD de Gerenciamento de Custom Tools ---
 
+def run_safe_migrations(engine):
+    with Session(engine) as session:
+        # Safe alter table for PostgreSQL (prevents Docker users from breaking their DBs)
+        try:
+            session.exec(text("ALTER TABLE customtool ADD COLUMN IF NOT EXISTS framework VARCHAR DEFAULT 'crewai';"))
+            
+            # NEW CrewProject migration
+            session.exec(text("ALTER TABLE crewproject ADD COLUMN IF NOT EXISTS framework VARCHAR DEFAULT 'crewai';"))
+            
+            session.commit()
+            print("--- Migration: framework column added to tables! ---")
+        except Exception as e:
+            print(f"--- Migration Note: Manual alter for customtool framework skipped: {e} ---")
+
 @app.post("/api/v1/custom-tools", response_model=CustomToolRead)
 async def create_custom_tool(tool: CustomToolCreate, session: Session = Depends(get_session)):
     new_tool = CustomTool(
@@ -647,8 +750,16 @@ async def create_custom_tool(tool: CustomToolCreate, session: Session = Depends(
     return new_tool
 
 @app.get("/api/v1/custom-tools", response_model=List[CustomToolRead])
-async def list_custom_tools(session: Session = Depends(get_session)):
-    statement = select(CustomTool).where(CustomTool.user_id == ROOT_USER_ID).order_by(CustomTool.created_at.desc())
+async def list_custom_tools(
+    framework: Optional[str] = None,
+    session: Session = Depends(get_session)
+):
+    statement = select(CustomTool).where(CustomTool.user_id == ROOT_USER_ID)
+    
+    if framework:
+        statement = statement.where(CustomTool.framework == framework)
+        
+    statement = statement.order_by(CustomTool.created_at.desc())
     tools = session.exec(statement).all()
     return tools
 
@@ -1000,12 +1111,16 @@ async def handle_webhook(
         import concurrent.futures
         
         def _run_sync():
-            """Cria um event loop dedicado para a execução síncrona do crew."""
+            """Cria um event loop dedicado para a execução síncrona."""
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
             final_result = ""
             try:
-                stream = run_crew_stream(graph_data, workspace_id=workspace_id, inputs=mapped_inputs, execution_id=execution.id)
+                # Resolve Engine
+                is_langgraph = target_project.framework == 'langgraph' or any(n.get("type") == "state" for n in target_project.canvas_data.get("nodes", []))
+                engine_func = run_langgraph_stream if is_langgraph else run_crew_stream
+                
+                stream = engine_func(graph_data, workspace_id=workspace_id, inputs=mapped_inputs, execution_id=execution.id)
                 for event_str in stream:
                     if not event_str.strip():
                         continue
@@ -1040,7 +1155,10 @@ async def handle_webhook(
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
             try:
-                for _ in run_crew_stream(graph_data, workspace_id=workspace_id, inputs=mapped_inputs, execution_id=execution.id):
+                is_langgraph = target_project.framework == 'langgraph' or any(n.get("type") == "state" for n in target_project.canvas_data.get("nodes", []))
+                engine_func = run_langgraph_stream if is_langgraph else run_crew_stream
+                
+                for _ in engine_func(graph_data, workspace_id=workspace_id, inputs=mapped_inputs, execution_id=execution.id):
                     pass
             finally:
                 loop.close()
@@ -1170,13 +1288,13 @@ async def delete_workspace_file(
 
 # --- Execution History Endpoints ---
 @app.get("/api/v1/projects/{project_id}/executions", response_model=List[ExecutionRead])
-async def list_project_executions(project_id: str, session: Session = Depends(get_session)):
-    statement = select(Execution).where(Execution.project_id == uuid.UUID(project_id)).order_by(Execution.timestamp.desc())
+async def list_project_executions(project_id: UUID, session: Session = Depends(get_session)):
+    statement = select(Execution).where(Execution.project_id == project_id).order_by(Execution.timestamp.desc())
     return session.exec(statement).all()
 
 @app.get("/api/v1/executions/{execution_id}", response_model=ExecutionRead)
-async def get_execution(execution_id: str, session: Session = Depends(get_session)):
-    execution = session.get(Execution, uuid.UUID(execution_id))
+async def get_execution(execution_id: UUID, session: Session = Depends(get_session)):
+    execution = session.get(Execution, execution_id)
     if not execution:
         raise HTTPException(status_code=404, detail="Execução não encontrada")
     return execution

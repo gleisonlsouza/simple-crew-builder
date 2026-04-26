@@ -2,19 +2,63 @@ import type { StateCreator } from 'zustand';
 import toast from 'react-hot-toast';
 
 import type { AppState, ConfigSlice } from '../../types/store.types';
+import type { ModelConfig, Credential, MCPServer, CustomTool, ToolConfig } from '../../types/config.types';
+
 
 const API_URL = import.meta.env.VITE_API_URL || '';
 
 import { initialGlobalTools } from '../initialTools';
 
+const getInitialGlobalTools = (): ToolConfig[] => {
+  const STORAGE_KEY = 'global_tools_v9';
+  const persistedRaw = localStorage.getItem(STORAGE_KEY);
+  
+  if (!persistedRaw) return initialGlobalTools;
+
+  try {
+    const persistedTools = JSON.parse(persistedRaw) as ToolConfig[];
+    
+    // 1. Find tools in initialGlobalTools that are missing in persistedTools (by ID)
+    const missingTools = initialGlobalTools.filter(
+      it => !persistedTools.some(pt => pt.id === it.id)
+    );
+
+    // 2. Ensure existing tools have all required properties (framework, category, etc.)
+    // This handles the case where the user has an older version in localStorage
+    const updatedPersistedTools = persistedTools.map(pt => {
+      const original = initialGlobalTools.find(it => it.id === pt.id);
+      if (!original) return pt;
+
+      return {
+        ...original, // Default properties (framework, category, description, etc.)
+        ...pt,       // User state (isEnabled, apiKey)
+      };
+    });
+
+    if (missingTools.length > 0) {
+      const merged = [...updatedPersistedTools, ...missingTools];
+      // Persist the merged list so next time we don't have to re-merge
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(merged));
+      return merged;
+    }
+
+    return updatedPersistedTools;
+  } catch (error) {
+    console.error('Error hydrating global tools:', error);
+    return initialGlobalTools;
+  }
+};
+
 export const createConfigSlice: StateCreator<AppState, [], [], ConfigSlice> = (set, get) => ({
   credentials: [],
   models: JSON.parse(localStorage.getItem('models') || '[]'),
   defaultModel: localStorage.getItem('default_model') || 'gpt-4o',
-  globalTools: JSON.parse(localStorage.getItem('global_tools_v8') || JSON.stringify(initialGlobalTools)),
+  globalTools: getInitialGlobalTools(),
   customTools: [],
   mcpServers: [],
+  skills: [],
   systemAiModelId: localStorage.getItem('default_system_ai_model_id'),
+
   embeddingModelId: localStorage.getItem('default_embedding_model_id'),
 
   fetchCredentials: async () => {
@@ -25,7 +69,7 @@ export const createConfigSlice: StateCreator<AppState, [], [], ConfigSlice> = (s
     } catch (error) { console.error(error); }
   },
 
-  addCredential: async (cred) => {
+  addCredential: async (cred: Omit<Credential, 'id' | 'created_at'>) => {
     try {
       const response = await fetch(`${API_URL}/api/v1/credentials`, {
         method: 'POST',
@@ -35,10 +79,10 @@ export const createConfigSlice: StateCreator<AppState, [], [], ConfigSlice> = (s
       if (!response.ok) throw new Error('Failed to add credential');
       toast.success("Credential added successfully");
       await get().fetchCredentials();
-    } catch (error: any) { toast.error(error.message); }
+    } catch (error) { toast.error((error as Error).message); }
   },
 
-  updateCredential: async (id, credUpdate) => {
+  updateCredential: async (id: string, credUpdate: Partial<Omit<Credential, 'id' | 'created_at'>>) => {
     try {
       const response = await fetch(`${API_URL}/api/v1/credentials/${id}`, {
         method: 'PATCH',
@@ -48,16 +92,16 @@ export const createConfigSlice: StateCreator<AppState, [], [], ConfigSlice> = (s
       if (!response.ok) throw new Error('Failed to update credential');
       toast.success("Credential updated successfully");
       await get().fetchCredentials();
-    } catch (error: any) { toast.error(error.message); }
+    } catch (error) { toast.error((error as Error).message); }
   },
 
-  deleteCredential: async (id) => {
+  deleteCredential: async (id: string) => {
     try {
       const response = await fetch(`${API_URL}/api/v1/credentials/${id}`, { method: 'DELETE' });
       if (!response.ok) throw new Error('Failed to delete credential');
       toast.success("Credential removed");
       await get().fetchCredentials();
-    } catch (error: any) { toast.error(error.message); }
+    } catch (error) { toast.error((error as Error).message); }
   },
 
   fetchModels: async () => {
@@ -65,7 +109,12 @@ export const createConfigSlice: StateCreator<AppState, [], [], ConfigSlice> = (s
       const response = await fetch(`${API_URL}/api/v1/models`);
       if (!response.ok) throw new Error('Failed to fetch models');
       const data = await response.json();
-      const mappedModels = data.map((m: any) => ({
+      const mappedModels = data.map((m: { 
+        id: string; name: string; model_name: string; description?: string;
+        credential_id: string; base_url?: string; temperature?: number;
+        max_tokens?: number; max_completion_tokens?: number;
+        is_default: boolean; model_type: ModelConfig['model_type']
+      }) => ({
         id: m.id, name: m.name, model_name: m.model_name, description: m.description,
         credentialId: m.credential_id, baseUrl: m.base_url, temperature: m.temperature,
         maxTokens: m.max_tokens, maxCompletionTokens: m.max_completion_tokens,
@@ -75,7 +124,7 @@ export const createConfigSlice: StateCreator<AppState, [], [], ConfigSlice> = (s
     } catch (error) { console.error(error); }
   },
 
-  addModel: async (modelConfig) => {
+  addModel: async (modelConfig: Omit<ModelConfig, 'id'>) => {
     const modelData = {
       name: modelConfig.name, model_name: modelConfig.model_name, description: modelConfig.description,
       credential_id: modelConfig.credentialId, base_url: modelConfig.baseUrl, temperature: modelConfig.temperature,
@@ -89,18 +138,23 @@ export const createConfigSlice: StateCreator<AppState, [], [], ConfigSlice> = (s
       if (!response.ok) throw new Error('Failed to add model');
       toast.success("Model added successfully");
       await get().fetchModels();
-    } catch (error: any) { toast.error(error.message); }
+    } catch (error) { toast.error((error as Error).message); }
   },
 
-  duplicateModel: (id) => {
-    const original = get().models.find(m => m.id === id);
+  duplicateModel: (id: string) => {
+    const original = get().models.find((m: ModelConfig) => m.id === id);
     if (!original) return;
-    const { id: _, ...copyData } = original;
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const { id: _unused, ...copyData } = original;
     get().addModel({ ...copyData, name: `${original.name} (Copy)`, isDefault: false });
   },
 
-  updateModel: async (id, modelUpdate) => {
-    const mappedUpdate: any = {};
+  updateModel: async (id: string, modelUpdate: Partial<ModelConfig>) => {
+    const mappedUpdate: Partial<{
+      name: string; model_name: string; description: string; credential_id: string;
+      base_url: string | null; temperature: number | null; max_tokens: number | null;
+      max_completion_tokens: number | null; is_default: boolean; model_type: string;
+    }> = {};
     if (modelUpdate.name !== undefined) mappedUpdate.name = modelUpdate.name;
     if (modelUpdate.model_name !== undefined) mappedUpdate.model_name = modelUpdate.model_name;
     if (modelUpdate.description !== undefined) mappedUpdate.description = modelUpdate.description;
@@ -118,10 +172,10 @@ export const createConfigSlice: StateCreator<AppState, [], [], ConfigSlice> = (s
       if (!response.ok) throw new Error('Failed to update model');
       toast.success("Model updated successfully");
       await get().fetchModels();
-    } catch (error: any) { toast.error(error.message); }
+    } catch (error) { toast.error((error as Error).message); }
   },
 
-  deleteModel: async (id) => {
+  deleteModel: async (id: string) => {
     try {
       const response = await fetch(`${API_URL}/api/v1/models/${id}`, { method: 'DELETE' });
       if (!response.ok) throw new Error('Failed to delete model');
@@ -130,52 +184,53 @@ export const createConfigSlice: StateCreator<AppState, [], [], ConfigSlice> = (s
       if (systemAiModelId === id) setSystemAiModelId(null);
       if (embeddingModelId === id) setEmbeddingModelId(null);
       await get().fetchModels();
-    } catch (error: any) { toast.error(error.message); }
+    } catch (error) { toast.error((error as Error).message); }
   },
 
-  setDefaultModelConfig: async (id) => {
+  setDefaultModelConfig: async (id: string) => {
     try {
       const response = await fetch(`${API_URL}/api/v1/models/${id}/set-default`, { method: 'POST' });
       if (!response.ok) throw new Error('Failed to set default model');
       toast.success("Default model updated");
       await get().fetchModels();
-    } catch (error: any) { toast.error(error.message); }
+    } catch (error) { toast.error((error as Error).message); }
   },
 
-  setSystemAiModelId: (id) => {
+  setSystemAiModelId: (id: string | null) => {
     set({ systemAiModelId: id });
     if (id) localStorage.setItem('default_system_ai_model_id', id); else localStorage.removeItem('default_system_ai_model_id');
     get().updateSettings({ system_ai_model_id: id });
   },
 
-  setEmbeddingModelId: (id) => {
+  setEmbeddingModelId: (id: string | null) => {
     set({ embeddingModelId: id });
     if (id) localStorage.setItem('default_embedding_model_id', id); else localStorage.removeItem('default_embedding_model_id');
     get().updateSettings({ embedding_model_id: id });
   },
 
-  setDefaultModel: (model) => {
+  setDefaultModel: (model: string) => {
     localStorage.setItem('default_model', model);
     set({ defaultModel: model });
   },
 
-  updateToolConfig: (id, config) => {
-    set((state: AppState) => {
-      const newTools = state.globalTools.map((t: any) => t.id === id ? { ...t, ...config } : t);
-      localStorage.setItem('global_tools_v8', JSON.stringify(newTools));
+  updateToolConfig: (id: string, config: Partial<ToolConfig>) => {
+    set((state) => {
+      const newTools = state.globalTools.map((t) => t.id === id ? { ...t, ...config } : t);
+      localStorage.setItem('global_tools_v9', JSON.stringify(newTools));
       return { globalTools: newTools };
     });
   },
 
-  fetchCustomTools: async () => {
+  fetchCustomTools: async (framework?: string) => {
     try {
-      const response = await fetch(`${API_URL}/api/v1/custom-tools`);
+      const query = framework ? `?framework=${framework}` : '';
+      const response = await fetch(`${API_URL}/api/v1/custom-tools${query}`);
       if (!response.ok) throw new Error('Failed to fetch custom tools');
       set({ customTools: await response.json() });
     } catch (error) { console.error(error); }
   },
 
-  addCustomTool: async (tool) => {
+  addCustomTool: async (tool: Omit<CustomTool, 'id'>) => {
     try {
       const response = await fetch(`${API_URL}/api/v1/custom-tools`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(tool)
@@ -183,10 +238,10 @@ export const createConfigSlice: StateCreator<AppState, [], [], ConfigSlice> = (s
       if (!response.ok) throw new Error('Failed to add custom tool');
       await get().fetchCustomTools();
       toast.success('Custom Tool added!');
-    } catch (error: any) { toast.error(error.message); }
+    } catch (error) { toast.error((error as Error).message); }
   },
 
-  updateCustomTool: async (id, config) => {
+  updateCustomTool: async (id: string, config: Partial<CustomTool>) => {
     try {
       const response = await fetch(`${API_URL}/api/v1/custom-tools/${id}`, {
         method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(config)
@@ -194,16 +249,16 @@ export const createConfigSlice: StateCreator<AppState, [], [], ConfigSlice> = (s
       if (!response.ok) throw new Error('Failed to update custom tool');
       await get().fetchCustomTools();
       toast.success('Custom Tool updated!');
-    } catch (error: any) { toast.error(error.message); }
+    } catch (error) { toast.error((error as Error).message); }
   },
 
-  deleteCustomTool: async (id) => {
+  deleteCustomTool: async (id: string) => {
     try {
       const response = await fetch(`${API_URL}/api/v1/custom-tools/${id}`, { method: 'DELETE' });
       if (!response.ok) throw new Error('Failed to delete custom tool');
       await get().fetchCustomTools();
       toast.success('Custom Tool removed.');
-    } catch (error: any) { toast.error(error.message); }
+    } catch (error) { toast.error((error as Error).message); }
   },
 
   fetchMCPServers: async () => {
@@ -211,7 +266,10 @@ export const createConfigSlice: StateCreator<AppState, [], [], ConfigSlice> = (s
       const response = await fetch(`${API_URL}/api/v1/mcp-servers`);
       if (!response.ok) throw new Error('Failed to fetch MCP servers');
       const servers = await response.json();
-      const mappedServers = servers.map((s: any) => ({
+      const mappedServers = servers.map((s: {
+        id: string; name: string; transport_type: string; command?: string;
+        args?: string[]; env_vars?: Record<string, string>; url?: string; headers?: Record<string, string>;
+      }) => ({
         id: s.id, name: s.name, transportType: s.transport_type, command: s.command,
         args: s.args, envVars: s.env_vars, url: s.url, headers: s.headers
       }));
@@ -219,7 +277,7 @@ export const createConfigSlice: StateCreator<AppState, [], [], ConfigSlice> = (s
     } catch (error) { console.error(error); }
   },
 
-  addMCPServer: async (server) => {
+  addMCPServer: async (server: Omit<MCPServer, 'id'>) => {
     try {
       const payload = {
         name: server.name, transport_type: server.transportType, command: server.command,
@@ -231,12 +289,15 @@ export const createConfigSlice: StateCreator<AppState, [], [], ConfigSlice> = (s
       if (!response.ok) throw new Error('Failed to add MCP server');
       await get().fetchMCPServers();
       toast.success('MCP Server added!');
-    } catch (error: any) { toast.error(error.message); }
+    } catch (error) { toast.error((error as Error).message); }
   },
 
-  updateMCPServer: async (id, config) => {
+  updateMCPServer: async (id: string, config: Partial<MCPServer>) => {
     try {
-      const payload: any = {};
+      const payload: Partial<{
+        name: string; transport_type: string; command: string;
+        args: string[]; env_vars: Record<string, string>; url: string; headers: Record<string, string>;
+      }> = {};
       if (config.name !== undefined) payload.name = config.name;
       if (config.transportType !== undefined) payload.transport_type = config.transportType;
       if (config.command !== undefined) payload.command = config.command;
@@ -250,17 +311,79 @@ export const createConfigSlice: StateCreator<AppState, [], [], ConfigSlice> = (s
       if (!response.ok) throw new Error('Failed to update MCP server');
       await get().fetchMCPServers();
       toast.success('MCP Server updated!');
-    } catch (error: any) { toast.error(error.message); }
+    } catch (error) { toast.error((error as Error).message); }
   },
 
-  deleteMCPServer: async (id) => {
+  deleteMCPServer: async (id: string) => {
     try {
       const response = await fetch(`${API_URL}/api/v1/mcp-servers/${id}`, { method: 'DELETE' });
       if (!response.ok) throw new Error('Failed to delete MCP server');
       await get().fetchMCPServers();
       toast.success('MCP Server removed.');
-    } catch (error: any) { toast.error(error.message); }
+    } catch (error) { toast.error((error as Error).message); }
   },
+  
+  fetchSkills: async () => {
+    try {
+      const response = await fetch(`${API_URL}/api/v1/skills`);
+      if (!response.ok) throw new Error('Failed to fetch skills');
+      set({ skills: await response.json() });
+    } catch (error) { console.error(error); }
+  },
+
+  importSkill: async (url: string) => {
+    try {
+      const response = await fetch(`${API_URL}/api/v1/skills/import`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url }),
+      });
+      if (!response.ok) {
+        const errorData = await response.json();
+        const fullDetail: string = errorData.detail || 'Failed to import skill';
+        // Take only the first line for the toast (backend may return multiline messages)
+        const toastMessage = fullDetail.split('\n')[0];
+        console.error('[importSkill] Backend error:', fullDetail);
+        throw new Error(toastMessage);
+      }
+      toast.success("Skill imported successfully!");
+      await get().fetchSkills();
+    } catch (error) { 
+      toast.error((error as Error).message);
+      throw error; // Re-throw so the component can reset its loading state
+    }
+  },
+
+  uploadSkill: async (file: File) => {
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      const response = await fetch(`${API_URL}/api/v1/skills/upload`, {
+        method: 'POST',
+        body: formData,
+      });
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.detail || 'Failed to upload skill');
+      }
+      toast.success("Skill uploaded successfully");
+      await get().fetchSkills();
+    } catch (error) {
+      toast.error((error as Error).message);
+      throw error;
+    }
+  },
+
+  deleteSkill: async (id: string) => {
+
+    try {
+      const response = await fetch(`${API_URL}/api/v1/skills/${id}`, { method: 'DELETE' });
+      if (!response.ok) throw new Error('Failed to delete skill');
+      toast.success("Skill removed");
+      await get().fetchSkills();
+    } catch (error) { toast.error((error as Error).message); }
+  },
+
 
   fetchSettings: async () => {
     try {
@@ -277,7 +400,7 @@ export const createConfigSlice: StateCreator<AppState, [], [], ConfigSlice> = (s
     } catch (error) { console.error("Error fetching settings:", error); }
   },
 
-  updateSettings: async (settings) => {
+  updateSettings: async (settings: { active_workspace_id?: string | null; system_ai_model_id?: string | null; embedding_model_id?: string | null }) => {
     try {
       const response = await fetch(`${API_URL}/api/v1/settings`, {
         method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(settings),
@@ -290,6 +413,6 @@ export const createConfigSlice: StateCreator<AppState, [], [], ConfigSlice> = (s
         embeddingModelId: updated.embedding_model_id
       });
       toast.success("Settings updated");
-    } catch (error: any) { toast.error(error.message); }
+    } catch (error) { toast.error((error as Error).message); }
   },
 });

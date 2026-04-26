@@ -1,5 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useStore } from '../store/index';
+import type { AppState } from '../store/index';
+import type { AppNode, AppEdge } from '../types/nodes.types';
 import { X, ChevronDown, ChevronUp, Trash2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { ConfirmationModal } from './ConfirmationModal';
@@ -7,15 +9,23 @@ import { ChatMessage } from './ChatMessage';
 import { ChatInput } from './ChatInput';
 
 export function ResizableChatPanel() {
-  const isChatVisible = useStore((state) => state.isChatVisible);
-  const setIsChatVisible = useStore((state) => state.setIsChatVisible);
-  const startRealExecution = useStore((state) => state.startRealExecution);
-  const updateNodeData = useStore((state) => state.updateNodeData);
-  const nodes = useStore((state) => state.nodes);
-  const edges = useStore((state) => state.edges);
-  const messages = useStore((state) => state.messages);
-  const setMessages = useStore((state) => state.setMessages);
-  const clearChat = useStore((state) => state.clearChat);
+  const isChatVisible = useStore((state: AppState) => state.isChatVisible);
+  const setIsChatVisible = useStore((state: AppState) => state.setIsChatVisible);
+  const startRealExecution = useStore((state: AppState) => state.startRealExecution);
+  const updateNodeData = useStore((state: AppState) => state.updateNodeData);
+  const nodes = useStore((state: AppState) => state.nodes, (oldNodes: AppNode[], newNodes: AppNode[]) => {
+    if (oldNodes.length !== newNodes.length) return false;
+    for (let i = 0; i < oldNodes.length; i++) {
+        if (oldNodes[i].id !== newNodes[i].id) return false;
+        if (oldNodes[i].type !== newNodes[i].type) return false;
+        if (JSON.stringify(oldNodes[i].data) !== JSON.stringify(newNodes[i].data)) return false;
+    }
+    return true;
+  });
+  const edges = useStore((state: AppState) => state.edges, (oldEdges: AppEdge[], newEdges: AppEdge[]) => JSON.stringify(oldEdges) === JSON.stringify(newEdges));
+  const messages = useStore((state: AppState) => state.messages);
+  const setMessages = useStore((state: AppState) => state.setMessages);
+  const clearChat = useStore((state: AppState) => state.clearChat);
 
   const [chatHeight, setChatHeight] = useState(300);
   const [isResizing, setIsResizing] = useState(false);
@@ -75,79 +85,107 @@ export function ResizableChatPanel() {
 
     setMessages(prev => [...prev, userMessage]);
 
-    // Locating the Chat Node and its target Crew to map exactly
-    const chatNode = nodes.find(n => n.type === 'chat');
+    // Find the Chat node
+    const chatNode = nodes.find((n: AppNode) => n.type === 'chat');
     if (!chatNode) {
       setMessages(prev => [...prev, { id: Date.now().toString(), role: 'assistant', content: 'No Chat Trigger found on the canvas.' }]);
       return;
     }
 
-    const inputMapping = (chatNode.data as any).inputMapping;
+    // Find the connected Crew/Graph node
+    const edgeToCrew = edges.find((e: AppEdge) => e.source === chatNode.id);
+    if (!edgeToCrew) {
+      setMessages(prev => [...prev, { id: Date.now().toString(), role: 'assistant', content: 'Chat Trigger is disconnected. Connect it to a Crew or Graph node.' }]);
+      return;
+    }
+    const crewNode = nodes.find((n: AppNode) => n.id === edgeToCrew.target);
+    if (!crewNode || crewNode.type !== 'crew') {
+      setMessages(prev => [...prev, { id: Date.now().toString(), role: 'assistant', content: 'Chat Trigger is not connected to a valid Crew/Graph node.' }]);
+      return;
+    }
+
+    const chatData = chatNode.data as Record<string, unknown>;
+    const inputMapping = chatData.inputMapping as string | undefined;
+    const isLangGraph = (nodes.some((n: AppNode) => n.type === 'state')); // LangGraph has a State node
+
+    // ── LangGraph path ────────────────────────────────────────────────────────
+    if (isLangGraph) {
+      // inputMapping is the stateKey where the user message goes (optional).
+      // If not configured, we still run — the graph may handle the input differently.
+      if (inputMapping) {
+        // Inject user text into the crew inputs under the mapped state key
+        const crewData = crewNode.data as Record<string, unknown>;
+        const currentInputs = (crewData.inputs as Record<string, unknown>) || {};
+        updateNodeData(crewNode.id, {
+          inputs: { ...currentInputs, [inputMapping]: text }
+        });
+      }
+
+      setIsLoading(true);
+      try {
+        // startRealExecution returns the final_result string which is already
+        // the correct extracted value (based on outputKey configured on the Graph node).
+        const finalResult = await startRealExecution();
+
+        // Display the result. If outputKey was a single field, this is already
+        // a clean string (e.g. the poem text). If it was the full state, it's JSON.
+        const displayContent = finalResult
+          ? finalResult
+          : 'Graph execution finished with no output.';
+
+        setMessages(prev => [...prev, {
+          id: Date.now().toString(),
+          role: 'assistant',
+          content: displayContent
+        }]);
+      } catch (err: unknown) {
+        const errorMessage = err instanceof Error ? err.message : String(err);
+        setMessages(prev => [...prev, {
+          id: Date.now().toString(),
+          role: 'assistant',
+          content: `Execution failed: ${errorMessage}`
+        }]);
+      } finally {
+        setIsLoading(false);
+      }
+      return;
+    }
+
+    // ── CrewAI path (original behaviour) ─────────────────────────────────────
     if (!inputMapping) {
       setMessages(prev => [...prev, { id: Date.now().toString(), role: 'assistant', content: 'Chat Trigger is not mapped to any Crew variable. Please configure it in node settings.' }]);
       return;
     }
 
-    const edgeToCrew = edges.find(e => e.source === chatNode.id);
-    if (!edgeToCrew) {
-      setMessages(prev => [...prev, { id: Date.now().toString(), role: 'assistant', content: 'Chat Trigger is disconnected. Connect it to a Crew.' }]);
-      return;
-    }
+    const includeHistory = (chatData.includeHistory as boolean) ?? false;
+    const systemMessage = (chatData.systemMessage as string)?.trim() || null;
 
-    const crewNode = nodes.find(n => n.id === edgeToCrew.target);
-    if (!crewNode || crewNode.type !== 'crew') {
-      setMessages(prev => [...prev, { id: Date.now().toString(), role: 'assistant', content: 'Chat Trigger is not connected to a valid Crew Node.' }]);
-      return;
-    }
-
-    // Build the OpenAI-format payload: system → history → current
-    const chatData = chatNode.data as any;
-    const includeHistory = chatData.includeHistory ?? false;
-    const systemMessage = chatData.systemMessage?.trim() || null;
-    const currentMessage = { role: 'user' as const, content: userMessage.content };
-
-    // Build ordered payload
     const payload: { role: string; content: string }[] = [];
-
-    // 1. System message at the top (if present)
-    if (systemMessage) {
-      payload.push({ role: 'system', content: systemMessage });
-    }
-
-    // 2. Conversation history (up to last 8 messages, excluding the one just added)
+    if (systemMessage) payload.push({ role: 'system', content: systemMessage });
     if (includeHistory) {
-      const history = messages.slice(-8)
-        .map(m => ({ role: m.role as string, content: m.content }));
+      const history = messages.slice(-8).map(m => ({ role: m.role as string, content: m.content }));
       payload.push(...history);
     }
+    payload.push({ role: 'user', content: userMessage.content });
 
-    // 3. Current user message
-    payload.push(currentMessage);
+    const crewData = crewNode.data as Record<string, unknown>;
+    const currentInputs = (crewData.inputs as Record<string, unknown>) || {};
+    updateNodeData(crewNode.id, { inputs: { ...currentInputs, [inputMapping]: payload } });
 
-    // Update Crew's inputs dict globally before executing
-    const currentInputs = (crewNode.data as any).inputs || {};
-    updateNodeData(crewNode.id, {
-      inputs: {
-        ...currentInputs,
-        [inputMapping]: payload
-      }
-    });
-
-    // Run the Crew
     setIsLoading(true);
     try {
       const finalResult = await startRealExecution();
-      
       setMessages(prev => [...prev, {
         id: Date.now().toString(),
         role: 'assistant',
         content: finalResult || 'Crew execution finished with no explicit payload.'
       }]);
-    } catch (err: any) {
+    } catch (err: unknown) {
+      const errorMessage = err instanceof Error ? err.message : String(err);
       setMessages(prev => [...prev, {
         id: Date.now().toString(),
         role: 'assistant',
-        content: `Execution failed: ${err.message}`
+        content: `Execution failed: ${errorMessage}`
       }]);
     } finally {
       setIsLoading(false);
@@ -165,12 +203,16 @@ export function ResizableChatPanel() {
   };
 
 
+  const isSidebarCollapsed = useStore((state: AppState) => state.isSidebarCollapsed);
+
   if (!isChatVisible) return null;
 
   return (
     <div
       ref={panelRef}
-      className={`absolute bottom-0 left-64 right-0 z-[50] bg-brand-bg border-t border-brand-border flex flex-col transition-[height] duration-0 shadow-2xl ${
+      className={`absolute bottom-0 ${isSidebarCollapsed ? 'left-20' : 'left-64'} right-0 z-[50] bg-brand-bg border-t border-brand-border flex flex-col ${
+        !isResizing && !isMinimized ? 'transition-[left] duration-300 ease-in-out' : ''
+      } shadow-2xl ${
         isMinimized ? 'h-12' : ''
       }`}
       style={!isMinimized ? { height: `${chatHeight}px` } : undefined}

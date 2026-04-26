@@ -21,22 +21,25 @@ def get_embedding_key(session: Session) -> Optional[str]:
     return credential.key if credential else os.getenv("OPENAI_API_KEY")
 
 def get_embedding_model_config(session: Session) -> dict:
-    """Retorna a configuração completa (key e model_name) do embedding."""
+    """Retorna a configuração completa (key, model_name e base_url) do embedding."""
     settings = session.exec(select(AppSettings).where(AppSettings.user_id == ROOT_USER_ID)).first()
     
     # Defaults (No fallback to env var to allow "Safety Lock" when not selected)
     api_key = None
     model_name = "text-embedding-3-small"
+    base_url = None
     
     if settings and settings.embedding_model_id:
         model = session.get(LLMModel, settings.embedding_model_id)
         if model:
             model_name = model.model_name
+            # Fallback para None se for "default" para não quebrar o cliente OpenAI
+            base_url = model.base_url if model.base_url and model.base_url != "default" else None
             credential = session.get(Credential, model.credential_id)
             if credential:
                 api_key = credential.key
                 
-    return {"api_key": api_key, "model_name": model_name}
+    return {"api_key": api_key, "model_name": model_name, "base_url": base_url}
 
 def get_system_llm(session: Session, root_user_id: str) -> Optional[LLM]:
     # 1. Pega o ID do modelo nas configurações

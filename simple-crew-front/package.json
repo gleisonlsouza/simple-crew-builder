@@ -1,16 +1,23 @@
 {
   "name": "simple-crew-front",
   "private": true,
-  "version": "0.0.6",
+  "version": "0.0.7",
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "prebuild": "npm run lint && npm run test && npm run test:e2e",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
     "preview": "vite preview",
     "test": "vitest run",
+    "test:unit": "vitest run src/store src/hooks src/utils",
+    "test:components": "vitest run src/components src/pages src/nodes",
     "test:coverage": "vitest run --coverage",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "test:e2e:coverage": "cross-env VITE_COVERAGE=true playwright test && nyc report --reporter=html",
+    "coverage:unit": "vitest run src/store src/hooks src/utils --coverage --coverage.include=\"src/{store,hooks,utils}/**\"",
+    "coverage:components": "vitest run src/components src/pages src/nodes --coverage --coverage.include=\"src/{components,pages,nodes}/**\"",
+    "coverage:all": "npm run test:coverage"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",
@@ -43,22 +50,26 @@
     "@testing-library/dom": "^10.4.1",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.2",
+    "@testing-library/user-event": "^14.6.1",
     "@types/node": "^24.12.0",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
     "@types/uuid": "^10.0.0",
     "@vitejs/plugin-react": "^6.0.0",
     "@vitest/coverage-v8": "^4.1.2",
+    "cross-env": "^10.1.0",
     "eslint": "^9.39.4",
     "eslint-plugin-react-hooks": "^7.0.1",
     "eslint-plugin-react-refresh": "^0.5.2",
     "globals": "^17.4.0",
     "happy-dom": "^20.8.9",
     "jsdom": "^29.0.1",
+    "nyc": "^18.0.0",
     "tailwindcss": "^4.2.1",
     "typescript": "~5.9.3",
     "typescript-eslint": "^8.56.1",
     "vite": "^8.0.0",
+    "vite-plugin-istanbul": "^8.0.0",
     "vitest": "^4.1.2"
   }
 }

@@ -1,15 +1,15 @@
 import { motion } from 'motion/react';
-import { useMemo } from 'react';
+import { useState } from 'react';
 
 export const WorkingParticles = ({ color }: { color: string }) => {
-  const particles = useMemo(() => [...Array(6)].map((_, i) => ({
+  const [particles] = useState(() => [...Array(6)].map((_, i) => ({
     id: i,
     x: (Math.random() - 0.5) * 40,
     y: (Math.random() - 0.5) * 40,
     size: 2 + Math.random() * 3,
     delay: Math.random() * 2,
     duration: 1 + Math.random()
-  })), []);
+  })));
 
   return (
     <div className="absolute inset-0 pointer-events-none">

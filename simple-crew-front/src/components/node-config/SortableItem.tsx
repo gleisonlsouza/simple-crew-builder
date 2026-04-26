@@ -30,6 +30,7 @@ export function SortableItem({ id, name }: SortableItemProps) {
     <div
       ref={setNodeRef}
       style={style}
+      data-testid={`draggable-item-${id}`}
       className={`flex items-center gap-3 p-2.5 bg-brand-card border rounded-lg mb-2 transition-shadow ${
         isDragging 
           ? 'opacity-90 ring-2 ring-blue-500 dark:ring-blue-400 shadow-lg border-blue-200 dark:border-blue-800' 
@@ -39,6 +40,7 @@ export function SortableItem({ id, name }: SortableItemProps) {
       <div 
         {...attributes} 
         {...listeners} 
+        data-testid={`move-handle-${id}`}
         className="cursor-grab active:cursor-grabbing hover:bg-brand-bg p-1.5 rounded text-brand-muted hover:text-brand-text transition-colors"
       >
         <GripVertical className="w-4 h-4" />

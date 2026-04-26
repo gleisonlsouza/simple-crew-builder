@@ -1,6 +1,6 @@
 import type { StateCreator } from 'zustand';
 import toast from 'react-hot-toast';
-import type { AppState, WorkspaceSlice } from '../../types/store.types';
+import type { AppState, WorkspaceSlice, Workspace } from '../../types/store.types';
 
 const API_URL = import.meta.env.VITE_API_URL || '';
 
@@ -20,7 +20,7 @@ export const createWorkspaceSlice: StateCreator<AppState, [], [], WorkspaceSlice
       // Sync project workspace name if project is already loaded
       const { currentProjectWorkspaceId } = get();
       if (currentProjectWorkspaceId) {
-        const ws = workspaces.find((w: any) => w.id === currentProjectWorkspaceId);
+        const ws = workspaces.find((w: Workspace) => w.id === currentProjectWorkspaceId);
         if (ws) set({ currentProjectWorkspaceName: ws.name });
       }
     } catch (error) { console.error("Fetch workspaces error:", error); }
@@ -37,7 +37,7 @@ export const createWorkspaceSlice: StateCreator<AppState, [], [], WorkspaceSlice
       }
       toast.success("Workspace created successfully");
       await get().fetchWorkspaces();
-    } catch (error: any) { toast.error(error.message); }
+    } catch (error) { toast.error((error as Error).message); }
   },
 
   updateWorkspace: async (id, workspace) => {
@@ -48,7 +48,7 @@ export const createWorkspaceSlice: StateCreator<AppState, [], [], WorkspaceSlice
       if (!response.ok) throw new Error('Failed to update workspace');
       toast.success("Workspace updated successfully");
       await get().fetchWorkspaces();
-    } catch (error: any) { toast.error(error.message); }
+    } catch (error) { toast.error((error as Error).message); }
   },
 
   deleteWorkspace: async (id) => {
@@ -63,7 +63,7 @@ export const createWorkspaceSlice: StateCreator<AppState, [], [], WorkspaceSlice
       if (currentProjectWorkspaceId === id) { set({ currentProjectWorkspaceId: null }); }
       toast.success("Workspace deleted successfully");
       await fetchWorkspaces();
-    } catch (error: any) { toast.error(error.message); }
+    } catch (error) { toast.error((error as Error).message); }
   },
 
   openWorkspace: async (id) => {
@@ -71,7 +71,7 @@ export const createWorkspaceSlice: StateCreator<AppState, [], [], WorkspaceSlice
       const response = await fetch(`${API_URL}/api/v1/workspaces/${id}/open`, { method: 'POST' });
       if (!response.ok) throw new Error('Failed to open workspace');
       toast.success("Opening workspace folder...");
-    } catch (error: any) { toast.error(error.message); }
+    } catch (error) { toast.error((error as Error).message); }
   },
 
   setActiveWorkspaceId: (id) => set({ activeWorkspaceId: id, currentExplorerWsId: null }),
@@ -83,8 +83,8 @@ export const createWorkspaceSlice: StateCreator<AppState, [], [], WorkspaceSlice
       const response = await fetch(`${API_URL}/api/v1/workspaces/${wsId}/files`);
       if (!response.ok) throw new Error('Failed to fetch workspace files');
       return await response.json();
-    } catch (error: any) {
-      toast.error(error.message);
+    } catch (error) {
+      toast.error((error as Error).message);
       return [];
     }
   },
@@ -95,8 +95,8 @@ export const createWorkspaceSlice: StateCreator<AppState, [], [], WorkspaceSlice
       if (!response.ok) throw new Error('Failed to fetch file content');
       const data = await response.json();
       return data.content;
-    } catch (error: any) {
-      toast.error(error.message);
+    } catch (error) {
+      toast.error((error as Error).message);
       return '';
     }
   },
@@ -106,7 +106,7 @@ export const createWorkspaceSlice: StateCreator<AppState, [], [], WorkspaceSlice
       const formData = new FormData();
       Array.from(files).forEach((file) => {
         formData.append('files', file);
-        const path = (file as any).webkitRelativePath || file.name;
+        const path = (file as File & { webkitRelativePath?: string }).webkitRelativePath || file.name;
         formData.append('paths', path);
       });
       const response = await fetch(`${API_URL}/api/v1/workspaces/${wsId}/upload`, { method: 'POST', body: formData });
@@ -115,8 +115,8 @@ export const createWorkspaceSlice: StateCreator<AppState, [], [], WorkspaceSlice
         throw new Error(errData.detail || 'Failed to upload files');
       }
       toast.success('Upload complete!');
-    } catch (error: any) {
-      toast.error(error.message);
+    } catch (error) {
+      toast.error((error as Error).message);
       throw error;
     }
   },
@@ -129,8 +129,8 @@ export const createWorkspaceSlice: StateCreator<AppState, [], [], WorkspaceSlice
         throw new Error(errData.detail || 'Failed to delete file');
       }
       toast.success('Deleted successfully');
-    } catch (error: any) {
-      toast.error(error.message);
+    } catch (error) {
+      toast.error((error as Error).message);
       throw error;
     }
   },
@@ -145,8 +145,7 @@ export const createWorkspaceSlice: StateCreator<AppState, [], [], WorkspaceSlice
       link.click();
       document.body.removeChild(link);
       toast.success("Starting zip download... 📦");
-    } catch (error: any) {
-      console.error("Error downloading zip:", error);
+    } catch {
       toast.error("Failed to download ZIP.");
     }
   },

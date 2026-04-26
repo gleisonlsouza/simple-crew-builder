@@ -1,7 +1,7 @@
 import React, { memo, useState } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 import { Globe, Lock, Settings, Copy, RefreshCw, Plus, X, Sparkles, Zap } from 'lucide-react';
-import { HighlightedTextField } from '../HighlightedTextField';
+import HighlightedTextField from '../HighlightedTextField';
 import type { WebhookNodeData } from '../../types/nodes.types';
 import toast from 'react-hot-toast';
 import { WebhookMapperModal } from './WebhookMapperModal';
@@ -10,8 +10,8 @@ interface WebhookFormProps {
   data: WebhookNodeData;
   nodeId: string;
   updateNodeData: (id: string, data: Partial<WebhookNodeData>) => void;
-  onFieldKeyDown: (e: React.KeyboardEvent) => void;
-  onFieldChange: (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>, field: string, updateFn: (val: string) => void) => void;
+  onFieldKeyDown: (e: React.KeyboardEvent<HTMLInputElement | HTMLTextAreaElement>) => void;
+  onFieldChange: (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement> | { target: { value: string } }, field: string, updateFn: (val: string) => void) => void;
   allProjectVariables: string[];
 }
 
@@ -54,10 +54,10 @@ export const WebhookForm: React.FC<WebhookFormProps> = memo(({
   const getBackendUrl = () => {
     try {
       if (import.meta.env?.VITE_API_URL) return import.meta.env.VITE_API_URL;
-    } catch (e) {
+    } catch {
       // Fallback for environments where import.meta is restricted
     }
-    return (window as any).VITE_API_URL || 'http://localhost:3001';
+    return (window as unknown as { VITE_API_URL?: string }).VITE_API_URL || 'http://localhost:3001';
   };
 
   const backendUrl = getBackendUrl();
@@ -130,7 +130,7 @@ export const WebhookForm: React.FC<WebhookFormProps> = memo(({
             type="input"
             value={data.path || ''}
             onKeyDown={onFieldKeyDown}
-            onChange={handlePathChange}
+            onChange={handlePathChange as (e: { target: { value: string } }) => void}
             placeholder="e.g. stripe-payment-success"
           />
           <p className="text-[9px] text-brand-muted">
@@ -198,7 +198,7 @@ export const WebhookForm: React.FC<WebhookFormProps> = memo(({
         ].map(tab => (
           <button
             key={tab.id}
-            onClick={() => setActiveTab(tab.id as any)}
+            onClick={() => setActiveTab(tab.id as 'basic' | 'security' | 'mappings')}
             className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all ${
               activeTab === tab.id
                 ? 'bg-orange-500/10 text-orange-500 border border-orange-500/20 shadow-sm'
