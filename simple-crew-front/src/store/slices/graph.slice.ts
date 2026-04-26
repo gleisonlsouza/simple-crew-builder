@@ -290,7 +290,6 @@ export const createGraphSlice: StateCreator<AppState, [], [], GraphSlice> = (set
       const isTaskToState = sourceNode.type === 'task' && targetNode.type === 'state';
 
       if (!isCrewToAgent && !isAgentToTask && !isChatToCrew && !isWebhookToCrew && !isAgentToTool && !isTaskToTool && !isAgentToMcp && !isTaskToMcp && !isStateToCrew && !isSchemaToAgent && !isSchemaToState && !isRouterToAgent && !isRouterToTask && !isRouterToRouter && !isAgentToRouter && !isCrewToRouter && !isAgentToAgent && !isAgentToState && !isTaskToState) {
-        console.warn(`[Rules] Invalid connection blocked: ${sourceNode.type} -> ${targetNode.type}`);
         return state;
       }
 
@@ -930,7 +929,6 @@ export const createGraphSlice: StateCreator<AppState, [], [], GraphSlice> = (set
   setExecutionResult: (result: string | null) => set({ executionResult: result }),
 
   resetProject: () => {
-    console.log('[GraphSlice] Resetting project state');
     set({
       nodes: [],
       edges: [],

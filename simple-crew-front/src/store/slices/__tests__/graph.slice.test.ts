@@ -122,13 +122,10 @@ describe('graphSlice', () => {
       { id: 'a1', type: 'agent', position: { x: 0, y: 0 }, data: { name: 'A1' } } as unknown as AppNode
     ];
     
-    const consoleSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
     // Task to Agent is invalid (only Agent to Task is allowed)
     slice.onConnect({ source: 't1', target: 'a1', sourceHandle: 'right-source', targetHandle: 'left-target' });
     
     expect(mockState.edges).toHaveLength(0);
-    expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('Invalid connection blocked'));
-    consoleSpy.mockRestore();
   });
 
   it('onConnect: allows valid connections and updates taskOrder', () => {
@@ -283,13 +280,10 @@ describe('graphSlice', () => {
       { id: 't1', type: 'task', data: { name: 'T' } } as unknown as AppNode
     ];
     
-    const consoleSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
     // Connection from Task (target) to Agent (source) is backwards
     slice.onConnect({ source: 't1', target: 'a1', sourceHandle: 'right-source', targetHandle: 'left-target' });
     
     expect(mockState.edges).toHaveLength(0);
-    expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('Invalid connection blocked'));
-    consoleSpy.mockRestore();
   });
 
   it('onConnect: prevents Task to Task connections', () => {
@@ -298,12 +292,9 @@ describe('graphSlice', () => {
       { id: 't2', type: 'task', data: { name: 'T2' } } as unknown as AppNode
     ];
     
-    const consoleSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
     slice.onConnect({ source: 't1', target: 't2', sourceHandle: 'right-source', targetHandle: 'left-target' });
     
     expect(mockState.edges).toHaveLength(0);
-    expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('Invalid connection blocked'));
-    consoleSpy.mockRestore();
   });
 
   it('validateGraph: covers all node types (crew, agent, task)', () => {

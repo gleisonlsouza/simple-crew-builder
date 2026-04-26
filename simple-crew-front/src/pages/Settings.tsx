@@ -1163,8 +1163,16 @@ const SettingsPage = () => {
                           <BookOpen className="w-6 h-6" />
                         </div>
                         <div className="flex-1">
-                          <h3 className="font-bold text-brand-text">{skill.name}</h3>
-                          <p className="text-xs text-brand-muted line-clamp-1">{skill.description || 'No description'}</p>
+                          <div className="flex items-center gap-3">
+                            <h3 className="font-bold text-brand-text">{skill.name}</h3>
+                            {skill.is_vectorized && (
+                              <span className="text-[10px] font-bold text-emerald-500 bg-emerald-500/10 px-2 py-0.5 rounded-full flex items-center gap-1">
+                                <Database className="w-3 h-3" />
+                                RAG READY
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-xs text-brand-muted line-clamp-1 mt-1">{skill.description || 'No description'}</p>
                           <div className="flex items-center gap-3 mt-1.5">
                             {skill.source_url && (
                               <span className="flex items-center gap-1 text-[9px] font-mono text-indigo-500 bg-brand-bg border border-brand-border px-2 py-0.5 rounded-md truncate max-w-[250px]">

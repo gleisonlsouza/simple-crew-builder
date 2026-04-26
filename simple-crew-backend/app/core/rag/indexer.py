@@ -152,11 +152,13 @@ def process_skill_content(skill_id: str, skill_name: str, skill_description: str
 
             # Cria o nó AgentSkill
             skill_query = """
-            MERGE (s:AgentSkill {id: $skill_id})
-            ON CREATE SET s.name = $skill_name, s.description = $skill_description
-            ON MATCH SET s.name = $skill_name, s.description = $skill_description
+            MATCH (kb:KnowledgeBase {id: $kb_id})
+            MERGE (s:AgentSkill:Document {id: $skill_id})
+            ON CREATE SET s.name = $skill_name, s.description = $skill_description, s.filename = $skill_name + '.md', s.status = 'success', s.created_at = datetime(), s.size = 0
+            ON MATCH SET s.name = $skill_name, s.description = $skill_description, s.filename = $skill_name + '.md', s.status = 'success'
+            MERGE (s)-[:BELONGS_TO]->(kb)
             """
-            neo4j_session.run(skill_query, skill_id=skill_id, skill_name=skill_name, skill_description=skill_description or "")
+            neo4j_session.run(skill_query, skill_id=skill_id, skill_name=skill_name, skill_description=skill_description or "", kb_id=kb_id)
             
             # Limpa chunks antigos se houver atualização da mesma skill
             clear_chunks_query = "MATCH (c:Chunk)-[:FROM_SKILL]->(s:AgentSkill {id: $skill_id}) DETACH DELETE c"
@@ -188,8 +190,10 @@ def process_skill_content(skill_id: str, skill_name: str, skill_description: str
                     index: $index,
                     embedding: $embedding,
                     created_at: datetime()
-                })-[:BELONGS_TO]->(kb)
+                })
+                CREATE (c)-[:BELONGS_TO]->(kb)
                 CREATE (c)-[:FROM_SKILL]->(s)
+                CREATE (c)-[:FROM_DOCUMENT]->(s)
                 """
                 neo4j_session.run(query, 
                     kb_id=kb_id, 
@@ -199,6 +203,13 @@ def process_skill_content(skill_id: str, skill_name: str, skill_description: str
                     embedding=embedding
                 )
                 
+        # Atualiza a flag no Postgres
+        from ...models import AgentSkill
+        skill = db_session.get(AgentSkill, skill_id)
+        if skill:
+            skill.is_vectorized = True
+            db_session.commit()
+
         print(f"DEBUG: Successfully indexed {len(chunks)} chunks for skill: {skill_name}")
         return True
     except Exception as e:

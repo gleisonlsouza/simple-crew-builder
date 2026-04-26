@@ -246,7 +246,6 @@ const FlowCanvas = () => {
 // 2. Componente Pai (Fica 100% estático durante o drag)
 function FlowBuilder() {
   const { id } = useParams();
-  console.log(`[Builder] Rendering FlowBuilder with id param: ${id}`);
   const navigate = useNavigate();
   const reactFlowWrapper = useRef<HTMLDivElement>(null);
 
@@ -258,7 +257,6 @@ function FlowBuilder() {
     canvasLayout, setCanvasLayout
   } = useStore(
     useShallow((state) => {
-      console.log(`[Builder] Store State - Name: ${state.currentProjectName}, ID: ${state.currentProjectId}`);
       return {
         isExecuting: state.isExecuting,
         startRealExecution: state.startRealExecution,

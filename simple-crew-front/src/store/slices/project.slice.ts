@@ -154,9 +154,7 @@ export const createProjectSlice: StateCreator<AppState, [], [], ProjectSlice> = 
   },
 
   loadProject: async (projectId: string) => {
-    console.log(`[ProjectSlice] loadProject called for: ${projectId}. Current ID in store: ${get().currentProjectId}`);
     if (projectId === get().currentProjectId) {
-      console.log(`[ProjectSlice] loadProject early return - already loaded.`);
       return;
     }
     try {
@@ -244,7 +242,6 @@ export const createProjectSlice: StateCreator<AppState, [], [], ProjectSlice> = 
       if (!response.ok) throw new Error('Failed to delete project');
 
       if (get().currentProjectId === projectId) {
-        console.log('[ProjectSlice] Resetting project state');
         get().resetProject();
       }
 
@@ -278,7 +275,6 @@ export const createProjectSlice: StateCreator<AppState, [], [], ProjectSlice> = 
       if (!response.ok) throw new Error('Failed to create project');
       const saved = await response.json();
 
-      console.log(`[ProjectSlice] Project created. Saved Name: ${saved.name}, ID: ${saved.id}`);
       set((state: AppState) => ({
         savedProjects: [...state.savedProjects, saved],
         currentProjectId: saved.id,

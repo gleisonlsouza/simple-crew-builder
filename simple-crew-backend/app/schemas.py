@@ -561,6 +561,7 @@ class AgentSkillBase(BaseModel):
     description: Optional[str] = None
     content: str
     source_url: Optional[str] = None
+    is_vectorized: bool = False
 
 class AgentSkillCreate(AgentSkillBase):
     pass

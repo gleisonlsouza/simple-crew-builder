@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime
 from typing import Optional, Dict, Any
-from sqlalchemy import Column, DateTime, func, JSON, ForeignKey
+from sqlalchemy import Column, DateTime, func, JSON, ForeignKey, Boolean
 from enum import Enum
 from sqlmodel import SQLModel, Field, Relationship
 
@@ -220,6 +220,7 @@ class AgentSkill(SQLModel, table=True):
     created_at: datetime = Field(
         sa_column=Column(DateTime(timezone=True), server_default=func.now())
     )
+    is_vectorized: bool = Field(default=False, sa_column=Column(Boolean, default=False))
 
     user: Optional[User] = Relationship(back_populates="skills")
 

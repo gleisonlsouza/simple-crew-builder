@@ -35,6 +35,14 @@ def init_db():
             print("--- Migration: workspace_id in crewproject is now nullable and has ON DELETE SET NULL! ---")
     except Exception as e:
         print(f"--- Migration Note: Manual alter for crewproject skipped: {e} ---")
+
+    # Migration for agentskill is_vectorized
+    try:
+        with engine.begin() as conn:
+            conn.execute(text("ALTER TABLE agentskill ADD COLUMN is_vectorized BOOLEAN DEFAULT FALSE"))
+            print("--- Migration: is_vectorized added to agentskill! ---")
+    except Exception as e:
+        print(f"--- Migration Note: Manual alter for agentskill skipped: {e} ---")
     
     # Seed Root User
     with Session(engine) as session:

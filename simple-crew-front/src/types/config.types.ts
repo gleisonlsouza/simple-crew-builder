@@ -73,5 +73,6 @@ export interface AgentSkill {
   content: string;
   source_url?: string;
   created_at: string;
+  is_vectorized?: boolean;
 }
 

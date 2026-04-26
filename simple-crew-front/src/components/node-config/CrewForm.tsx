@@ -148,7 +148,6 @@ export const CrewForm: React.FC<CrewFormProps> = memo(({
                         const newInputs: Record<string, string> = { ...(data.inputs as Record<string, string>) };
                         delete newInputs[key];
                         newInputs[e.target.value || `input_${idx}`] = value as string;
-                        console.log(`[CrewForm] Updating variables. New inputs keys: ${Object.keys(newInputs).join(', ')}`);
                         updateNodeData(nodeId, { inputs: newInputs });
                       }}
                     />
@@ -160,7 +159,6 @@ export const CrewForm: React.FC<CrewFormProps> = memo(({
                       onChange={(e) => {
                         const newInputs: Record<string, string> = { ...(data.inputs as Record<string, string>) };
                         newInputs[key] = e.target.value;
-                        console.log(`[CrewForm] Updating variable value. Key: ${key}, New: ${e.target.value}`);
                         updateNodeData(nodeId, { inputs: newInputs });
                       }}
                     />
@@ -168,7 +166,6 @@ export const CrewForm: React.FC<CrewFormProps> = memo(({
                       onClick={() => {
                         const newInputs: Record<string, string> = { ...(data.inputs as Record<string, string>) };
                         delete newInputs[key];
-                        console.log(`[CrewForm] Removing variable. Key: ${key}`);
                         updateNodeData(nodeId, { inputs: newInputs });
                       }}
                       className="flex-shrink-0 p-1.5 text-brand-muted hover:text-rose-500 transition-colors"

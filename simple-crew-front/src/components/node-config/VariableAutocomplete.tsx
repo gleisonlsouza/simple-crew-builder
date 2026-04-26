@@ -39,7 +39,6 @@ export const VariableAutocomplete: React.FC<VariableAutocompleteProps> = ({
             level = 'nested';
         } else {
             // Path broken, stay at current level
-            console.log(`[VariableAutocomplete] Path broken at ${part}, keeping root.`);
             break;
         }
     }
@@ -53,7 +52,6 @@ export const VariableAutocomplete: React.FC<VariableAutocompleteProps> = ({
         info
       }));
 
-    console.log(`[VariableAutocomplete] Generated ${filteredItems.length} items. Filter: "${filter}", Variables keys: ${Object.keys(variables).join(', ')}`);
     return { items: filteredItems, currentLevel: level };
   }, [filter, variables]);
 
