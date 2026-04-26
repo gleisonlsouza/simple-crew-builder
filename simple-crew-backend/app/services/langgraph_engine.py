@@ -323,9 +323,10 @@ class LangGraphCompiler:
             if not base_type:
                 base_type = self.schema_models.get(field.type, Any)
 
-            if field.reducer in ["add", "append"]:
-                reducer_fn = add_messages if field.key == "messages" else operator.add
-                state_annotations[field.key] = Annotated[base_type, reducer_fn]
+            if field.key == "messages":
+                state_annotations[field.key] = Annotated[base_type, add_messages]
+            elif field.reducer in ["add", "append"]:
+                state_annotations[field.key] = Annotated[base_type, operator.add]
             else:
                 state_annotations[field.key] = base_type
 
@@ -720,7 +721,14 @@ class LangGraphCompiler:
             self._emit({"type": "status", "nodeId": node.id, "status": "running"})
 
             llm_to_use = base_model.bind_tools(node_tools) if node_tools else base_model
+            
             history = state.get("messages", [])
+            # Defensive coercion to list of messages
+            if isinstance(history, str):
+                history = [HumanMessage(content=history)]
+            elif not isinstance(history, list):
+                history = [history] if history else []
+                
             effective_task_ids = task_ids if task_ids else ["NO_TASK_FALLBACK"]
 
             # --- Sequential Task Tracking ---

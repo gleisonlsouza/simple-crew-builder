@@ -15,7 +15,6 @@ interface GraphFormProps {
   stateFields?: string[];
   stateNodes?: StateNodeInfo[];
   updateStateConnection: (nodeId: string, stateId: string | null, showLine: boolean, fieldKey?: string | null) => void;
-  framework?: string;
 }
 
 // ─── Sub-key row ──────────────────────────────────────────────────────────────
@@ -262,8 +261,7 @@ export const GraphForm: React.FC<GraphFormProps> = ({
   handleNameChange,
   nameError,
   stateNodes = [],
-  updateStateConnection,
-  framework = 'crewai'
+  updateStateConnection
 }) => {
   const [isPickerOpen, setIsPickerOpen] = useState(false);
   const triggerRef = useRef<HTMLButtonElement>(null);
@@ -303,119 +301,137 @@ export const GraphForm: React.FC<GraphFormProps> = ({
           />
         </div>
 
-        {/* ── State Connection (LangGraph only) ───────────────────────────── */}
-        {framework === 'langgraph' && (
-          <div className="flex flex-col gap-3 pt-4 border-t border-brand-border/30">
-            <div className="flex items-center gap-2">
-              <Server className="w-3.5 h-3.5 text-purple-500" />
-              <label className="text-xs font-bold text-brand-muted uppercase tracking-wider">State Connection</label>
-            </div>
-            
-            <div className="space-y-3">
-               <select
-                 value={data.selectedStateId || ''}
-                 onChange={(e) => updateStateConnection(nodeId, e.target.value || null, data.showStateConnections ?? true)}
-                 className="w-full bg-brand-bg border border-brand-border rounded-lg px-3 py-2 text-sm text-brand-text focus:outline-none focus:ring-2 focus:ring-purple-500 transition-all"
-               >
-                 <option value="">No State Connected</option>
-                 {stateNodes.map(sNode => (
-                   <option key={sNode.id} value={sNode.id}>{sNode.name}</option>
-                 ))}
-               </select>
 
-               <label className="flex items-center gap-2 cursor-pointer group/toggle">
-                  <input
-                    type="checkbox"
-                    checked={data.showStateConnections ?? true}
-                    onChange={(e) => updateStateConnection(nodeId, data.selectedStateId || null, e.target.checked)}
-                    className="w-4 h-4 rounded border-brand-border text-purple-600 focus:ring-purple-500 cursor-pointer bg-brand-bg"
-                  />
-                  <span className="text-xs font-medium text-brand-muted group-hover/toggle:text-brand-text transition-colors">
-                    Show Connection Line on Canvas
-                  </span>
-                </label>
-            </div>
-            
-            <p className="text-[10px] text-brand-muted px-0.5 leading-relaxed italic">
-              Connecting to a State node allows this Graph to read/write shared data. 
-              You can hide the manual line to reduce visual pollution.
-            </p>
+
+        {/* ── State Connection (LangGraph only) ───────────────────────────── */}
+        <div className="flex flex-col gap-3 pt-4 border-t border-brand-border/30">
+          <div className="flex items-center gap-2">
+            <Server className="w-3.5 h-3.5 text-purple-500" />
+            <label className="text-xs font-bold text-brand-muted uppercase tracking-wider">State Connection</label>
           </div>
-        )}
+          
+          <div className="space-y-3">
+             <select
+               value={data.selectedStateId ? `${data.selectedStateId}${(data as { selectedStateKey?: string }).selectedStateKey ? `:${(data as { selectedStateKey?: string }).selectedStateKey}` : ''}` : ''}
+               onChange={(e) => {
+                 const val = e.target.value;
+                 if (!val) {
+                   updateStateConnection(nodeId, null, data.showStateConnections ?? true);
+                 } else {
+                   const [stateId, key] = val.split(':');
+                   updateStateConnection(nodeId, stateId, data.showStateConnections ?? true, key || null);
+                 }
+               }}
+               className="w-full bg-brand-bg border border-brand-border rounded-lg px-3 py-2 text-sm text-brand-text focus:outline-none focus:ring-2 focus:ring-purple-500 transition-all"
+             >
+               <option value="">No State Connected</option>
+               {stateNodes.flatMap(stateNode => {
+                   const fields = stateNode.fields || [];
+                   const options = [
+                     <option key={stateNode.id} value={stateNode.id}>{stateNode.name} (Entire State)</option>
+                   ];
+                   if (fields.length > 0) {
+                     options.push(...fields.map((f: StateFieldInfo) => (
+                       <option key={`${stateNode.id}-${f.key}`} value={`${stateNode.id}:${f.key}`}>
+                         {stateNode.name} &gt; {f.key}
+                       </option>
+                     )));
+                   }
+                   return options;
+                 })
+               }
+             </select>
+
+             <label className="flex items-center gap-2 cursor-pointer group/toggle">
+                <input
+                  type="checkbox"
+                  checked={data.showStateConnections ?? true}
+                  onChange={(e) => updateStateConnection(nodeId, data.selectedStateId || null, e.target.checked)}
+                  className="w-4 h-4 rounded border-brand-border text-purple-600 focus:ring-purple-500 cursor-pointer bg-brand-bg"
+                />
+                <span className="text-xs font-medium text-brand-muted group-hover/toggle:text-brand-text transition-colors">
+                  Show Connection Line on Canvas
+                </span>
+              </label>
+          </div>
+          
+          <p className="text-[10px] text-brand-muted px-0.5 leading-relaxed italic">
+            Connecting to a State node allows this Graph to read/write shared data. 
+            You can hide the manual line to reduce visual pollution.
+          </p>
+        </div>
 
         {/* ── Final Output Mapping (LangGraph only) ───────────────────────── */}
-        {framework === 'langgraph' && (
-          <div className="flex flex-col gap-2 pt-4 border-t border-brand-border/30">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <ArrowRightFromLine className="w-3.5 h-3.5 text-indigo-400" />
-                <label className="text-xs font-bold text-brand-muted uppercase tracking-wider">Select Output</label>
-              </div>
-              {selectedKey && (
-                <button
-                  type="button"
-                  onClick={() => setOutputKey(undefined)}
-                  className="text-[10px] font-bold text-rose-500 hover:underline uppercase"
-                >
-                  Reset
-                </button>
-              )}
+        <div className="flex flex-col gap-2 pt-4 border-t border-brand-border/30">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <ArrowRightFromLine className="w-3.5 h-3.5 text-indigo-400" />
+              <label className="text-xs font-bold text-brand-muted uppercase tracking-wider">Select Output</label>
             </div>
-
-            {/* Trigger — dashed border, mirroring the "current output" style */}
-            <div className="relative">
+            {selectedKey && (
               <button
-                ref={triggerRef}
                 type="button"
-                id="btn-select-output-key"
-                data-testid="btn-select-output-key"
-                onClick={() => setIsPickerOpen((v) => !v)}
-                className={`w-full flex items-center justify-between gap-2 px-3 py-3 rounded-xl border-2 border-dashed transition-all duration-200 group ${
-                  isPickerOpen
-                    ? 'border-indigo-500 bg-indigo-500/8'
-                    : selectedKey
-                    ? 'border-indigo-500/50 bg-indigo-500/5 hover:border-indigo-500/70'
-                    : 'border-brand-border/60 bg-brand-bg/30 hover:border-indigo-500/40 hover:bg-indigo-500/5'
-                }`}
+                onClick={() => setOutputKey(undefined)}
+                className="text-[10px] font-bold text-rose-500 hover:underline uppercase"
               >
-                <div className="flex items-center gap-2.5">
-                  {selectedKey ? (
-                    <>
-                      <ArrowRightFromLine className="w-4 h-4 text-indigo-400 shrink-0" />
-                      <span className="text-[12px] font-mono font-semibold text-indigo-400">{selectedKey}</span>
-                    </>
-                  ) : (
-                    <>
-                      <Database className="w-4 h-4 text-brand-muted/50 shrink-0" />
-                      <span className="text-[11px] text-brand-muted italic">Entire Graph State (default)</span>
-                    </>
-                  )}
-                </div>
-                <ChevronDown
-                  className={`w-3.5 h-3.5 text-brand-muted transition-transform duration-200 ${isPickerOpen ? 'rotate-180' : ''}`}
-                />
+                Reset
               </button>
-
-              {/* Floating Popup */}
-              {isPickerOpen && (
-                <OutputPickerPopup
-                  stateNodes={stateNodes}
-                  selectedKey={selectedKey}
-                  onSelect={setOutputKey}
-                  onClose={() => setIsPickerOpen(false)}
-                  anchorRef={triggerRef}
-                />
-              )}
-            </div>
-
-            <p className="text-[10px] text-brand-muted px-0.5 leading-relaxed">
-              Choose a state key, or a{' '}
-              <span className="font-semibold text-violet-400">Schema sub-field</span>{' '}
-              (e.g. <span className="font-mono">response.result</span>) to expose as the final output.
-              Leave as default to pass the entire state to downstream nodes.
-            </p>
+            )}
           </div>
-        )}
+
+          {/* Trigger — dashed border, mirroring the "current output" style */}
+          <div className="relative">
+            <button
+              ref={triggerRef}
+              type="button"
+              id="btn-select-output-key"
+              data-testid="btn-select-output-key"
+              onClick={() => setIsPickerOpen((v) => !v)}
+              className={`w-full flex items-center justify-between gap-2 px-3 py-3 rounded-xl border-2 border-dashed transition-all duration-200 group ${
+                isPickerOpen
+                  ? 'border-indigo-500 bg-indigo-500/8'
+                  : selectedKey
+                  ? 'border-indigo-500/50 bg-indigo-500/5 hover:border-indigo-500/70'
+                  : 'border-brand-border/60 bg-brand-bg/30 hover:border-indigo-500/40 hover:bg-indigo-500/5'
+              }`}
+            >
+              <div className="flex items-center gap-2.5">
+                {selectedKey ? (
+                  <>
+                    <ArrowRightFromLine className="w-4 h-4 text-indigo-400 shrink-0" />
+                    <span className="text-[12px] font-mono font-semibold text-indigo-400">{selectedKey}</span>
+                  </>
+                ) : (
+                  <>
+                    <Database className="w-4 h-4 text-brand-muted/50 shrink-0" />
+                    <span className="text-[11px] text-brand-muted italic">Entire Graph State (default)</span>
+                  </>
+                )}
+              </div>
+              <ChevronDown
+                className={`w-3.5 h-3.5 text-brand-muted transition-transform duration-200 ${isPickerOpen ? 'rotate-180' : ''}`}
+              />
+            </button>
+
+            {/* Floating Popup */}
+            {isPickerOpen && (
+              <OutputPickerPopup
+                stateNodes={stateNodes}
+                selectedKey={selectedKey}
+                onSelect={setOutputKey}
+                onClose={() => setIsPickerOpen(false)}
+                anchorRef={triggerRef}
+              />
+            )}
+          </div>
+
+          <p className="text-[10px] text-brand-muted px-0.5 leading-relaxed">
+            Choose a state key, or a{' '}
+            <span className="font-semibold text-violet-400">Schema sub-field</span>{' '}
+            (e.g. <span className="font-mono">response.result</span>) to expose as the final output.
+            Leave as default to pass the entire state to downstream nodes.
+          </p>
+        </div>
 
       </div>
     </div>

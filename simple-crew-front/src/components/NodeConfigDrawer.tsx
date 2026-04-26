@@ -310,7 +310,7 @@ export function NodeConfigDrawer() {
             updateNodeData={updateNodeData}
             onFieldKeyDown={handleFieldKeyDown}
             onFieldChange={handleFieldChange}
-            allProjectVariables={allProjectVariables}
+            allProjectVariables={currentProjectFramework === 'langgraph' ? Array.from(new Set([...allProjectVariables, ...(stateFields || [])])) : allProjectVariables}
           />
         )}
       </div>

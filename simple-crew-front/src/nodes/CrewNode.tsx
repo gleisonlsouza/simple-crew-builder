@@ -37,7 +37,7 @@ export const CrewNode = memo(({ id, data }: NodeProps<Node<CrewNodeData, 'crew'>
   const stateNodesOptions = useStore((state) => 
     state.nodes
       .filter(n => n.type === 'state')
-      .map(n => ({ id: n.id, name: (n.data as StateNodeData).name })),
+      .map(n => ({ id: n.id, name: (n.data as StateNodeData).name, fields: (n.data as StateNodeData).fields })),
     (a, b) => JSON.stringify(a) === JSON.stringify(b)
   );
   
@@ -231,17 +231,36 @@ export const CrewNode = memo(({ id, data }: NodeProps<Node<CrewNodeData, 'crew'>
               </div>
               <div className="space-y-2">
                 <select
-                  value={data.selectedStateId || ''}
-                  onChange={(e) => updateStateConnection(id, e.target.value || null, data.showStateConnections ?? true)}
+                  value={data.selectedStateId ? `${data.selectedStateId}${(data as { selectedStateKey?: string }).selectedStateKey ? `:${(data as { selectedStateKey?: string }).selectedStateKey}` : ''}` : ''}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    if (!val) {
+                      updateStateConnection(id, null, data.showStateConnections ?? true);
+                    } else {
+                      const [stateId, key] = val.split(':');
+                      updateStateConnection(id, stateId, data.showStateConnections ?? true, key || null);
+                    }
+                  }}
                   onClick={(e) => e.stopPropagation()}
                   className="w-full bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-lg px-2 py-1.5 text-[11px] font-medium text-slate-700 dark:text-slate-300 outline-none focus:ring-1 focus:ring-purple-500 transition-all shadow-sm"
                 >
                   <option value="">No State Connected</option>
-                  {stateNodesOptions.map(stateNode => (
-                      <option key={stateNode.id} value={stateNode.id}>
-                        {stateNode.name || `State #${stateNode.id.slice(-4)}`}
-                      </option>
-                    ))
+                  {stateNodesOptions.flatMap(stateNode => {
+                      const fields = stateNode.fields || [];
+                      const options = [
+                        <option key={stateNode.id} value={stateNode.id}>
+                          {stateNode.name || `State #${stateNode.id.slice(-4)}`} (Entire State)
+                        </option>
+                      ];
+                      if (fields.length > 0) {
+                        options.push(...fields.map((f: { key: string }) => (
+                          <option key={`${stateNode.id}-${f.key}`} value={`${stateNode.id}:${f.key}`}>
+                            {stateNode.name || `State #${stateNode.id.slice(-4)}`} &gt; {f.key}
+                          </option>
+                        )));
+                      }
+                      return options;
+                    })
                   }
                 </select>
 

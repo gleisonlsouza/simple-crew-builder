@@ -16,7 +16,7 @@ class StateField(BaseModel):
     id: str
     key: str
     type: str
-    reducer: str
+    reducer: Optional[str] = None
     defaultValue: Optional[Any] = Field(default=None, alias="defaultValue")
 
 class SchemaField(BaseModel):

@@ -351,15 +351,19 @@ export const AgentNode = memo(({ id, data }: NodeProps<Node<AgentNodeData, 'agen
                     const fields = stateNode.fields || [];
                     const stateName = stateNode.name || `State #${stateNode.id.slice(-4)}`;
                     
-                    if (fields.length === 0) {
-                      return [<option key={stateNode.id} value={stateNode.id}>{stateName} (Entire State)</option>];
+                    const options = [
+                      <option key={stateNode.id} value={stateNode.id}>{stateName} (Entire State)</option>
+                    ];
+                    
+                    if (fields.length > 0) {
+                      options.push(...fields.map((f: StateField) => (
+                        <option key={`${stateNode.id}-${f.key}`} value={`${stateNode.id}:${f.key}`}>
+                          {stateName} &gt; {f.key}
+                        </option>
+                      )));
                     }
                     
-                    return fields.map((f: StateField) => (
-                      <option key={`${stateNode.id}-${f.key}`} value={`${stateNode.id}:${f.key}`}>
-                        {stateName} &gt; {f.key}
-                      </option>
-                    ));
+                    return options;
                   })
                 }
               </select>

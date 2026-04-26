@@ -6,8 +6,9 @@ import httpx
 import yaml
 import re
 from ..database import get_session
-from ..models import AgentSkill
+from ..models import AgentSkill, AppSettings
 from ..schemas import AgentSkillRead, SkillImportRequest
+from ..core.rag.indexer import process_skill_content
 
 router = APIRouter()
 
@@ -148,6 +149,21 @@ async def import_skill(request: SkillImportRequest, session: Session = Depends(g
     session.add(new_skill)
     session.commit()
     session.refresh(new_skill)
+    
+    # Conditional Gate: Neo4j Dual-Ingestion
+    app_settings = session.get(AppSettings, ROOT_USER_ID)
+    if app_settings and app_settings.embedding_model_id:
+        try:
+            process_skill_content(
+                skill_id=str(new_skill.id),
+                skill_name=new_skill.name,
+                skill_description=new_skill.description,
+                text=new_skill.content,
+                db_session=session
+            )
+        except Exception as e:
+            print(f"DEBUG: Failed to vectorize skill to Neo4j: {e}")
+
     return new_skill
 
 @router.post("/upload", response_model=AgentSkillRead)
@@ -174,6 +190,21 @@ async def upload_skill(file: UploadFile = File(...), session: Session = Depends(
     session.add(new_skill)
     session.commit()
     session.refresh(new_skill)
+
+    # Conditional Gate: Neo4j Dual-Ingestion
+    app_settings = session.get(AppSettings, ROOT_USER_ID)
+    if app_settings and app_settings.embedding_model_id:
+        try:
+            process_skill_content(
+                skill_id=str(new_skill.id),
+                skill_name=new_skill.name,
+                skill_description=new_skill.description,
+                text=new_skill.content,
+                db_session=session
+            )
+        except Exception as e:
+            print(f"DEBUG: Failed to vectorize skill to Neo4j: {e}")
+
     return new_skill
 
 

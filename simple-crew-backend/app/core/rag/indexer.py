@@ -114,3 +114,93 @@ def process_document(kb_id: str, file_path: str, doc_id: str = None):
     except Exception as e:
         # Rethrowing with context
         raise RuntimeError(f"Error during RAG indexing: {str(e)}")
+
+def process_skill_content(skill_id: str, skill_name: str, skill_description: str, text: str, db_session: Session):
+    """Lê o texto da skill, divide em chunks, gera embeddings e salva no Neo4j na base Skill Library."""
+    print(f"DEBUG: Indexing skill {skill_name} (id: {skill_id})")
+    
+    # 1. Chunking
+    chunks = chunk_text(text)
+    if not chunks:
+        print("DEBUG: No chunks generated from skill content")
+        return False
+        
+    # 2. Get Model Config for Embeddings
+    embedding_config = get_embedding_model_config(db_session)
+    api_key = embedding_config.get("api_key")
+    model_name = embedding_config.get("model_name")
+    base_url = embedding_config.get("base_url")
+        
+    if not api_key:
+        print("DEBUG: OpenAI API Key not configured for embedding. Skipping Neo4j ingestion.")
+        return False
+        
+    # 3. Generate Embeddings & Save to Neo4j
+    client = OpenAI(api_key=api_key, base_url=base_url)
+    driver = neo4j_manager.driver
+    
+    try:
+        with driver.session() as neo4j_session:
+            # Garante que a KnowledgeBase "Skill Library" existe
+            kb_query = """
+            MERGE (kb:KnowledgeBase {name: 'Skill Library'})
+            ON CREATE SET kb.id = randomUUID(), kb.description = 'System Knowledge Base for Agent Skills', kb.is_system = true, kb.created_at = datetime()
+            RETURN kb.id AS id
+            """
+            kb_result = neo4j_session.run(kb_query).single()
+            kb_id = kb_result["id"]
+
+            # Cria o nó AgentSkill
+            skill_query = """
+            MERGE (s:AgentSkill {id: $skill_id})
+            ON CREATE SET s.name = $skill_name, s.description = $skill_description
+            ON MATCH SET s.name = $skill_name, s.description = $skill_description
+            """
+            neo4j_session.run(skill_query, skill_id=skill_id, skill_name=skill_name, skill_description=skill_description or "")
+            
+            # Limpa chunks antigos se houver atualização da mesma skill
+            clear_chunks_query = "MATCH (c:Chunk)-[:FROM_SKILL]->(s:AgentSkill {id: $skill_id}) DETACH DELETE c"
+            neo4j_session.run(clear_chunks_query, skill_id=skill_id)
+
+            index_created = False
+            
+            for i, chunk in enumerate(chunks):
+                # Gera o embedding
+                response = client.embeddings.create(
+                    input=chunk,
+                    model=model_name
+                )
+                embedding = response.data[0].embedding
+                
+                # Lazy Creation do Índice Vetorial
+                if not index_created:
+                    dimension = len(embedding)
+                    neo4j_manager.create_vector_index(dimension)
+                    index_created = True
+                
+                # Salva o Chunk no Neo4j com vínculo à KB e à Skill
+                query = """
+                MATCH (kb:KnowledgeBase {id: $kb_id})
+                MATCH (s:AgentSkill {id: $skill_id})
+                CREATE (c:Chunk {
+                    id: randomUUID(),
+                    text: $text,
+                    index: $index,
+                    embedding: $embedding,
+                    created_at: datetime()
+                })-[:BELONGS_TO]->(kb)
+                CREATE (c)-[:FROM_SKILL]->(s)
+                """
+                neo4j_session.run(query, 
+                    kb_id=kb_id, 
+                    skill_id=skill_id, 
+                    text=chunk, 
+                    index=i, 
+                    embedding=embedding
+                )
+                
+        print(f"DEBUG: Successfully indexed {len(chunks)} chunks for skill: {skill_name}")
+        return True
+    except Exception as e:
+        raise RuntimeError(f"Error during Skill RAG indexing: {str(e)}")
+
