@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { X, Moon, Sun, Bell, Shield, Info, Plus, FolderOpen } from 'lucide-react';
+import { X, Moon, Sun, Bell, Shield, Info, Plus, FolderOpen, Columns, Rows } from 'lucide-react';
 import { useStore } from '../store/index';
 
 export function SettingsDrawer() {
@@ -7,6 +7,8 @@ export function SettingsDrawer() {
   const setIsSettingsOpen = useStore((state) => state.setIsSettingsOpen);
   const theme = useStore((state) => state.theme);
   const toggleTheme = useStore((state) => state.toggleTheme);
+  const canvasLayout = useStore((state) => state.canvasLayout);
+  const setCanvasLayout = useStore((state) => state.setCanvasLayout);
   const currentProjectId = useStore((state) => state.currentProjectId);
   const currentProjectWorkspaceId = useStore((state) => state.currentProjectWorkspaceId);
   const updateProjectWorkspaceId = useStore((state) => state.updateProjectWorkspaceId);
@@ -89,6 +91,50 @@ export function SettingsDrawer() {
             </div>
           </section>
 
+          {/* Canvas Layout Section */}
+          <section>
+            <h3 className="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-4 px-1">
+              Canvas Layout
+            </h3>
+            <div className="bg-brand-bg rounded-2xl border border-brand-border p-5 transition-colors">
+              <div className="flex items-center justify-between mb-5">
+                <div className="flex items-center gap-4">
+                  <div className="p-2.5 bg-brand-card rounded-xl border border-brand-border text-brand-text transition-all shadow-sm">
+                    {canvasLayout === 'horizontal' ? <Columns className="w-5 h-5" /> : <Rows className="w-5 h-5" />}
+                  </div>
+                  <div>
+                    <p className="text-sm font-bold text-brand-text">Flow Orientation</p>
+                    <p className="text-[11px] text-brand-muted">Vertical (classic) or Horizontal flow</p>
+                  </div>
+                </div>
+              </div>
+              
+              <div className="grid grid-cols-2 gap-3">
+                <button
+                  onClick={() => setCanvasLayout('vertical')}
+                  className={`flex items-center justify-center gap-2 px-3 py-3 rounded-xl text-sm font-bold border transition-all duration-300 ${
+                    canvasLayout === 'vertical' 
+                      ? 'bg-indigo-600 border-indigo-500 text-white shadow-lg shadow-indigo-600/20 active:scale-95' 
+                      : 'bg-brand-card border-brand-border text-brand-muted hover:border-slate-300 dark:hover:border-slate-600'
+                  }`}
+                >
+                  <Rows className="w-4 h-4" />
+                  Vertical
+                </button>
+                <button
+                  onClick={() => setCanvasLayout('horizontal')}
+                  className={`flex items-center justify-center gap-2 px-3 py-3 rounded-xl text-sm font-bold border transition-all duration-300 ${
+                    canvasLayout === 'horizontal' 
+                      ? 'bg-indigo-600 border-indigo-500 text-white shadow-lg shadow-indigo-600/20 active:scale-95' 
+                      : 'bg-brand-card border-brand-border text-brand-muted hover:border-slate-300 dark:hover:border-slate-600'
+                  }`}
+                >
+                  <Columns className="w-4 h-4" />
+                  Horizontal
+                </button>
+              </div>
+            </div>
+          </section>
           {/* Execution Workspace Section - Only for specific projects */}
           {currentProjectId && (
             <section>

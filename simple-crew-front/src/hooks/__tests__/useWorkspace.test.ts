@@ -3,7 +3,10 @@ import { useWorkspace } from '../useWorkspace';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import Prism from 'prismjs';
 import { useStore } from '../../store/index';
+import type { AppState } from '../../store/index';
+import type { Mock } from 'vitest';
 import toast from 'react-hot-toast';
+import React from 'react';
 
 // Mock Zustand
 vi.mock('../../store/index', () => ({
@@ -24,7 +27,7 @@ vi.mock('react-hot-toast', () => ({
 }));
 
 describe('useWorkspace - Hook Coverage', () => {
-    let mockStore: any;
+    let mockStore: AppState;
 
     beforeEach(() => {
         vi.clearAllMocks();
@@ -40,15 +43,20 @@ describe('useWorkspace - Hook Coverage', () => {
             uploadWorkspaceFiles: vi.fn().mockResolvedValue(undefined),
             deleteWorkspaceFile: vi.fn().mockResolvedValue(undefined),
             downloadWorkspaceZip: vi.fn(),
-        };
+        } as unknown as AppState;
 
-        (useStore as any).mockImplementation((selector: any) => selector(mockStore));
+        (useStore as unknown as Mock).mockImplementation((selector: (state: AppState) => unknown) => selector(mockStore));
         
-        vi.stubGlobal('URL', { createObjectURL: vi.fn(() => 'blob:url'), revokeObjectURL: vi.fn() });
-        vi.stubGlobal('navigator', { clipboard: { writeText: vi.fn() } });
+        vi.stubGlobal('URL', { 
+            createObjectURL: vi.fn(() => 'blob:url'), 
+            revokeObjectURL: vi.fn() 
+        });
+        vi.stubGlobal('navigator', { 
+            clipboard: { writeText: vi.fn() } 
+        });
     });
 
-    it('handleFileSelect: fetches content and highlights (lines 65-72)', async () => {
+    it('handleFileSelect: fetches content and highlights', async () => {
         const { result } = renderHook(() => useWorkspace());
         await act(async () => {
             await result.current.handleFileSelect('test.txt');
@@ -56,25 +64,58 @@ describe('useWorkspace - Hook Coverage', () => {
         expect(mockStore.fetchFileContent).toHaveBeenCalledWith('ws-1', 'test.txt');
         expect(result.current.content).toBe('text content');
         
-        // Wait for effect
         await waitFor(() => expect(Prism.highlightAll).toHaveBeenCalled());
     });
 
-    it('downloadFile: triggers download flow (lines 88-106)', async () => {
+    it('handleDownload: downloads current file content', async () => {
         const { result } = renderHook(() => useWorkspace());
+        
+        // Setup initial content
+        await act(async () => {
+            await result.current.handleFileSelect('test.txt');
+        });
+
         const documentSpy = vi.spyOn(document, 'createElement');
         
-        await act(async () => {
-            await result.current.downloadFile('test.txt');
+        act(() => {
+            result.current.handleDownload();
         });
         
         expect(documentSpy).toHaveBeenCalledWith('a');
     });
 
-    it('handleUpload: triggers upload and reloads (lines 108-122)', async () => {
+    it('downloadFile: triggers download flow with custom path', async () => {
+        const { result } = renderHook(() => useWorkspace());
+        const documentSpy = vi.spyOn(document, 'createElement');
+        
+        await act(async () => {
+            await result.current.downloadFile('other.py');
+        });
+        
+        expect(mockStore.fetchFileContent).toHaveBeenCalledWith('ws-1', 'other.py');
+        expect(documentSpy).toHaveBeenCalledWith('a');
+    });
+
+    it('downloadFile: handles fetch error', async () => {
+        (mockStore.fetchFileContent as Mock).mockRejectedValueOnce(new Error('Fetch Fail'));
+        const { result } = renderHook(() => useWorkspace());
+        
+        await act(async () => {
+            await result.current.downloadFile('fail.txt');
+        });
+        
+        expect(toast.error).toHaveBeenCalledWith('Failed to download file');
+    });
+
+    it('handleUpload: triggers upload and reloads', async () => {
         const { result } = renderHook(() => useWorkspace());
         const mockFiles = [new File([''], 'test.txt')];
-        const event = { target: { files: mockFiles, value: 'something' } } as any;
+        const event = { 
+            target: { 
+                files: mockFiles, 
+                value: 'something' 
+            } 
+        } as unknown as React.ChangeEvent<HTMLInputElement>;
 
         await act(async () => {
             await result.current.handleUpload(event);
@@ -82,10 +123,32 @@ describe('useWorkspace - Hook Coverage', () => {
 
         expect(mockStore.uploadWorkspaceFiles).toHaveBeenCalled();
         expect(mockStore.fetchWorkspaceFiles).toHaveBeenCalled();
+        expect(event.target.value).toBe('');
     });
 
-    it('confirmDelete: triggers deletion and handles cleanup (lines 129-145)', async () => {
+    it('handleUpload: handles upload error', async () => {
+        (mockStore.uploadWorkspaceFiles as Mock).mockRejectedValueOnce(new Error('Upload Fail'));
         const { result } = renderHook(() => useWorkspace());
+        const mockFiles = [new File([''], 'test.txt')];
+        const event = { 
+            target: { files: mockFiles, value: 'something' } 
+        } as unknown as React.ChangeEvent<HTMLInputElement>;
+
+        await act(async () => {
+            await result.current.handleUpload(event);
+        });
+        
+        expect(result.current.isUploading).toBe(false);
+    });
+
+    it('confirmDelete: triggers deletion and handles cleanup', async () => {
+        const { result } = renderHook(() => useWorkspace());
+        
+        // Select file first
+        await act(async () => {
+            await result.current.handleFileSelect('test.txt');
+        });
+
         act(() => {
             result.current.handleDelete('test.txt');
         });
@@ -95,10 +158,64 @@ describe('useWorkspace - Hook Coverage', () => {
         });
 
         expect(mockStore.deleteWorkspaceFile).toHaveBeenCalled();
-        expect(result.current.isDeleteModalOpen).toBe(false);
+        expect(result.current.selectedPath).toBeNull();
+        expect(result.current.content).toBeNull();
     });
 
-    it('copyRelativePath: uses clipboard API (lines 165-168)', () => {
+    it('confirmDelete: handles deletion error', async () => {
+        (mockStore.deleteWorkspaceFile as Mock).mockRejectedValueOnce(new Error('Delete Fail'));
+        const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+        const { result } = renderHook(() => useWorkspace());
+        
+        act(() => {
+            result.current.handleDelete('fail.txt');
+        });
+        
+        await act(async () => {
+            await result.current.confirmDelete();
+        });
+        
+        expect(consoleSpy).toHaveBeenCalled();
+        expect(result.current.isDeleteModalOpen).toBe(false);
+        consoleSpy.mockRestore();
+    });
+
+    it('handleContextMenu: updates context menu state', () => {
+        const { result } = renderHook(() => useWorkspace());
+        const mockEvent = { 
+            preventDefault: vi.fn(), 
+            stopPropagation: vi.fn(),
+            clientX: 100,
+            clientY: 200
+        } as unknown as React.MouseEvent;
+        const mockItem = { name: 'file.txt', path: 'file.txt', is_dir: false };
+
+        act(() => {
+            result.current.handleContextMenu(mockEvent, mockItem);
+        });
+
+        expect(result.current.contextMenu).toEqual({ x: 100, y: 200, item: mockItem });
+        expect(mockEvent.preventDefault).toHaveBeenCalled();
+    });
+
+    it('closes context menu on window click', () => {
+        const { result } = renderHook(() => useWorkspace());
+        const mockEvent = { 
+            preventDefault: vi.fn(), stopPropagation: vi.fn(), clientX: 10, clientY: 10 
+        } as unknown as React.MouseEvent;
+        
+        act(() => {
+            result.current.handleContextMenu(mockEvent, { name: 'f.txt', path: 'f.txt', is_dir: false });
+        });
+        expect(result.current.contextMenu).not.toBeNull();
+
+        act(() => {
+            window.dispatchEvent(new MouseEvent('click'));
+        });
+        expect(result.current.contextMenu).toBeNull();
+    });
+
+    it('copyRelativePath: uses clipboard API', () => {
         const { result } = renderHook(() => useWorkspace());
         act(() => {
             result.current.copyRelativePath('my/path');
@@ -107,25 +224,34 @@ describe('useWorkspace - Hook Coverage', () => {
         expect(toast.success).toHaveBeenCalled();
     });
 
-    it('filterFiles: handles search (lines 170-187)', async () => {
+    it('filterFiles: handles recursive search in directories', async () => {
         const files = [
-            { name: 'foo.txt', path: 'foo.txt', is_dir: false },
-            { name: 'bar.py', path: 'bar.py', is_dir: false },
             { name: 'folder', path: 'folder', is_dir: true, children: [
                 { name: 'sub.txt', path: 'folder/sub.txt', is_dir: false }
             ]}
         ];
-        mockStore.fetchWorkspaceFiles.mockResolvedValue(files);
+        (mockStore.fetchWorkspaceFiles as Mock).mockResolvedValue(files);
         
         const { result } = renderHook(() => useWorkspace());
         
-        await waitFor(() => expect(result.current.files.length).toBe(3));
+        await waitFor(() => expect(result.current.files.length).toBe(1));
 
         act(() => {
-            result.current.setSearchTerm('py');
+            result.current.setSearchTerm('sub');
         });
 
         expect(result.current.filteredDocs.length).toBe(1);
-        expect(result.current.filteredDocs[0].name).toBe('bar.py');
+        expect(result.current.filteredDocs[0].children?.[0].name).toBe('sub.txt');
+    });
+
+    it('filterFiles: reaches null case for non-matching files at root', async () => {
+        const files = [
+            { name: 'no-match.jpg', path: 'no-match.jpg', is_dir: false },
+        ];
+        (mockStore.fetchWorkspaceFiles as Mock).mockResolvedValue(files);
+        const { result } = renderHook(() => useWorkspace());
+        await waitFor(() => expect(result.current.files.length).toBe(1));
+        act(() => { result.current.setSearchTerm('something-else'); });
+        expect(result.current.filteredDocs.length).toBe(0);
     });
 });

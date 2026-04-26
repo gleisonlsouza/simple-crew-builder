@@ -1,17 +1,22 @@
 import React, { useState, memo } from 'react';
-import { X, Plus, Cpu, Sparkles, Settings, Code, FileText, Calendar, ToggleLeft, ToggleRight, ChevronDown, ChevronUp } from 'lucide-react';
+import { X, Plus, Cpu, Sparkles, Settings, Code, FileText, Calendar, ToggleLeft, ToggleRight, ChevronDown, ChevronUp, BookOpen, Eye, Search } from 'lucide-react';
+import toast from 'react-hot-toast';
+
 import { 
   DndContext, 
-  closestCenter 
+  closestCenter,
+  useSensors
 } from '@dnd-kit/core';
+import type { DragEndEvent } from '@dnd-kit/core';
 import { 
   SortableContext, 
   verticalListSortingStrategy 
 } from '@dnd-kit/sortable';
-import { HighlightedTextField } from '../HighlightedTextField';
+import HighlightedTextField from '../HighlightedTextField';
 import { SortableItem } from './SortableItem';
-import type { AgentNodeData, AppNode } from '../../types/nodes.types';
-import type { ModelConfig, ToolConfig, CustomTool, MCPServer } from '../../types/config.types';
+import type { AgentNodeData, TaskNodeData, AppNode } from '../../types/nodes.types';
+import type { ModelConfig, ToolConfig, CustomTool, MCPServer, AgentSkill } from '../../types/config.types';
+
 
 interface AgentFormProps {
   data: AgentNodeData;
@@ -21,10 +26,12 @@ interface AgentFormProps {
   mcpServers: MCPServer[];
   globalTools: ToolConfig[];
   customTools: CustomTool[];
+  skills: AgentSkill[];
   loadingFields: Record<string, boolean>;
+
   onAiSuggest: (field: string) => void;
-  onFieldKeyDown: (e: React.KeyboardEvent) => void;
-  onFieldChange: (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>, field: string, updateFn: (val: string) => void) => void;
+  onFieldKeyDown: (e: React.KeyboardEvent<HTMLInputElement | HTMLTextAreaElement>) => void;
+  onFieldChange: (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement> | { target: { value: string } }, field: string, updateFn: (val: string) => void) => void;
   isMcpSelectorOpen: boolean;
   setIsMcpSelectorOpen: (open: boolean) => void;
   isGlobalToolSelectorOpen: boolean;
@@ -34,8 +41,8 @@ interface AgentFormProps {
   setToolToConfigure: (tool: ToolConfig | null) => void;
   setIsToolConfigModalOpen: (open: boolean) => void;
   renderableTasks: AppNode[];
-  handleTaskDragEnd: (event: any) => void;
-  sensors: any;
+  handleTaskDragEnd: (event: DragEndEvent) => void;
+  sensors: ReturnType<typeof useSensors>;
 }
 
 export const AgentForm: React.FC<AgentFormProps> = memo(({
@@ -46,7 +53,9 @@ export const AgentForm: React.FC<AgentFormProps> = memo(({
   mcpServers,
   globalTools,
   customTools,
+  skills,
   loadingFields,
+
   onAiSuggest,
   onFieldKeyDown,
   onFieldChange,
@@ -64,6 +73,9 @@ export const AgentForm: React.FC<AgentFormProps> = memo(({
 }) => {
   const [activeTab, setActiveTab] = useState<'basic' | 'llm' | 'tools' | 'execution' | 'templates'>('basic');
   const [expandedTemplates, setExpandedTemplates] = useState<string[]>([]);
+  const [isSkillSelectorOpen, setIsSkillSelectorOpen] = useState(false);
+  const [skillToPreview, setSkillToPreview] = useState<AgentSkill | null>(null);
+
 
   const toggleTemplate = (template: string) => {
     setExpandedTemplates(prev => 
@@ -94,6 +106,53 @@ export const AgentForm: React.FC<AgentFormProps> = memo(({
 
   return (
     <div className="flex flex-col gap-5">
+      {/* -- Import From Skill Button -- */}
+      <div className="relative">
+        <button
+          onClick={() => setIsSkillSelectorOpen(true)}
+          className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-indigo-500/5 hover:bg-indigo-500/10 border border-indigo-500/20 rounded-xl text-indigo-500 text-xs font-bold transition-all group mb-2"
+        >
+          ✨ Import From Skill
+        </button>
+
+        {isSkillSelectorOpen && (
+          <>
+            <div className="fixed inset-0 z-[55]" onClick={() => setIsSkillSelectorOpen(false)} />
+            <div className="absolute right-0 top-full mt-1 w-full bg-brand-card border border-brand-border rounded-xl shadow-xl z-[60] py-2 animate-in zoom-in-95 duration-150">
+              <div className="px-3 pb-2 border-b border-brand-border/50 mb-2 flex items-center gap-2">
+                <Search className="w-3.5 h-3.5 text-brand-muted" />
+                <span className="text-[10px] font-bold text-brand-muted uppercase">Select Skill to Auto-Fill</span>
+              </div>
+              <div className="max-h-60 overflow-y-auto px-1 custom-scrollbar">
+                {skills.length === 0 ? (
+                  <div className="px-3 py-4 text-center text-[10px] text-brand-muted italic">No skills available in library.</div>
+                ) : (
+                  skills.map(skill => (
+                    <button
+                      key={skill.id}
+                      onClick={() => {
+                        // Replace the current skill — one skill per agent at a time
+                        updateNodeData(nodeId, { 
+                          identitySkillIds: [skill.id],
+                          role: skill.name,
+                          backstory: skill.description || data.backstory
+                        });
+                        toast.success(`Skill "${skill.name}" applied`);
+                        setIsSkillSelectorOpen(false);
+                      }}
+                      className="w-full flex flex-col px-3 py-2 text-xs text-brand-text hover:bg-brand-bg rounded-lg transition-colors text-left group"
+                    >
+                      <span className="font-bold group-hover:text-indigo-500">{skill.name}</span>
+                      {skill.description && <span className="text-[9px] text-brand-muted line-clamp-1">{skill.description}</span>}
+                    </button>
+                  ))
+                )}
+              </div>
+            </div>
+          </>
+        )}
+      </div>
+
       {/* -- Basic Settings -- */}
       <div className="flex flex-col gap-5">
         <div className="flex flex-col gap-2 shadow-[0_4px_20px_rgba(0,0,0,0.05)] p-4 bg-brand-bg/20 rounded-xl border border-brand-border/30">
@@ -114,6 +173,7 @@ export const AgentForm: React.FC<AgentFormProps> = memo(({
             onKeyDown={onFieldKeyDown}
             onChange={(e) => onFieldChange(e, 'role', (val) => updateNodeData(nodeId, { role: val }))}
             placeholder="e.g. Senior Researcher"
+            data-testid="field-agent-role"
           />
         </div>
 
@@ -136,8 +196,47 @@ export const AgentForm: React.FC<AgentFormProps> = memo(({
             onChange={(e) => onFieldChange(e, 'goal', (val) => updateNodeData(nodeId, { goal: val }))}
             placeholder="What does this agent need to achieve?"
             rows={3}
+            data-testid="input-goal"
+            footer={(data.identitySkillIds || []).length > 0 && (
+              <div className="flex flex-wrap gap-2">
+                {data.identitySkillIds?.map(skillId => {
+                  const skill = skills.find(s => s.id === skillId);
+                  if (!skill) return null;
+                  return (
+                    <div 
+                      key={skillId}
+                      className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-indigo-500/10 border border-indigo-500/40 border-dashed text-indigo-400 text-xs font-medium backdrop-blur-sm transition-all animate-in fade-in zoom-in-95 duration-200"
+                    >
+                      <BookOpen className="w-3.5 h-3.5" />
+                      <span className="truncate max-w-[150px]">{skill.name}</span>
+                      <div className="flex items-center gap-1.5 border-l border-indigo-500/30 ml-1 pl-1.5">
+                        <button 
+                          onClick={() => setSkillToPreview(skill)}
+                          className="p-1 hover:bg-indigo-500/20 rounded transition-colors"
+                          title="View Content"
+                        >
+                          <Eye className="w-3.5 h-3.5" />
+                        </button>
+                        <button 
+                          onClick={(e) => { 
+                            e.stopPropagation(); 
+                            updateNodeData(nodeId, { identitySkillIds: (data.identitySkillIds || []).filter(id => id !== skillId) }); 
+                            toast.success("Skill removed from agent");
+                          }}
+                          className="p-1 hover:bg-red-500/20 hover:text-red-500 rounded transition-colors"
+                          title="Remove Skill"
+                        >
+                          <X className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           />
         </div>
+
 
         <div className="flex flex-col gap-2">
           <div className="flex items-center justify-between">
@@ -158,6 +257,7 @@ export const AgentForm: React.FC<AgentFormProps> = memo(({
             onChange={(e) => onFieldChange(e, 'backstory', (val) => updateNodeData(nodeId, { backstory: val }))}
             placeholder="The agent's background and expertise..."
             rows={4}
+            data-testid="field-agent-backstory"
           />
         </div>
       </div>
@@ -172,7 +272,7 @@ export const AgentForm: React.FC<AgentFormProps> = memo(({
         ].map(tab => (
           <button
             key={tab.id}
-            onClick={() => setActiveTab(tab.id as any)}
+            onClick={() => setActiveTab(tab.id as 'llm' | 'tools' | 'execution' | 'templates')}
             className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all mb-1 ${
               activeTab === tab.id 
                 ? 'bg-indigo-500/10 text-indigo-500 shadow-sm border border-indigo-500/20' 
@@ -255,7 +355,7 @@ export const AgentForm: React.FC<AgentFormProps> = memo(({
                     <div className="absolute right-0 top-full mt-2 w-64 bg-brand-card border border-brand-border rounded-xl shadow-xl z-[60] py-2">
                        <div className="max-h-60 overflow-y-auto px-1 custom-scrollbar">
                         {['Search', 'Web', 'Files & Documents', 'RAG / DATABASE'].map(cat => {
-                          const catTools = globalTools.filter(t => t.category === cat && t.isEnabled && !(data.globalToolIds || []).some((e: any) => (typeof e === 'string' ? e : e.id) === t.id));
+                          const catTools = globalTools.filter(t => t.category === cat && t.isEnabled && !(data.globalToolIds || []).some((e: string | { id: string }) => (typeof e === 'string' ? e : e.id) === t.id));
                           if (catTools.length === 0) return null;
                           return (
                             <div key={cat} className="mb-2 last:mb-0">
@@ -290,7 +390,7 @@ export const AgentForm: React.FC<AgentFormProps> = memo(({
             </div>
             
             <div className="flex flex-col gap-2">
-              {(data.globalToolIds || []).map((entry: any) => {
+              {(data.globalToolIds || []).map((entry: string | { id: string }) => {
                 const toolId = typeof entry === 'string' ? entry : entry.id;
                 const tool = globalTools.find(t => t.id === toolId);
                 if (!tool) return null;
@@ -302,7 +402,7 @@ export const AgentForm: React.FC<AgentFormProps> = memo(({
                         {renderToggle(toolId)}
                         <span className="text-xs font-medium text-brand-text">{tool.name}</span>
                       </div>
-                      <button onClick={() => updateNodeData(nodeId, { globalToolIds: data.globalToolIds?.filter((e: any) => (typeof e === 'string' ? e : e.id) !== toolId) })} className="p-1 hover:bg-rose-500/10 text-brand-muted hover:text-rose-500 rounded"><X className="w-3 h-3" /></button>
+                      <button onClick={() => updateNodeData(nodeId, { globalToolIds: data.globalToolIds?.filter((e: string | { id: string }) => (typeof e === 'string' ? e : e.id) !== toolId) })} className="p-1 hover:bg-rose-500/10 text-brand-muted hover:text-rose-500 rounded"><X className="w-3 h-3" /></button>
                     </div>
                   </div>
                 );
@@ -411,11 +511,17 @@ export const AgentForm: React.FC<AgentFormProps> = memo(({
           <div className="grid grid-cols-2 gap-4 border-t border-brand-border/50 pt-4">
             {(['max_iter', 'max_retry_limit', 'max_rpm', 'max_execution_time', 'max_reasoning_attempts'] as (keyof AgentNodeData)[]).map(field => (
               <div key={field} className="flex flex-col gap-1.5">
-                <label className="text-[10px] font-bold text-brand-muted uppercase tracking-wider">{(field as string).replace(/_/g, ' ')}</label>
+                <label 
+                  htmlFor={`agent-${field}`}
+                  className="text-[10px] font-bold text-brand-muted uppercase tracking-wider"
+                >
+                  {(field as string).replace(/_/g, ' ')}
+                </label>
                 <input 
+                  id={`agent-${field}`}
                   type="number" 
                   value={(data[field] as number) || ''}
-                  onChange={(e) => updateNodeData(nodeId, { [field]: e.target.value ? parseInt(e.target.value) : undefined })}
+                  onChange={(e) => updateNodeData(nodeId, { [field]: e.target.value !== '' ? parseInt(e.target.value) : undefined })}
                   className="w-full bg-brand-bg border border-brand-border rounded-lg px-3 py-1.5 text-sm text-brand-text"
                 />
               </div>
@@ -442,7 +548,7 @@ export const AgentForm: React.FC<AgentFormProps> = memo(({
                 <SortableContext items={renderableTasks.map(a => a.id)} strategy={verticalListSortingStrategy}>
                   <div className="flex flex-col gap-1">
                     {renderableTasks.map((taskVal) => (
-                      <SortableItem key={taskVal.id} id={taskVal.id} name={(taskVal.data as any).name || 'Task'} />
+                      <SortableItem key={taskVal.id} id={taskVal.id} name={(taskVal.data as TaskNodeData).name || 'Task'} />
                     ))}
                   </div>
                 </SortableContext>
@@ -498,6 +604,50 @@ export const AgentForm: React.FC<AgentFormProps> = memo(({
           ))}
         </div>
       )}
+      {/* -- Preview Skill Modal -- */}
+      {skillToPreview && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 animate-in fade-in duration-200">
+          <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => setSkillToPreview(null)} />
+          <div className="relative w-full max-w-lg bg-brand-card border border-brand-border rounded-3xl shadow-2xl p-6 animate-in zoom-in-95 duration-200 flex flex-col max-h-[80vh]">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-blue-50 dark:bg-blue-900/20 rounded-xl flex items-center justify-center text-blue-600">
+                  <BookOpen className="w-5 h-5" />
+                </div>
+                <div>
+                  <h2 className="text-lg font-bold text-brand-text leading-tight">{skillToPreview.name}</h2>
+                  <p className="text-xs text-brand-muted">Injected Skill Content</p>
+                </div>
+              </div>
+              <button onClick={() => setSkillToPreview(null)} className="p-2 hover:bg-brand-bg rounded-full text-brand-muted transition-colors">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            
+            {skillToPreview.description && (
+              <div className="mb-4 p-3 bg-brand-bg/50 border border-brand-border rounded-xl">
+                <p className="text-xs text-brand-text italic">{skillToPreview.description}</p>
+              </div>
+            )}
+            
+            <div className="flex-1 overflow-y-auto bg-slate-900 rounded-xl p-4 custom-scrollbar">
+              <pre className="text-xs text-slate-300 font-mono whitespace-pre-wrap break-words leading-relaxed">
+                {skillToPreview.content}
+              </pre>
+            </div>
+            
+            <div className="mt-6 flex justify-end">
+              <button 
+                onClick={() => setSkillToPreview(null)}
+                className="bg-brand-bg border border-brand-border text-brand-text px-6 py-2 rounded-xl text-sm font-bold hover:bg-slate-100 dark:hover:bg-slate-800 transition-all"
+              >
+                Close Preview
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 });
+

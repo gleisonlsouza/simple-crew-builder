@@ -1,11 +1,14 @@
 import { render, screen, within } from '@testing-library/react';
 import { SnapshotFlow } from '../SnapshotFlow';
 import { vi, describe, it, expect, beforeEach } from 'vitest';
+import type { Mock } from 'vitest';
 import { useStore } from '../../store';
+import type { AppNode, AppEdge } from '../../types/nodes.types';
+import React from 'react';
 
 // Mock Lucide icons used by the Badge Wrapper
 vi.mock('lucide-react', async (importOriginal) => {
-  const actual = await importOriginal() as Record<string, any>;
+  const actual = await importOriginal() as Record<string, unknown>;
   return {
     ...actual,
     CheckCircle2: () => <div data-testid="icon-check" />,
@@ -18,28 +21,47 @@ vi.mock('../../store', () => ({
   useStore: vi.fn(),
 }));
 
+interface MockNode {
+  id: string;
+  type: string;
+  data: unknown;
+  position: { x: number, y: number };
+  style?: { opacity?: string | number; filter?: string; boxShadow?: string };
+}
+
+interface MockEdge {
+  id: string;
+  source: string;
+  target: string;
+  style?: { stroke?: string };
+  animated?: boolean;
+}
+
 // Mock React Flow so we can inspect props passed to it and avoid layout issues
 vi.mock('@xyflow/react', async (importOriginal) => {
-  const actual = await importOriginal() as Record<string, any>;
+  const actual = await importOriginal() as Record<string, unknown>;
   return {
     ...actual,
     Background: () => <div data-testid="background-mock" />,
     Controls: () => <div data-testid="controls-mock" />,
-    MiniMap: (props: any) => {
-      // Execute `nodeColor` for all node types to satisfy code coverage
+    MiniMap: (props: { nodeColor?: (node: { type: string }) => string }) => {
       if (typeof props.nodeColor === 'function') {
         ['agent', 'task', 'crew', 'webhook', 'chat', 'unknown'].forEach(type => {
-          props.nodeColor({ type });
+          props.nodeColor!({ type });
         });
       }
       return <div data-testid="minimap-mock" />;
     },
-    ReactFlow: (props: any) => {
+    ReactFlow: (props: { 
+      nodes: MockNode[], 
+      edges: MockEdge[], 
+      nodeTypes: Record<string, React.ComponentType<{ data: unknown }>>,
+      children?: React.ReactNode 
+    }) => {
       return (
         <div data-testid="react-flow-mock">
-          {/* Render edges */}
           <div data-testid="mock-edges-container">
-            {props.edges.map((e: any) => (
+            {props.edges.map((e) => (
               <div key={e.id} data-testid={`edge-${e.id}`}>
                 <span data-testid={`edge-stroke-${e.id}`}>{e.style?.stroke}</span>
                 <span data-testid={`edge-animated-${e.id}`}>{String(e.animated)}</span>
@@ -47,17 +69,15 @@ vi.mock('@xyflow/react', async (importOriginal) => {
             ))}
           </div>
 
-          {/* Render nodes and manually execute the withSnapshotBadge wrapper! */}
           <div data-testid="mock-nodes-container">
-            {props.nodes.map((n: any) => {
+            {props.nodes.map((n) => {
               const NodeTypeRender = props.nodeTypes[n.type];
               return (
                 <div key={n.id} data-testid={`node-${n.id}`}>
-                  <span data-testid={`node-style-opacity-${n.id}`}>{n.style?.opacity}</span>
-                  <span data-testid={`node-style-filter-${n.id}`}>{n.style?.filter}</span>
-                  <span data-testid={`node-style-boxShadow-${n.id}`}>{n.style?.boxShadow}</span>
+                  <span data-testid={`node-style-opacity-${n.id}`}>{String(n.style?.opacity)}</span>
+                  <span data-testid={`node-style-filter-${n.id}`}>{String(n.style?.filter)}</span>
+                  <span data-testid={`node-style-boxShadow-${n.id}`}>{String(n.style?.boxShadow)}</span>
                   
-                  {/* Test the HOC Rendering */}
                   <div data-testid={`wrapped-node-${n.id}`}>
                     {NodeTypeRender ? <NodeTypeRender data={n.data} /> : null}
                   </div>
@@ -84,30 +104,31 @@ vi.mock('../../nodes/WebhookNode', () => ({ WebhookNode: () => <div data-testid=
 vi.mock('../../nodes/DeletableEdge', () => ({ DeletableEdge: () => <div data-testid="mock-deletable-edge" /> }));
 
 describe('SnapshotFlow', () => {
-  const sampleNodes = [
-    { id: 'chat-1', type: 'chat', data: { name: 'Chat' }, style: {} },
-    { id: 'agent-1', type: 'agent', data: { name: 'Agent' }, style: {} },
-    { id: 'task-1', type: 'task', data: { name: 'Task' }, style: {} },
-    { id: 'crew-1', type: 'crew', data: { name: 'Crew' }, style: {} }
+  const sampleNodes: MockNode[] = [
+    { id: 'chat-1', type: 'chat', data: { name: 'Chat' }, position: { x: 0, y: 0 }, style: {} },
+    { id: 'agent-1', type: 'agent', data: { name: 'Agent' }, position: { x: 100, y: 0 }, style: {} },
+    { id: 'task-1', type: 'task', data: { name: 'Task' }, position: { x: 200, y: 0 }, style: {} },
+    { id: 'crew-1', type: 'crew', data: { name: 'Crew' }, position: { x: 300, y: 0 }, style: {} }
   ];
 
-  const sampleEdges = [
-    { id: 'edge-1', source: 'chat-1', target: 'crew-1', style: {} },
-    { id: 'edge-2', source: 'crew-1', target: 'agent-1', style: {} },
-    { id: 'edge-3', source: 'agent-1', target: 'task-1', style: {} } // For unreached edge logic coverage
+  const sampleEdges: MockEdge[] = [
+    { id: 'edge-1', source: 'chat-1', target: 'crew-1', style: {}, animated: false },
+    { id: 'edge-2', source: 'crew-1', target: 'agent-1', style: {}, animated: false },
+    { id: 'edge-3', source: 'agent-1', target: 'task-1', style: {}, animated: false }
   ];
 
   beforeEach(() => {
     vi.clearAllMocks();
-    (useStore as any).mockReturnValue('light'); // Mock theme selector
+    (useStore as unknown as Mock).mockReturnValue('light');
   });
 
   it('renders gracefully with missing or undefined node_statuses', () => {
-    render(<SnapshotFlow nodes={sampleNodes} edges={sampleEdges} executionStatus="success" />);
+    render(<SnapshotFlow nodes={sampleNodes as unknown as AppNode[]} edges={sampleEdges as unknown as AppEdge[]} executionStatus="success" />);
     expect(screen.getByTestId('react-flow-mock')).toBeInTheDocument();
   });
 
   it('applies basic fallback logic when nodeStatuses are omitted but global status is error', () => {
+    // @ts-expect-error - Mocks don't fully satisfy AppNode
     render(<SnapshotFlow nodes={sampleNodes} edges={sampleEdges} executionStatus="error" />);
     
     // Crew node should be marked as "error" explicitly due to fallback logic in SnapshotFlow.tsx
@@ -125,8 +146,8 @@ describe('SnapshotFlow', () => {
 
     render(
       <SnapshotFlow 
-        nodes={sampleNodes} 
-        edges={sampleEdges} 
+        nodes={sampleNodes as unknown as AppNode[]} 
+        edges={sampleEdges as unknown as AppEdge[]} 
         executionStatus="running" 
         nodeStatuses={granularStatuses} 
       />
@@ -151,8 +172,8 @@ describe('SnapshotFlow', () => {
 
     render(
       <SnapshotFlow 
-        nodes={sampleNodes} 
-        edges={sampleEdges} 
+        nodes={sampleNodes as unknown as AppNode[]} 
+        edges={sampleEdges as unknown as AppEdge[]} 
         executionStatus="error" 
         nodeStatuses={granularStatuses} 
       />
@@ -175,8 +196,8 @@ describe('SnapshotFlow', () => {
 
     render(
       <SnapshotFlow 
-        nodes={sampleNodes} 
-        edges={sampleEdges} 
+        nodes={sampleNodes as unknown as AppNode[]} 
+        edges={sampleEdges as unknown as AppEdge[]} 
         executionStatus="success" 
         nodeStatuses={granularStatuses} 
       />
@@ -198,8 +219,8 @@ describe('SnapshotFlow', () => {
 
     render(
       <SnapshotFlow 
-        nodes={sampleNodes} 
-        edges={sampleEdges} 
+        nodes={sampleNodes as unknown as AppNode[]} 
+        edges={sampleEdges as unknown as AppEdge[]} 
         executionStatus="error" 
         nodeStatuses={granularStatuses} 
       />

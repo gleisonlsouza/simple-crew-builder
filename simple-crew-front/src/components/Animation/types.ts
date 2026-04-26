@@ -13,6 +13,7 @@ export interface Robot {
   state: RobotState;
   currentTask: string | null;
   color: string;
+  icon?: React.ReactNode;
   assignedTasks: string[];
   thought: string | null;
   energy: number;

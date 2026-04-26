@@ -1,7 +1,7 @@
 import React, { useState, memo } from 'react';
 import { X, Plus, Sparkles, User, Settings, FileOutput } from 'lucide-react';
-import { HighlightedTextField } from '../HighlightedTextField';
-import type { TaskNodeData, AppNode } from '../../types/nodes.types';
+import HighlightedTextField from '../HighlightedTextField';
+import type { TaskNodeData, AppNode, AgentNodeData } from '../../types/nodes.types';
 
 interface TaskFormProps {
   data: TaskNodeData;
@@ -10,8 +10,8 @@ interface TaskFormProps {
   nodes: AppNode[];
   loadingFields: Record<string, boolean>;
   onAiSuggest: (field: string) => void;
-  onFieldKeyDown: (e: React.KeyboardEvent) => void;
-  onFieldChange: (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>, field: string, updateFn: (val: string) => void) => void;
+  onFieldKeyDown: (e: React.KeyboardEvent<HTMLInputElement | HTMLTextAreaElement>) => void;
+  onFieldChange: (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement> | { target: { value: string } }, field: string, updateFn: (val: string) => void) => void;
   isContextSelectorOpen: boolean;
   setIsContextSelectorOpen: (open: boolean) => void;
 }
@@ -46,7 +46,7 @@ export const TaskForm: React.FC<TaskFormProps> = memo(({
             <div className="flex items-center gap-2">
               <User className={`w-4 h-4 ${assignedAgent ? 'text-indigo-500' : 'text-brand-muted'}`} />
               <span className={assignedAgent ? 'text-brand-text' : 'text-brand-muted italic'}>
-                {assignedAgent ? (assignedAgent.data as any).name || 'Unnamed Agent' : 'Select an agent...'}
+                {assignedAgent ? (assignedAgent.data as AgentNodeData).name || 'Unnamed Agent' : 'Select an agent...'}
               </span>
             </div>
             <Plus className="w-3 h-3 text-brand-muted group-hover:text-indigo-500" />
@@ -70,7 +70,7 @@ export const TaskForm: React.FC<TaskFormProps> = memo(({
                       className="w-full flex items-center gap-2 px-3 py-2 text-xs text-brand-text hover:bg-brand-bg rounded-lg transition-colors text-left"
                     >
                       <User className="w-3 h-3 text-indigo-500" />
-                      <span className="truncate">{(agent.data as any).name || 'Unnamed Agent'}</span>
+                      <span className="truncate">{(agent.data as AgentNodeData).name || 'Unnamed Agent'}</span>
                     </button>
                   ))}
                   {nodes.filter(n => n.type === 'agent').length === 0 && (
@@ -98,6 +98,7 @@ export const TaskForm: React.FC<TaskFormProps> = memo(({
             </button>
           </div>
           <HighlightedTextField 
+            data-testid={`input-${(field as string).replace(/_/g, '-')}`}
             type="textarea" 
             value={(data[field] as string) || ''} 
             onKeyDown={onFieldKeyDown} 
@@ -114,7 +115,7 @@ export const TaskForm: React.FC<TaskFormProps> = memo(({
             const taskNode = nodes.find(n => n.id === contextId);
             return (
               <div key={contextId} className="flex items-center gap-1.5 px-2 py-1 bg-blue-500/10 border border-blue-500/20 text-blue-600 dark:text-blue-400 rounded-lg text-xs font-medium">
-                <span className="truncate max-w-[120px]">{(taskNode?.data as any)?.name || 'Task'}</span>
+                <span className="truncate max-w-[120px]">{(taskNode?.data as TaskNodeData | undefined)?.name || 'Task'}</span>
                 <button 
                   onClick={() => updateNodeData(nodeId, { context: (data.context || []).filter((id: string) => id !== contextId) })} 
                   className="hover:bg-blue-500/20 p-0.5 rounded"
@@ -147,7 +148,7 @@ export const TaskForm: React.FC<TaskFormProps> = memo(({
                         }} 
                         className="w-full flex justify-between px-3 py-2 text-xs text-brand-text hover:bg-brand-bg rounded-lg"
                       >
-                        {(taskNode.data as any).name || 'Unnamed Task'}
+                        {(taskNode.data as TaskNodeData).name || 'Unnamed Task'}
                         <Plus className="w-3 h-3" />
                       </button>
                     ))}

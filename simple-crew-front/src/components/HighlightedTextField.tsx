@@ -1,39 +1,37 @@
 import React from 'react';
-// @ts-ignore
-import * as EditorModule from 'react-simple-code-editor';
-import Prism from 'prismjs';
+import EditorModule from 'react-simple-code-editor';
+import PrismModule from 'prismjs';
 
-// Robust way to get the Editor component from various module formats (CJS, ESM, etc.)
-let Editor: any = EditorModule;
-// Recursive unwrap if there's a .default property (common in Vite/ESM/CJS interop)
-while (Editor && Editor.default && Editor !== Editor.default) {
-  Editor = Editor.default;
-}
+// Fix for Vite ESM/CommonJS interop
+const Editor = (EditorModule as unknown as { default: React.ElementType })?.default || (EditorModule as unknown as React.ElementType);
+const Prism = (PrismModule as unknown as { default: typeof import('prismjs') })?.default || (PrismModule as unknown as typeof import('prismjs'));
 
-// Special case for some builds where it's named 'Editor' specifically
-if (!Editor || (typeof Editor !== 'function' && typeof Editor !== 'string' && !(Editor && Editor.$$typeof))) {
-  if ((EditorModule as any).Editor) Editor = (EditorModule as any).Editor;
-}
+
+
+
 
 // Import all required languages explicitly to avoid missing peer dependency issues in some environments
 import 'prismjs/components/prism-python';
 import 'prismjs/components/prism-javascript';
 import 'prismjs/components/prism-markup'; // HTML
 import 'prismjs/components/prism-bash';
+import { getCursorCoordinates } from '../utils/getCursorCoordinates';
 
 interface HighlightedTextFieldProps {
   type: 'input' | 'textarea';
   value: string;
-  onChange: (e: any) => void;
-  onKeyDown?: (e: React.KeyboardEvent<HTMLTextAreaElement | HTMLInputElement | any>) => void;
+  onChange: (e: React.ChangeEvent<HTMLTextAreaElement | HTMLInputElement> | { target: { value: string, selectionStart?: number, cursorRect?: { top: number, left: number, height: number } } }) => void;
+  onKeyDown?: React.KeyboardEventHandler<HTMLTextAreaElement | HTMLInputElement | HTMLDivElement>;
   placeholder?: string;
   className?: string;
   highlightClassName?: string;
   language?: 'none' | 'python';
   rows?: number;
+  'data-testid'?: string;
+  footer?: React.ReactNode;
 }
 
-export const HighlightedTextField: React.FC<HighlightedTextFieldProps> = ({
+const HighlightedTextField: React.FC<HighlightedTextFieldProps> = ({
   type,
   value,
   onChange,
@@ -41,9 +39,49 @@ export const HighlightedTextField: React.FC<HighlightedTextFieldProps> = ({
   placeholder,
   className = '',
   language = 'none',
-  rows = 3
+  rows = 3,
+  'data-testid': dataTestId,
+  footer
 }) => {
   const [isFocused, setIsFocused] = React.useState(false);
+  const [localValue, setLocalValue] = React.useState(value);
+  const containerRef = React.useRef<HTMLDivElement>(null);
+  const inputRef = React.useRef<HTMLInputElement>(null);
+
+  React.useEffect(() => {
+    // Sync local value with prop value when prop changes
+    // This is critical for external updates like AI suggestions or variable insertions
+    if (value !== localValue) {
+      setLocalValue(value);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [value]);
+
+
+  const handleValueChange = (code: string) => {
+    setLocalValue(code);
+    let textarea: HTMLTextAreaElement | HTMLInputElement | null = null;
+    
+    if (type === 'textarea' && containerRef.current) {
+      textarea = containerRef.current.querySelector('textarea');
+    } else if (type === 'input' && inputRef.current) {
+      textarea = inputRef.current;
+    }
+
+    if (textarea) {
+      const cursorPos = textarea.selectionStart || code.length;
+      const coords = getCursorCoordinates(textarea, cursorPos);
+      onChange({ 
+        target: { 
+          value: code, 
+          selectionStart: cursorPos,
+          cursorRect: coords
+        } 
+      });
+    } else {
+      onChange({ target: { value: code } });
+    }
+  };
 
   const highlightWithPrism = (code: string) => {
     if (!code && !isFocused) return ''; // Let placeholder show
@@ -69,56 +107,69 @@ export const HighlightedTextField: React.FC<HighlightedTextFieldProps> = ({
     }
   };
 
-  if (!Editor || (typeof Editor !== 'function' && typeof Editor !== 'string' && !(Editor && Editor.$$typeof))) {
+  if (!Editor) {
     return (
       <div className="p-4 bg-red-500/10 border border-red-500 rounded-xl text-red-500 text-xs font-mono">
-        <div>Error: Editor is invalid type: {typeof Editor}</div>
-        <div>Keys: {JSON.stringify(Object.keys(EditorModule))}</div>
-        <div>Default Keys: {EditorModule.default ? JSON.stringify(Object.keys(EditorModule.default)) : 'null'}</div>
+        <div>Error: Editor could not be loaded</div>
       </div>
     );
   }
 
   return (
     <div className={`
-      relative w-full rounded-xl border transition-all duration-200 overflow-hidden bg-brand-bg/30
-      ${isFocused ? 'border-indigo-500 ring-4 ring-indigo-500/10' : 'border-brand-border'} 
+      relative w-full rounded-xl border transition-all duration-200 overflow-hidden bg-brand-bg flex flex-col
+      ${isFocused ? 'border-indigo-600 ring-2 ring-indigo-600/20 shadow-lg shadow-indigo-500/5' : 'border-brand-border'} 
       ${className}
-    `}>
+    `}
+    data-testid={dataTestId}
+    >
       {type === 'textarea' ? (
-        <Editor
-          value={value}
-          onValueChange={(code: string) => onChange({ target: { value: code } })}
-          highlight={(code: string) => highlightWithPrism(code) as any}
-          padding={16}
-          onKeyDown={onKeyDown}
-          onFocus={() => setIsFocused(true)}
-          onBlur={() => setIsFocused(false)}
-          placeholder={isFocused ? '' : placeholder}
-          className="code-editor-wrapper min-h-full"
-          textareaClassName="code-editor-textarea"
-          style={{
-            fontSize: 14,
-            lineHeight: '1.5rem',
-            minHeight: rows ? `${rows * 1.5}rem` : 'inherit',
-          }}
-        />
+        <div ref={containerRef} className="flex-1 w-full flex flex-col">
+          <Editor
+            value={localValue}
+            onValueChange={handleValueChange}
+            highlight={(code: string) => highlightWithPrism(code)}
+            padding={0}
+            onKeyDown={onKeyDown}
+            onFocus={() => setIsFocused(true)}
+            onBlur={() => setIsFocused(false)}
+            placeholder={isFocused ? '' : placeholder}
+            className="code-editor-wrapper w-full flex-1"
+            textareaClassName="code-editor-textarea !p-4 !outline-none !border-none !bg-transparent !shadow-none !ring-0 !min-h-[100px]"
+            preClassName="!p-4"
+            style={{
+              fontSize: 14,
+              lineHeight: '1.5rem',
+              minHeight: rows ? `${rows * 1.5}rem` : 'inherit',
+              width: '100%',
+              backgroundColor: 'transparent'
+            }}
+          />
+        </div>
       ) : (
-        /* For simple input, we still use the manual way but simpler, or just a regular input if highlighting isn't critical */
         <div className="relative">
              <input
-                value={value}
-                onChange={onChange}
-                onKeyDown={onKeyDown}
+                ref={inputRef}
+                value={localValue}
+                onChange={(e) => handleValueChange(e.target.value)}
+                onKeyDown={onKeyDown as React.KeyboardEventHandler<HTMLInputElement>}
                 onFocus={() => setIsFocused(true)}
                 onBlur={() => setIsFocused(false)}
                 placeholder={placeholder}
                 className="w-full bg-transparent border-none px-4 py-3 text-sm text-brand-text outline-none focus:ring-0"
                 spellCheck={false}
              />
-             {/* Simple inputs usually don't need complex highlighting for code, but if we need it for {vars}, we can add it back later */}
+        </div>
+      )}
+
+      {/* Attachment Footer */}
+      {footer && (
+        <div className="mt-auto border-t border-brand-border/30 border-dashed bg-brand-bg/50 px-3 pb-3 pt-2">
+          {footer}
         </div>
       )}
     </div>
   );
 };
+
+export default HighlightedTextField;

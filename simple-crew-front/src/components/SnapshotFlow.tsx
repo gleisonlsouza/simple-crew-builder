@@ -4,9 +4,12 @@ import {
   Background, 
   Controls, 
   MiniMap, 
-  BackgroundVariant 
+  BackgroundVariant,
+  ConnectionLineType,
+  type NodeProps
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
+import type { AppNode, AppEdge } from '../types/nodes.types';
 
 // Import our custom nodes and edges to match the Builder visual style
 import { AgentNode } from '../nodes/AgentNode';
@@ -18,9 +21,19 @@ import { DeletableEdge } from '../nodes/DeletableEdge';
 import { useStore } from '../store';
 import { CheckCircle2, XCircle } from 'lucide-react';
 
-const withSnapshotBadge = (WrappedComponent: React.ComponentType<any>) => {
-  return function BadgeWrapper(props: any) {
-    const status = props.data?.executionStatus;
+import { migrateLegacyWorkflow } from '../utils/workflowAdapter';
+import { getLayoutedElements } from '../utils/layoutUtils';
+import { ToolNode } from '../nodes/ToolNode';
+import { CustomToolNode } from '../nodes/CustomToolNode';
+import { McpNode } from '../nodes/McpNode';
+import { StateNode } from '../nodes/StateNode';
+import { SchemaNode } from '../nodes/SchemaNode';
+import { RouterNode } from '../nodes/RouterNode';
+
+const withSnapshotBadge = <T extends NodeProps>(WrappedComponent: React.ComponentType<T>) => {
+  return function BadgeWrapper(props: T) {
+    const data = props.data as Record<string, unknown>;
+    const status = data?.executionStatus;
     
     // To ensure the badge is positioned relative to the node bounds, we use a fragment
     // since React Flow's wrapper (.react-flow__node) is already positioned.
@@ -48,15 +61,22 @@ const nodeTypes = {
   crew: withSnapshotBadge(CrewNode),
   chat: withSnapshotBadge(ChatNode),
   webhook: withSnapshotBadge(WebhookNode),
+  tool: withSnapshotBadge(ToolNode),
+  customTool: withSnapshotBadge(CustomToolNode),
+  mcp: withSnapshotBadge(McpNode),
+  state: withSnapshotBadge(StateNode),
+  schema: withSnapshotBadge(SchemaNode),
+  router: withSnapshotBadge(RouterNode),
 };
 
 const edgeTypes = {
   deletable: DeletableEdge,
+  smoothstep: DeletableEdge,
 };
 
 interface SnapshotFlowProps {
-  nodes: any[];
-  edges: any[];
+  nodes: AppNode[];
+  edges: AppEdge[];
   executionStatus?: string;
   nodeStatuses?: Record<string, string>;
 }
@@ -64,10 +84,16 @@ interface SnapshotFlowProps {
 export const SnapshotFlow: React.FC<SnapshotFlowProps> = ({ nodes = [], edges = [], executionStatus, nodeStatuses }) => {
   const theme = useStore((state) => state.theme);
 
+  const { layoutedNodes, layoutedEdges } = useMemo(() => {
+    const { migratedNodes, migratedEdges } = migrateLegacyWorkflow(nodes, edges);
+    const { nodes: layoutedN, edges: layoutedE } = getLayoutedElements(migratedNodes, migratedEdges);
+    return { layoutedNodes: layoutedN, layoutedEdges: layoutedE };
+  }, [nodes, edges]);
+
   // We memoize the nodes and edges so ReactFlow doesn't constantly re-render
   // unless the actual snapshot data changes.
   const snapshotNodes = useMemo(() => {
-    return nodes.map((node) => {
+    return layoutedNodes.map((node) => {
       let nodeState = executionStatus; // fallback
 
       if (nodeStatuses) {
@@ -100,14 +126,15 @@ export const SnapshotFlow: React.FC<SnapshotFlowProps> = ({ nodes = [], edges = 
         style: historyStyle,
         data: {
           ...node.data,
-          executionStatus: nodeState // Inject status here to be read by the BadgeWrapper
+          executionStatus: nodeState, // Inject status here to be read by the BadgeWrapper
+          isSnapshot: true
         }
       };
     });
-  }, [nodes, executionStatus, nodeStatuses]);
+  }, [layoutedNodes, executionStatus, nodeStatuses]);
 
   const snapshotEdges = useMemo(() => {
-    return edges.map((edge) => {
+    return layoutedEdges.map((edge) => {
       let isSuccessEdge = executionStatus === 'success';
 
       if (nodeStatuses) {
@@ -116,7 +143,7 @@ export const SnapshotFlow: React.FC<SnapshotFlowProps> = ({ nodes = [], edges = 
           isSuccessEdge = sourceStatus === 'success';
         } else {
           // If source node is chat/webhook/crew, edge is lit up if execution reached crew
-          const sourceNode = nodes.find(n => n.id === edge.source);
+          const sourceNode = layoutedNodes.find(n => n.id === edge.source);
           if (sourceNode && (sourceNode.type === 'chat' || sourceNode.type === 'webhook' || sourceNode.type === 'crew')) {
             isSuccessEdge = true; // flow naturally proceeded 
           } else {
@@ -136,7 +163,7 @@ export const SnapshotFlow: React.FC<SnapshotFlowProps> = ({ nodes = [], edges = 
         animated: isSuccessEdge, // Animate flow path actively taken
       };
     });
-  }, [edges, nodes, theme, executionStatus, nodeStatuses]);
+  }, [layoutedEdges, layoutedNodes, theme, executionStatus, nodeStatuses]);
 
   return (
     <div className="w-full h-[400px] border border-brand-border rounded-xl overflow-hidden relative bg-brand-bg">
@@ -153,6 +180,8 @@ export const SnapshotFlow: React.FC<SnapshotFlowProps> = ({ nodes = [], edges = 
         edges={snapshotEdges}
         nodeTypes={nodeTypes}
         edgeTypes={edgeTypes}
+        defaultEdgeOptions={{ type: 'smoothstep' }}
+        connectionLineType={ConnectionLineType.SmoothStep}
         fitView
         fitViewOptions={{ padding: 0.3, maxZoom: 1.0 }}
         minZoom={0.2}

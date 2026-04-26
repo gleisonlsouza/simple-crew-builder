@@ -12,15 +12,33 @@ import {
   type ToolConfig, 
   type CustomTool, 
   type MCPServer, 
-  type Credential 
+  type Credential,
+  type AgentSkill
 } from './config.types';
 
+
 export type NodeStatus = 'idle' | 'running' | 'success' | 'error' | 'waiting';
+
+export interface ExportedProject {
+  version: string;
+  framework?: string;
+  nodes: AppNode[];
+  edges: AppEdge[];
+  globalTools?: ToolConfig[];
+  customTools?: CustomTool[];
+  mcpServers?: MCPServer[];
+  name?: string;
+  description?: string;
+  workspaceId?: string | null;
+  workspaceName?: string | null;
+  canvasLayout?: 'vertical' | 'horizontal';
+}
 
 export interface Project {
   id: string;
   name: string;
   description?: string;
+  framework?: string;
   workspace_id?: string;
   canvas_data: {
     nodes: AppNode[];
@@ -28,6 +46,7 @@ export interface Project {
     customTools?: CustomTool[];
     mcpServers?: MCPServer[];
     version: string;
+    canvasLayout: 'vertical' | 'horizontal';
   };
   created_at: string;
   updated_at: string;
@@ -63,6 +82,8 @@ export interface KnowledgeBaseDocument {
   id: string;
   filename: string;
   size?: number;
+  status?: 'indexing' | 'success' | 'failed';
+  error?: string | null;
   created_at: string;
 }
 
@@ -81,25 +102,34 @@ export interface GraphSlice {
   executionResult: string | null;
   messages: ChatMessage[];
   activeNodeId: string | null;
+  focusedTreeRootId: string | null;
   onNodesChange: (changes: NodeChange<AppNode>[]) => void;
   onEdgesChange: (changes: EdgeChange[]) => void;
   onConnect: (connection: Connection) => void;
   deleteEdge: (edgeId: string) => void;
   deleteNode: (nodeId: string) => void;
-  updateNodeData: (nodeId: string, data: Partial<any>) => void;
+  updateNodeData: (nodeId: string, data: Partial<AppNode['data']>) => void;
   addNode: (node: AppNode) => void;
-  addNodeWithAutoPosition: (type: 'agent' | 'task' | 'crew' | 'chat' | 'webhook', data: any) => void;
+  addNodeWithAutoPosition: (type: 'agent' | 'task' | 'crew' | 'chat' | 'webhook' | 'tool' | 'customTool' | 'mcp' | 'state' | 'router' | 'schema', data: Partial<AppNode['data']>) => void;
   setNodeStatus: (id: string, status: NodeStatus) => void;
   setNodeWarnings: (warnings: Record<string, string[]>) => void;
   setActiveNode: (id: string | null) => void;
-  toggleCollapse: (nodeId: string) => void;
+  toggleCollapse: (nodeId: string, allowedHandles?: string[]) => void;
   updateCrewAgentOrder: (crewId: string, newOrder: string[]) => void;
   updateCrewTaskOrder: (crewId: string, newOrder: string[]) => void;
   updateAgentTaskOrder: (agentId: string, newOrder: string[]) => void;
+  updateStateConnection: (nodeId: string, stateId: string | null, showLine: boolean, fieldKey?: string | null) => void;
   validateGraph: () => boolean;
+  setExecutionResult: (result: string | null) => void;
   setMessages: (messages: ChatMessage[] | ((prev: ChatMessage[]) => ChatMessage[])) => void;
   clearChat: () => void;
   resetProject: () => void;
+  resetExecutionVisuals: () => void;
+  finalizeExecutionVisuals: () => void;
+  focusEdge: (edgeId: string | null) => void;
+  focusNodeTree: (nodeId: string | null) => void;
+  clearDimmedState: () => void;
+  applyAutoLayout: () => void;
 }
 
 export interface UISlice {
@@ -109,13 +139,31 @@ export interface UISlice {
   isConsoleExpanded: boolean;
   isUsabilityDrawerOpen: boolean;
   isChatVisible: boolean;
+  isAboutModalOpen: boolean;
+  isSidebarCollapsed: boolean;
+  isStateModalOpen: boolean;
+  activeStateNodeId: string | null;
+  isSchemaModalOpen: boolean;
+  activeSchemaNodeId: string | null;
+  isRouterModalOpen: boolean;
+  activeRouterNodeId: string | null;
   notification: AppNotification | null;
+  canvasLayout: 'vertical' | 'horizontal';
   toggleTheme: () => void;
+  setCanvasLayout: (layout: 'vertical' | 'horizontal') => void;
   setIsSettingsOpen: (open: boolean) => void;
   setIsConsoleOpen: (open: boolean) => void;
   setIsConsoleExpanded: (expanded: boolean) => void;
   setIsUsabilityDrawerOpen: (open: boolean) => void;
   setIsChatVisible: (visible: boolean) => void;
+  setIsAboutModalOpen: (open: boolean) => void;
+  setIsSidebarCollapsed: (collapsed: boolean) => void;
+  openStateModal: (nodeId: string) => void;
+  closeStateModal: () => void;
+  openSchemaModal: (nodeId: string) => void;
+  closeSchemaModal: () => void;
+  openRouterModal: (nodeId: string) => void;
+  closeRouterModal: () => void;
   resetUIState: () => void;
   showNotification: (message: string, type: 'success' | 'error' | 'warning' | 'info') => void;
   clearNotification: () => void;
@@ -128,23 +176,24 @@ export interface ProjectSlice {
   currentProjectDescription: string | null;
   currentProjectWorkspaceId: string | null;
   currentProjectWorkspaceName: string | null;
+  currentProjectFramework: string | null;
   isSaving: boolean;
   isExecuting: boolean;
   isDirty: boolean; // Add isDirty flag
   abortController: AbortController | null;
   setDirty: (dirty: boolean) => void;
-  hydrateFromSnapshot: (projectId: string, snapshot: any) => void;
+  hydrateFromSnapshot: (projectId: string, snapshot: Project['canvas_data']) => void;
   fetchProjects: () => Promise<void>;
   saveProject: (name: string, description?: string) => Promise<void>;
   updateProjectMetadata: (id: string, name: string, description: string) => Promise<void>;
   loadProject: (projectId: string) => Promise<void>;
   deleteProject: (projectId: string) => Promise<void>;
-  createNewProject: (name: string, description: string) => Promise<Project | null>;
+  createNewProject: (name: string, description: string, framework?: string) => Promise<Project | null>;
   duplicateProject: (id: string) => Promise<void>;
   exportProjectJson: () => void;
   exportPythonProject: () => Promise<void>;
-  loadProjectJson: (data: any) => boolean;
-  importProjectJsonAndSave: (data: any) => Promise<Project | null>;
+  loadProjectJson: (data: unknown) => boolean;
+  importProjectJsonAndSave: (data: unknown) => Promise<Project | null>;
   startRealExecution: () => Promise<string | null>;
   stopExecution: () => void;
   updateProjectWorkspaceId: (workspaceId: string | null) => void;
@@ -156,7 +205,9 @@ export interface ConfigSlice {
   globalTools: ToolConfig[];
   customTools: CustomTool[];
   mcpServers: MCPServer[];
+  skills: AgentSkill[];
   systemAiModelId: string | null;
+
   embeddingModelId: string | null;
   defaultModel: string;
   fetchCredentials: () => Promise<void>;
@@ -173,7 +224,7 @@ export interface ConfigSlice {
   setEmbeddingModelId: (id: string | null) => void;
   setDefaultModel: (model: string) => void;
   updateToolConfig: (id: string, config: Partial<ToolConfig>) => void;
-  fetchCustomTools: () => Promise<void>;
+  fetchCustomTools: (framework?: string) => Promise<void>;
   addCustomTool: (tool: Omit<CustomTool, 'id'>) => Promise<void>;
   updateCustomTool: (id: string, tool: Partial<CustomTool>) => Promise<void>;
   deleteCustomTool: (id: string) => Promise<void>;
@@ -181,7 +232,13 @@ export interface ConfigSlice {
   addMCPServer: (server: Omit<MCPServer, 'id'>) => Promise<void>;
   updateMCPServer: (id: string, server: Partial<MCPServer>) => Promise<void>;
   deleteMCPServer: (id: string) => Promise<void>;
+  fetchSkills: () => Promise<void>;
+  importSkill: (url: string) => Promise<void>;
+  uploadSkill: (file: File) => Promise<void>;
+  deleteSkill: (id: string) => Promise<void>;
+
   fetchSettings: () => Promise<void>;
+
   updateSettings: (settings: { active_workspace_id?: string | null; system_ai_model_id?: string | null; embedding_model_id?: string | null }) => Promise<void>;
 }
 
@@ -216,9 +273,9 @@ export interface Execution {
   project_id: string;
   status: 'running' | 'success' | 'error';
   trigger_type: string;
-  input_data: any;
-  output_data?: any;
-  graph_snapshot: any;
+  input_data: unknown;
+  output_data?: unknown;
+  graph_snapshot: Project['canvas_data'];
   duration?: number;
   timestamp: string;
 }

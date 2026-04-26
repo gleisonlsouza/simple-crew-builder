@@ -1,36 +1,69 @@
-from pydantic import BaseModel, field_validator
-from typing import List, Dict, Optional, Any
+from pydantic import BaseModel, Field, field_validator, ConfigDict
+from typing import List, Dict, Optional, Any, Literal, Union, Annotated
 from datetime import datetime
 from .models import ModelType
 
 class CustomTool(BaseModel):
+    model_config = ConfigDict(extra="ignore")
     id: str
     name: str
-    description: str
+    description: Optional[str] = None
     code: str
 
-class NodeData(BaseModel):
-    # Campos que transitam desde o Canvas do React Flow
+# --- LangGraph Specific Sub-Schemas ---
+class StateField(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    id: str
+    key: str
+    type: str
+    reducer: Optional[str] = None
+    defaultValue: Optional[Any] = Field(default=None, alias="defaultValue")
+
+class SchemaField(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    id: str
+    key: str
+    type: str
+    description: str
+    defaultValue: Optional[Any] = Field(default=None, alias="defaultValue")
+
+class RouteCondition(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    id: str
+    label: str
+    field: str
+    operator: str
+    value: Any
+
+# --- Specialized Node Data Models ---
+
+class BaseNodeData(BaseModel):
+    model_config = ConfigDict(extra="ignore")
     name: Optional[str] = None
-    role: Optional[str] = None
-    goal: Optional[str] = None
-    backstory: Optional[str] = None
-    description: Optional[str] = None
-    expected_output: Optional[str] = None
+
+class CrewNodeData(BaseNodeData):
     process: Optional[str] = None
-    context: Optional[List[str]] = None
-    mcpServerIds: Optional[List[str]] = None
-    customToolIds: Optional[List[str]] = None
-    globalToolIds: Optional[List[Any]] = None
-    
-    # LLM & Logic Fields
-    modelId: Optional[str] = None
-    temperature: Optional[float] = None
+    memory: Optional[bool] = None
+    planning: Optional[bool] = None
+    share_crew: Optional[bool] = None
+    agentOrder: Optional[List[str]] = None
+    taskOrder: Optional[List[str]] = None
+    inputs: Optional[Dict[str, Any]] = None
+    embedder: Optional[Any] = None
+    output_log_file: Optional[str] = None
+    prompt_file: Optional[str] = None
     manager_llm_id: Optional[str] = None
     planning_llm_id: Optional[str] = None
     function_calling_llm_id: Optional[str] = None
-    
-    # Execution & Configuration Fields
+    outputKey: Optional[str] = None
+    outputMapping: Optional[str] = None
+
+class AgentNodeData(BaseNodeData):
+    role: Optional[str] = None
+    goal: Optional[str] = None
+    backstory: Optional[str] = None
+    modelId: Optional[str] = None
+    temperature: Optional[float] = None
     verbose: Optional[bool] = None
     allow_delegation: Optional[bool] = None
     cache: Optional[bool] = None
@@ -50,73 +83,191 @@ class NodeData(BaseModel):
     system_template: Optional[str] = None
     prompt_template: Optional[str] = None
     response_template: Optional[str] = None
-    
-    # Task specific
+    mcpServerIds: Optional[List[str]] = None
+    customToolIds: Optional[List[str]] = None
+    globalToolIds: Optional[List[Any]] = None
+    disabledToolIds: Optional[List[str]] = None
+    identitySkillIds: Optional[List[str]] = Field(default_factory=list)
+    taskOrder: Optional[List[str]] = None
+
+class TaskNodeData(BaseNodeData):
+    description: Optional[str] = None
+    expected_output: Optional[str] = None
     async_execution: Optional[bool] = None
     human_input: Optional[bool] = None
     create_directory: Optional[bool] = None
     output_file: Optional[str] = None
-    
-    # Crew specific
-    memory: Optional[bool] = None
-    planning: Optional[bool] = None
-    share_crew: Optional[bool] = None
-    agentOrder: Optional[List[str]] = None
-    taskOrder: Optional[List[str]] = None
-    inputs: Optional[Dict[str, Any]] = None
-    embedder: Optional[Any] = None
-    output_log_file: Optional[str] = None
-    prompt_file: Optional[str] = None
+    context: Optional[List[str]] = None
+    mcpServerIds: Optional[List[str]] = None
+    customToolIds: Optional[List[str]] = None
+    globalToolIds: Optional[List[Any]] = None
+    disabledToolIds: Optional[List[str]] = None
 
-    # Webhook specific
+class StateNodeData(BaseNodeData):
+    fields: List[StateField] = []
+
+class SchemaNodeData(BaseNodeData):
+    fields: List[SchemaField] = []
+
+class RouterNodeData(BaseNodeData):
+    conditions: List[RouteCondition] = []
+    defaultRoute: Optional[str] = None
+
+class McpNodeData(BaseNodeData):
+    serverId: Optional[str] = None
+
+class ToolNodeData(BaseNodeData):
+    toolId: Optional[str] = None
+    config: Optional[Dict[str, Any]] = None
+
+class CustomToolNodeData(BaseNodeData):
+    toolId: Optional[str] = None
+
+class ChatNodeData(BaseNodeData):
+    description: Optional[str] = None
+    inputMapping: Optional[str] = None
+    includeHistory: Optional[bool] = None
+    systemMessage: Optional[str] = None
+
+class WebhookNodeData(BaseNodeData):
+    webhookId: Optional[str] = None
     path: Optional[str] = None
+    url: Optional[str] = None
     method: Optional[str] = None
+    fieldMappings: Optional[Dict[str, str]] = None
+    token: Optional[str] = None
+    headers: Optional[Dict[str, str]] = None
     isActive: Optional[bool] = None
     waitForResult: Optional[bool] = None
-    secret: Optional[str] = None
-    fieldMappings: Optional[Dict[str, str]] = None
 
-    # Permitir chaves adicionais como isCollapsed de forma crua, caso necessite depois
-    class Config:
-        extra = "allow"
+# --- Specific Node Models ---
 
-class Node(BaseModel):
+class CrewNode(BaseModel):
+    model_config = ConfigDict(extra="ignore")
     id: str
-    type: str  # 'crew', 'agent' ou 'task'
-    data: NodeData
-    position: Dict[str, float]
+    type: Literal['crew']
+    data: Optional[CrewNodeData] = None
+    position: Optional[Dict[str, float]] = None
+
+class AgentNode(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    id: str
+    type: Literal['agent']
+    data: Optional[AgentNodeData] = None
+    position: Optional[Dict[str, float]] = None
+
+class TaskNode(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    id: str
+    type: Literal['task']
+    data: Optional[TaskNodeData] = None
+    position: Optional[Dict[str, float]] = None
+
+class StateNode(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    id: str
+    type: Literal['state']
+    data: Optional[StateNodeData] = None
+    position: Optional[Dict[str, float]] = None
+
+class SchemaNode(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    id: str
+    type: Literal['schema']
+    data: Optional[SchemaNodeData] = None
+    position: Optional[Dict[str, float]] = None
+
+class RouterNode(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    id: str
+    type: Literal['router']
+    data: Optional[RouterNodeData] = None
+    position: Optional[Dict[str, float]] = None
+
+class McpNode(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    id: str
+    type: Literal['mcp']
+    data: Optional[McpNodeData] = None
+    position: Optional[Dict[str, float]] = None
+
+class ToolNode(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    id: str
+    type: Literal['tool']
+    data: Optional[ToolNodeData] = None
+    position: Optional[Dict[str, float]] = None
+
+class CustomToolNode(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    id: str
+    type: Literal['customTool']
+    data: Optional[CustomToolNodeData] = None
+    position: Optional[Dict[str, float]] = None
+
+class ChatNode(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    id: str
+    type: Literal['chat']
+    data: Optional[ChatNodeData] = None
+    position: Optional[Dict[str, float]] = None
+
+class WebhookNode(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    id: str
+    type: Literal['webhook']
+    data: Optional[WebhookNodeData] = None
+    position: Optional[Dict[str, float]] = None
+
+# --- Final Discriminated Union ---
+
+Node = Annotated[
+    Union[
+        CrewNode, AgentNode, TaskNode, 
+        StateNode, SchemaNode, RouterNode,
+        McpNode, ToolNode, CustomToolNode,
+        ChatNode, WebhookNode
+    ],
+    Field(discriminator='type')
+]
 
 class Edge(BaseModel):
+    model_config = ConfigDict(extra="ignore")
     id: str
     source: str
     target: str
-    # 'sourceHandle' e 'targetHandle' geralmente vem no xyflow, permitimos opcional
     sourceHandle: Optional[str] = None
     targetHandle: Optional[str] = None
 
 class ToolConfig(BaseModel):
+    model_config = ConfigDict(extra="ignore")
     id: str
     name: str
-    description: str
-    isEnabled: bool
+    description: Optional[str] = None
+    isEnabled: bool = True
     apiKey: Optional[str] = None
-    requiresKey: bool
+    requiresKey: bool = False
     category: Optional[str] = None
     user_config_schema: Optional[Dict[str, Any]] = None
 
 class GraphData(BaseModel):
+    model_config = ConfigDict(extra="ignore")
     version: Optional[str] = "1.0"
-    nodes: List[Node]
-    edges: List[Edge]
+    framework: Optional[str] = Field(default="crewai")  # Capture framework choice from frontend
+    nodes: List[Node] = Field(default_factory=list)
+    edges: List[Edge] = Field(default_factory=list)
     customTools: Optional[List[CustomTool]] = []
     globalTools: Optional[List[ToolConfig]] = []
     inputs: Optional[Dict[str, Any]] = None
 
+
 # Schemas para CRUD de Projetos (Sprint 38)
 class ProjectBase(BaseModel):
+    model_config = ConfigDict(extra="ignore")
     name: str
     description: Optional[str] = None
     workspace_id: Optional[Any] = None # UUID
+    framework: Optional[str] = Field(default="crewai")  # New field for Multi-Framework support
     canvas_data: Dict[str, Any]
 
 class ProjectCreate(ProjectBase):
@@ -131,6 +282,7 @@ class ProjectRead(ProjectBase):
         from_attributes = True
 
 class ProjectUpdate(BaseModel):
+    model_config = ConfigDict(extra="ignore")
     name: Optional[str] = None
     description: Optional[str] = None
     workspace_id: Optional[Any] = None
@@ -138,6 +290,7 @@ class ProjectUpdate(BaseModel):
 
 # Schemas para CRUD de Credenciais
 class CredentialBase(BaseModel):
+    model_config = ConfigDict(extra="ignore")
     name: str
     description: Optional[str] = None
     provider: Optional[str] = None
@@ -174,6 +327,7 @@ class CredentialUpdate(BaseModel):
 
 # Schemas para CRUD de Modelos de AI (LLM Models)
 class LLMModelBase(BaseModel):
+    model_config = ConfigDict(extra="ignore")
     name: str
     model_name: str
     description: Optional[str] = None
@@ -224,6 +378,7 @@ class LLMModelUpdate(BaseModel):
 
 # Schemas para Gerenciamento de MCP Servers
 class MCPServerBase(BaseModel):
+    model_config = ConfigDict(extra="ignore")
     name: str
     transport_type: str # 'stdio' | 'sse'
     command: Optional[str] = None
@@ -276,6 +431,7 @@ class CustomToolBase(BaseModel):
     name: str
     description: Optional[str] = None
     code: str
+    framework: Optional[str] = Field(default="crewai")
 
 class CustomToolCreate(CustomToolBase):
     pass
@@ -292,6 +448,7 @@ class CustomToolUpdate(BaseModel):
     name: Optional[str] = None
     description: Optional[str] = None
     code: Optional[str] = None
+    framework: Optional[str] = None
 
 # Schemas para Gerenciamento de Workspaces
 class WorkspaceBase(BaseModel):
@@ -378,6 +535,8 @@ class KnowledgeBaseDocumentResponse(BaseModel):
     id: str
     filename: str
     size: Optional[int] = None
+    status: str = "success"
+    error: Optional[str] = None
     created_at: Any
 
 # Execution History Schemas
@@ -394,4 +553,26 @@ class ExecutionRead(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+# --- Agent Skill Library Schemas ---
+class AgentSkillBase(BaseModel):
+    name: str
+    description: Optional[str] = None
+    content: str
+    source_url: Optional[str] = None
+    is_vectorized: bool = False
+
+class AgentSkillCreate(AgentSkillBase):
+    pass
+
+class AgentSkillRead(AgentSkillBase):
+    id: Any # UUID
+    created_at: Any
+
+    class Config:
+        from_attributes = True
+
+class SkillImportRequest(BaseModel):
+    url: str
 

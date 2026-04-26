@@ -22,3 +22,20 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+
+# =========================
+# E2E Tests & Coverage
+# =========================
+
+# Arquivos brutos de cobertura do Istanbul
+.nyc_output/
+
+# Relatórios finais de cobertura (HTML, lcov, etc)
+coverage/
+
+# Relatório HTML gerado pelo Playwright
+playwright-report/
+
+# Rastros, vídeos e screenshots gerados quando um teste falha (Traces)
+test-results/

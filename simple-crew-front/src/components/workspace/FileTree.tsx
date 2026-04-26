@@ -200,7 +200,7 @@ export const FileTree: React.FC<FileTreeProps> = ({
           type="file"
           ref={folderInputRef}
           onChange={onUpload}
-          {...{ webkitdirectory: "", directory: "" } as any}
+          {...{ webkitdirectory: "", directory: "" } as React.InputHTMLAttributes<HTMLInputElement> & { webkitdirectory?: string; directory?: string }}
           className="hidden"
         />
 

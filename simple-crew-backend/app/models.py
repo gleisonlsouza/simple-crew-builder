@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime
 from typing import Optional, Dict, Any
-from sqlalchemy import Column, DateTime, func, JSON
+from sqlalchemy import Column, DateTime, func, JSON, ForeignKey, Boolean
 from enum import Enum
 from sqlmodel import SQLModel, Field, Relationship
 
@@ -13,6 +13,11 @@ class ExecutionStatus(str, Enum):
     RUNNING = "running"
     SUCCESS = "success"
     ERROR = "error"
+
+class DocumentStatus(str, Enum):
+    INDEXING = "indexing"
+    SUCCESS = "success"
+    FAILED = "failed"
 
 class User(SQLModel, table=True):
     id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
@@ -38,12 +43,15 @@ class User(SQLModel, table=True):
     custom_tools: list["CustomTool"] = Relationship(back_populates="user")
     workspaces: list["Workspace"] = Relationship(back_populates="user")
     settings: Optional["AppSettings"] = Relationship(back_populates="user", sa_relationship_kwargs={"uselist": False})
+    skills: list["AgentSkill"] = Relationship(back_populates="user")
+
 
 class CustomTool(SQLModel, table=True):
     id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
     name: str
     description: Optional[str] = None
     code: str
+    framework: str = Field(default="crewai", nullable=False)
     
     # Relationship
     user_id: uuid.UUID = Field(foreign_key="user.id")
@@ -65,11 +73,15 @@ class CrewProject(SQLModel, table=True):
     name: str
     description: Optional[str] = None
     canvas_data: Dict[str, Any] = Field(default_factory=dict, sa_column=Column(JSON))
+    framework: str = Field(default="crewai", nullable=False)
     
     user_id: uuid.UUID = Field(foreign_key="user.id")
     user: User = Relationship(back_populates="crews")
 
-    workspace_id: Optional[uuid.UUID] = Field(default=None, foreign_key="workspace.id", sa_column_kwargs={"nullable": True})
+    workspace_id: Optional[uuid.UUID] = Field(
+        default=None, 
+        sa_column=Column(ForeignKey("workspace.id", ondelete="SET NULL"), nullable=True)
+    )
 
     executions: list["Execution"] = Relationship(back_populates="project", sa_relationship_kwargs={"cascade": "all, delete-orphan"})
 
@@ -175,6 +187,10 @@ class Workspace(SQLModel, table=True):
     user_id: uuid.UUID = Field(foreign_key="user.id")
     user: User = Relationship(back_populates="workspaces")
     
+    projects: list["CrewProject"] = Relationship(
+        sa_relationship_kwargs={"cascade": "save-update, merge"}
+    )
+    
     created_at: datetime = Field(
         sa_column=Column(DateTime(timezone=True), server_default=func.now())
     )
@@ -193,6 +209,21 @@ class AppSettings(SQLModel, table=True):
     active_workspace_id: Optional[uuid.UUID] = Field(default=None, foreign_key="workspace.id", sa_column_kwargs={"nullable": True})
     
     user: User = Relationship(back_populates="settings")
+
+class AgentSkill(SQLModel, table=True):
+    id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
+    user_id: uuid.UUID = Field(foreign_key="user.id", nullable=True)
+    name: str = Field(index=True, description="Skill name from YAML, used for Agent Role")
+    description: Optional[str] = Field(default=None, description="Skill description from YAML, used for Backstory")
+    content: str = Field(description="The full raw markdown body containing the rules and goals")
+    source_url: Optional[str] = Field(default=None, description="The URL from which the skill was imported")
+    created_at: datetime = Field(
+        sa_column=Column(DateTime(timezone=True), server_default=func.now())
+    )
+    is_vectorized: bool = Field(default=False, sa_column=Column(Boolean, default=False))
+
+    user: Optional[User] = Relationship(back_populates="skills")
+
 
 class Execution(SQLModel, table=True):
     id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)

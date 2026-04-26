@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
-import { X, Zap, Search, ChevronRight, ChevronDown, ListTree, GripVertical } from 'lucide-react';
-import { useDraggable, useDroppable, DndContext, type DragEndEvent } from '@dnd-kit/core';
+import { X, Zap, Search, ListTree } from 'lucide-react';
+import { DndContext, useDroppable, type DragEndEvent } from '@dnd-kit/core';
 import type { WebhookNodeData } from '../../types/nodes.types';
 
 interface WebhookMapperModalProps {
@@ -12,148 +12,7 @@ interface WebhookMapperModalProps {
   allProjectVariables: string[];
 }
 
-interface DraggableJsonItemProps {
-  id: string;
-  label: string;
-  path: string;
-  isBranch?: boolean;
-}
-
-const DraggableJsonItem: React.FC<DraggableJsonItemProps> = ({ id, label, path, isBranch }) => {
-  const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
-    id,
-    data: { path }
-  });
-
-  const style = transform ? {
-    transform: `translate3d(${transform.x}px, ${transform.y}px, 0)`,
-    zIndex: 1000,
-  } : undefined;
-
-  return (
-    <div
-      ref={setNodeRef}
-      style={style}
-      {...listeners}
-      {...attributes}
-      className={`flex items-center gap-2 px-2 py-1 rounded-md cursor-grab active:cursor-grabbing transition-colors ${
-        isDragging 
-          ? 'bg-orange-500/20 text-orange-500 shadow-lg border border-orange-500/30 ring-1 ring-orange-500/50' 
-          : 'hover:bg-brand-bg text-brand-text/90'
-      } ${isBranch ? 'font-bold text-[11px]' : 'font-mono text-[10px]'}`}
-    >
-      <GripVertical className="w-3 h-3 text-brand-muted shrink-0" />
-      <span className="truncate max-w-[150px]">{label}</span>
-    </div>
-  );
-};
-
-interface DropZoneProps {
-  id: string;
-  label: string;
-  value: string;
-  onClear: () => void;
-}
-
-const TargetDropZone: React.FC<DropZoneProps> = ({ id, label, value, onClear }) => {
-  const { isOver, setNodeRef } = useDroppable({
-    id
-  });
-
-  return (
-    <div 
-      ref={setNodeRef}
-      className={`flex flex-col gap-1.5 p-3 rounded-xl border transition-all duration-300 ${
-        isOver 
-          ? 'bg-orange-500/10 border-orange-500 shadow-[0_0_15px_rgba(249,115,22,0.15)] scale-[1.02]' 
-          : 'bg-brand-bg/50 border-brand-border/30'
-      }`}
-    >
-      <div className="flex items-center justify-between">
-        <span className="text-[10px] font-bold text-brand-muted uppercase tracking-wider">{label}</span>
-        {value && (
-          <button onClick={onClear} className="text-brand-muted hover:text-rose-500 transition-colors">
-            <X className="w-3 h-3" />
-          </button>
-        )}
-      </div>
-      <div className={`flex items-center h-9 px-3 rounded-lg border text-xs font-mono transition-colors ${
-        value 
-          ? 'bg-orange-500/5 border-orange-500/30 text-orange-500' 
-          : 'bg-brand-bg border-brand-border/50 text-brand-muted italic'
-      }`}>
-        {value || 'Drop JSON object here...'}
-      </div>
-    </div>
-  );
-};
-
-interface JsonTreeProps {
-  data: any;
-  path?: string;
-  label: string;
-}
-
-const JsonTree: React.FC<JsonTreeProps> = ({ data, path = '', label }) => {
-  const [isExpanded, setIsExpanded] = useState(true);
-  
-  const isObject = data !== null && typeof data === 'object' && !Array.isArray(data);
-  const isArray = Array.isArray(data);
-  const hasChildren = (isObject && Object.keys(data).length > 0) || (isArray && data.length > 0);
-  
-  const currentPath = path || label;
-
-  return (
-    <div className="flex flex-col gap-1">
-      <div className="flex items-center gap-1 group">
-        {hasChildren ? (
-          <button 
-            onClick={() => setIsExpanded(!isExpanded)} 
-            className="p-0.5 hover:bg-brand-bg rounded-md transition-colors shrink-0"
-          >
-            {isExpanded ? <ChevronDown className="w-3 h-3 text-brand-muted" /> : <ChevronRight className="w-3 h-3 text-brand-muted" />}
-          </button>
-        ) : (
-          <div className="w-4 shrink-0" />
-        )}
-        
-        <DraggableJsonItem 
-          id={currentPath} 
-          label={label} 
-          path={currentPath} 
-          isBranch={hasChildren}
-        />
-        
-        {hasChildren && (
-          <span className="text-[9px] text-brand-muted opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap ml-1">
-            {isArray ? `[${data.length}]` : '{...}'}
-          </span>
-        )}
-      </div>
-      
-      {isExpanded && hasChildren && (
-        <div className="pl-6 flex flex-col gap-1 border-l border-brand-border/30 ml-2">
-          {isObject && Object.entries(data).map(([key, value]) => (
-            <JsonTree 
-              key={key} 
-              data={value} 
-              label={key} 
-              path={path ? `${path}.${key}` : key} 
-            />
-          ))}
-          {isArray && data.map((item, index) => (
-            <JsonTree 
-              key={index} 
-              data={item} 
-              label={`[${index}]`} 
-              path={`${path}[${index}]`} 
-            />
-          ))}
-        </div>
-      )}
-    </div>
-  );
-};
+import { JsonTree } from './JsonVisualMapper';
 
 export const WebhookMapperModal: React.FC<WebhookMapperModalProps> = ({
   isOpen,
@@ -171,7 +30,7 @@ export const WebhookMapperModal: React.FC<WebhookMapperModalProps> = ({
     if (!sampleJson.trim()) return null;
     try {
       return JSON.parse(sampleJson);
-    } catch (e: any) {
+    } catch {
       return null;
     }
   }, [sampleJson]);
@@ -185,8 +44,8 @@ export const WebhookMapperModal: React.FC<WebhookMapperModalProps> = ({
     try {
       JSON.parse(sampleJson);
       setJsonError(null);
-    } catch (e: any) {
-      setJsonError(e.message);
+    } catch (e: unknown) {
+      setJsonError(e instanceof Error ? e.message : String(e));
     }
   }, [sampleJson]);
 
@@ -324,6 +183,53 @@ export const WebhookMapperModal: React.FC<WebhookMapperModalProps> = ({
           </button>
         </div>
       </div>
+    </div>
+  );
+};
+
+interface TargetDropZoneProps {
+  id: string;
+  label: string;
+  value: string;
+  onClear: () => void;
+}
+
+const TargetDropZone: React.FC<TargetDropZoneProps> = ({ id, label, value, onClear }) => {
+  const { isOver, setNodeRef } = useDroppable({ id });
+
+  return (
+    <div 
+      ref={setNodeRef}
+      className={`min-h-[40px] flex items-center justify-between gap-3 px-3 py-2 rounded-xl border transition-all duration-300 ${
+        isOver 
+          ? 'bg-orange-500/10 border-orange-500 shadow-[0_0_15px_rgba(249,115,22,0.2)] scale-[1.02]' 
+          : value 
+            ? 'bg-brand-bg/40 border-orange-500/30 shadow-sm' 
+            : 'bg-brand-bg/50 border-brand-border border-dashed'
+      }`}
+    >
+      <div className="flex flex-col gap-0.5 overflow-hidden flex-1">
+        <span className="text-[10px] font-bold text-brand-muted uppercase tracking-wider">{label}</span>
+        {value ? (
+          <span className="text-[11px] text-orange-500 font-mono truncate">{value}</span>
+        ) : (
+          <span className="text-[10px] text-brand-muted italic opacity-50">Drop JSON key here...</span>
+        )}
+      </div>
+      
+      {value && (
+        <button 
+          onClick={(e) => { e.stopPropagation(); onClear(); }}
+          className="p-1.5 hover:bg-rose-500/10 text-brand-muted hover:text-rose-500 rounded-lg transition-colors"
+          title="Clear mapping"
+        >
+          <X className="w-3.5 h-3.5" />
+        </button>
+      )}
+      
+      {isOver && !value && (
+        <Zap className="w-3.5 h-3.5 text-orange-500 animate-pulse" />
+      )}
     </div>
   );
 };

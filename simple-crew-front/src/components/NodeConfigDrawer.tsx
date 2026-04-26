@@ -1,9 +1,11 @@
-import { X, Trash2, Plus, Sparkles, AlertCircle } from 'lucide-react';
+import { X, Trash2, Sparkles, AlertCircle } from 'lucide-react';
 import { useNodeConfig } from '../hooks/useNodeConfig';
 import { ToolConfigurationModal } from './ToolConfigurationModal';
 import { AgentForm } from './node-config/AgentForm';
 import { TaskForm } from './node-config/TaskForm';
 import { CrewForm } from './node-config/CrewForm';
+import { GraphForm } from './node-config/GraphForm';
+
 import { ChatForm } from './node-config/ChatForm';
 import { WebhookForm } from './node-config/WebhookForm';
 import {
@@ -15,7 +17,10 @@ import {
 import {
   sortableKeyboardCoordinates,
 } from '@dnd-kit/sortable';
-import type { AgentNodeData, TaskNodeData, CrewNodeData, ChatNodeData, WebhookNodeData } from '../types/nodes.types';
+import type { AppNode, AgentNodeData, TaskNodeData, CrewNodeData, ChatNodeData, WebhookNodeData, LangGraphAgentData, LangGraphTaskData } from '../types/nodes.types';
+import { LangGraphAgentForm } from './node-config/LangGraphAgentForm';
+import { LangGraphTaskForm } from './node-config/LangGraphTaskForm';
+import { VariableAutocomplete } from './node-config/VariableAutocomplete';
 
 
 
@@ -31,7 +36,9 @@ export function NodeConfigDrawer() {
     mcpServers,
     customTools,
     globalTools,
+    skills,
     localName,
+
     nameError,
     isContextSelectorOpen,
     setIsContextSelectorOpen,
@@ -66,8 +73,12 @@ export function NodeConfigDrawer() {
     handleFieldKeyDown,
     handleFieldChange,
     connectedCrewInputs,
-    isChatConnected,
     allProjectVariables,
+    stateFields,
+    stateNodes,
+    variables,
+    currentProjectFramework,
+    updateStateConnection,
     nodeWarnings
   } = useNodeConfig();
 
@@ -83,7 +94,10 @@ export function NodeConfigDrawer() {
   const { type, data } = activeNode;
 
   return (
-    <div className="absolute right-0 top-0 h-full w-96 bg-brand-card shadow-[-20px_0_50px_rgba(0,0,0,0.1)] dark:shadow-[-20px_0_50px_rgba(0,0,0,0.3)] z-50 flex flex-col border-l border-brand-border transition-all duration-300">
+    <div 
+      data-testid="config-drawer"
+      className="absolute right-0 top-0 h-full w-96 bg-brand-card shadow-[-20px_0_50px_rgba(0,0,0,0.1)] dark:shadow-[-20px_0_50px_rgba(0,0,0,0.3)] z-50 flex flex-col border-l border-brand-border transition-all duration-300"
+    >
       <div className="px-5 py-4 border-b border-brand-border flex items-center justify-between bg-brand-bg/50">
         <div className="flex items-center gap-3">
           <h2 className="text-lg font-bold text-brand-text capitalize tracking-tight">
@@ -135,57 +149,21 @@ export function NodeConfigDrawer() {
         </div>
       )}
 
-      {/* -- Autocomplete Dropdown -- */}
-      {suggestionState.isOpen && (
-        <div 
-          className="fixed z-[100] bg-brand-card border border-brand-border rounded-xl shadow-2xl py-1.5 w-64 overflow-hidden animate-in fade-in zoom-in duration-150"
-          style={(() => {
-            const rect = suggestionState.anchorRect;
-            const spaceBelow = rect ? window.innerHeight - rect.bottom : 0;
-            const dropdownHeight = 220;
-            if (rect && spaceBelow < dropdownHeight) {
-              return { bottom: window.innerHeight - rect.top + 4, left: rect.left, maxHeight: '200px' };
-            }
-            return { top: (rect?.bottom || 0) + 4, left: rect?.left || 0, maxHeight: '200px' };
-          })()}
-        >
-          <div className="px-3 py-1.5 border-b border-brand-border mb-1">
-            <span className="text-[10px] font-bold text-brand-muted uppercase tracking-wider">Crew Input Variables</span>
-          </div>
-          <div className="overflow-y-auto max-h-[160px] custom-scrollbar">
-            {Object.keys((nodes.find(n => n.type === 'crew')?.data as any)?.inputs || {})
-              .filter(k => !k.startsWith('input_') && k.toLowerCase().includes(suggestionState.filter.toLowerCase()))
-              .map((key, idx) => (
-                <button
-                  key={key}
-                  onMouseDown={(e) => {
-                    e.preventDefault();
-                    handleSelectSuggestion(key);
-                  }}
-                  onMouseEnter={() => setSuggestionState(prev => ({ ...prev, selectedIndex: idx }))}
-                  className={`w-full flex items-center justify-between px-3 py-2 text-xs transition-colors ${
-                    idx === suggestionState.selectedIndex 
-                      ? 'bg-blue-500/10 text-blue-500' 
-                      : 'text-brand-text hover:bg-brand-bg'
-                  }`}
-                >
-                  <span className="truncate">{key}</span>
-                  <Plus className={`w-3 h-3 ${idx === suggestionState.selectedIndex ? 'opacity-100' : 'opacity-0'}`} />
-                </button>
-              ))}
-            {Object.keys((nodes.find(n => n.type === 'crew')?.data as any)?.inputs || {})
-              .filter(k => !k.startsWith('input_') && k.toLowerCase().includes(suggestionState.filter.toLowerCase())).length === 0 && (
-              <div className="px-3 py-3 text-center">
-                <p className="text-[10px] text-brand-muted italic">No matching inputs.</p>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
+      {/* -- Advanced Variable Autocomplete -- */}
+      <VariableAutocomplete
+        isOpen={suggestionState.isOpen}
+        filter={suggestionState.filter}
+        selectedIndex={suggestionState.selectedIndex}
+        anchorRect={suggestionState.anchorRect}
+        cursorRect={suggestionState.cursorRect}
+        variables={variables}
+        onSelect={handleSelectSuggestion}
+        setSelectedIndex={(idx) => setSuggestionState(prev => ({ ...prev, selectedIndex: idx }))}
+      />
 
       <div className="p-6 flex-1 overflow-y-auto">
         {(type === 'agent' || type === 'task') && (
-          <div className="flex flex-col gap-2 mb-6 pb-6 border-b border-brand-border/50">
+          <div className="flex flex-col gap-2 mb-6 pb-6 border-b border-brand-border/50" data-testid="input-node-name">
             <label className="text-xs font-bold text-brand-muted uppercase tracking-wider">Name</label>
             <input
               className={`border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 transition-all duration-200 ${
@@ -206,76 +184,123 @@ export function NodeConfigDrawer() {
         )}
 
         {isAgent && (
-          <AgentForm
-            data={data as AgentNodeData}
-            nodeId={activeNode.id}
-            updateNodeData={updateNodeData}
-            models={models}
-            mcpServers={mcpServers}
-            globalTools={globalTools}
-            customTools={customTools}
-            loadingFields={loadingFields}
-            onAiSuggest={handleAiSuggest}
-            onFieldKeyDown={handleFieldKeyDown}
-            onFieldChange={handleFieldChange}
-            isMcpSelectorOpen={isMcpSelectorOpen}
-            setIsMcpSelectorOpen={setIsMcpSelectorOpen}
-            isGlobalToolSelectorOpen={isGlobalToolSelectorOpen}
-            setIsGlobalToolSelectorOpen={setIsGlobalToolSelectorOpen}
-            isCustomToolSelectorOpen={isCustomToolSelectorOpen}
-            setIsCustomToolSelectorOpen={setIsCustomToolSelectorOpen}
-            setToolToConfigure={setToolToConfigure}
-            setIsToolConfigModalOpen={setIsToolConfigModalOpen}
-            renderableTasks={renderableTasks}
-            handleTaskDragEnd={handleTaskDragEnd}
-            sensors={sensors}
-          />
+          currentProjectFramework === 'langgraph' ? (
+            <LangGraphAgentForm
+              data={data as LangGraphAgentData}
+              nodeId={activeNode.id}
+              updateNodeData={updateNodeData}
+              models={models}
+              skills={skills}
+              loadingFields={loadingFields}
+
+              onAiSuggest={handleAiSuggest}
+              onFieldKeyDown={handleFieldKeyDown}
+              onFieldChange={handleFieldChange}
+              stateNodes={stateNodes}
+              updateStateConnection={updateStateConnection}
+            />
+          ) : (
+            <AgentForm
+              data={data as AgentNodeData}
+              nodeId={activeNode.id}
+              updateNodeData={updateNodeData}
+              models={models}
+              mcpServers={mcpServers}
+              globalTools={globalTools}
+              customTools={customTools}
+              skills={skills}
+              loadingFields={loadingFields}
+
+              onAiSuggest={handleAiSuggest}
+              onFieldKeyDown={handleFieldKeyDown}
+              onFieldChange={handleFieldChange}
+              isMcpSelectorOpen={isMcpSelectorOpen}
+              setIsMcpSelectorOpen={setIsMcpSelectorOpen}
+              isGlobalToolSelectorOpen={isGlobalToolSelectorOpen}
+              setIsGlobalToolSelectorOpen={setIsGlobalToolSelectorOpen}
+              isCustomToolSelectorOpen={isCustomToolSelectorOpen}
+              setIsCustomToolSelectorOpen={setIsCustomToolSelectorOpen}
+              setToolToConfigure={setToolToConfigure}
+              setIsToolConfigModalOpen={setIsToolConfigModalOpen}
+              renderableTasks={renderableTasks}
+              handleTaskDragEnd={handleTaskDragEnd}
+              sensors={sensors}
+            />
+          )
         )}
 
         {isTask && (
-          <TaskForm
-            data={data as TaskNodeData}
-            nodeId={activeNode.id}
-            updateNodeData={updateNodeData}
-            nodes={nodes}
-            loadingFields={loadingFields}
-            onAiSuggest={handleAiSuggest}
-            onFieldKeyDown={handleFieldKeyDown}
-            onFieldChange={handleFieldChange}
-            isContextSelectorOpen={isContextSelectorOpen}
-            setIsContextSelectorOpen={setIsContextSelectorOpen}
-          />
+          currentProjectFramework === 'langgraph' ? (
+            <LangGraphTaskForm
+              data={data as LangGraphTaskData}
+              nodeId={activeNode.id}
+              updateNodeData={updateNodeData}
+              loadingFields={loadingFields}
+              onAiSuggest={handleAiSuggest}
+              onFieldKeyDown={handleFieldKeyDown}
+              onFieldChange={handleFieldChange}
+            />
+          ) : (
+            <TaskForm
+              data={data as TaskNodeData}
+              nodeId={activeNode.id}
+              updateNodeData={updateNodeData}
+              nodes={nodes as unknown as AppNode[]}
+              loadingFields={loadingFields}
+              onAiSuggest={handleAiSuggest}
+              onFieldKeyDown={handleFieldKeyDown}
+              onFieldChange={handleFieldChange}
+              isContextSelectorOpen={isContextSelectorOpen}
+              setIsContextSelectorOpen={setIsContextSelectorOpen}
+            />
+          )
         )}
 
         {isCrew && (
-          <CrewForm
-            data={data as CrewNodeData}
-            nodeId={activeNode.id}
-            updateNodeData={updateNodeData}
-            localName={localName}
-            handleNameChange={handleNameChange}
-            nameError={nameError}
-            renderableAgents={renderableAgents}
-            renderableTasks={renderableTasks}
-            handleAgentDragEnd={handleAgentDragEnd}
-            handleTaskDragEnd={handleTaskDragEnd}
-            sensors={sensors}
-            models={models}
-          />
+          currentProjectFramework === 'langgraph' ? (
+            <GraphForm
+              data={data as CrewNodeData}
+              nodeId={activeNode.id}
+              updateNodeData={updateNodeData}
+              localName={localName}
+              handleNameChange={handleNameChange}
+              nameError={nameError}
+              stateFields={stateFields}
+              stateNodes={stateNodes}
+              updateStateConnection={updateStateConnection}
+            />
+          ) : (
+            <CrewForm
+              data={data as CrewNodeData}
+              nodeId={activeNode.id}
+              updateNodeData={updateNodeData}
+              localName={localName}
+              handleNameChange={handleNameChange}
+              nameError={nameError}
+              renderableAgents={renderableAgents}
+              renderableTasks={renderableTasks}
+              handleAgentDragEnd={handleAgentDragEnd}
+              handleTaskDragEnd={handleTaskDragEnd}
+              sensors={sensors}
+              models={models}
+              framework={currentProjectFramework || 'crewai'}
+            />
+          )
         )}
 
         {isChat && (
-          <ChatForm
-            data={data as ChatNodeData}
-            nodeId={activeNode.id}
-            updateNodeData={updateNodeData}
-            isChatConnected={isChatConnected}
-            connectedCrewInputs={connectedCrewInputs}
-            isChatMappingSelectorOpen={isChatMappingSelectorOpen}
-            setIsChatMappingSelectorOpen={setIsChatMappingSelectorOpen}
-            onFieldKeyDown={handleFieldKeyDown}
-            onFieldChange={handleFieldChange}
-          />
+            <ChatForm
+              data={data as ChatNodeData}
+              nodeId={activeNode.id}
+              updateNodeData={updateNodeData}
+              connectedCrewInputs={connectedCrewInputs}
+              stateFields={stateFields}
+              framework={currentProjectFramework || 'crewai'}
+              isChatMappingSelectorOpen={isChatMappingSelectorOpen}
+              setIsChatMappingSelectorOpen={setIsChatMappingSelectorOpen}
+              onFieldKeyDown={handleFieldKeyDown}
+              onFieldChange={handleFieldChange}
+            />
         )}
 
         {isWebhook && (
@@ -285,13 +310,20 @@ export function NodeConfigDrawer() {
             updateNodeData={updateNodeData}
             onFieldKeyDown={handleFieldKeyDown}
             onFieldChange={handleFieldChange}
-            allProjectVariables={allProjectVariables}
+            allProjectVariables={currentProjectFramework === 'langgraph' ? Array.from(new Set([...allProjectVariables, ...(stateFields || [])])) : allProjectVariables}
           />
         )}
       </div>
 
       <div className="p-4 border-t border-brand-border bg-brand-bg/50 flex gap-3">
-        <button onClick={() => deleteNode(activeNode.id)} className="flex items-center gap-2 text-rose-500 hover:bg-rose-500/10 px-4 py-2 rounded-lg text-sm font-medium transition-all"><Trash2 className="w-4 h-4" />Delete</button>
+        <button 
+          onClick={() => deleteNode(activeNode.id)} 
+          data-testid="btn-delete-node"
+          className="flex items-center gap-2 text-rose-500 hover:bg-rose-500/10 px-4 py-2 rounded-lg text-sm font-medium transition-all"
+        >
+          <Trash2 className="w-4 h-4" />
+          Delete
+        </button>
         <button onClick={() => setActiveNode(null)} className="flex-1 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-bold transition-all shadow-md">Done</button>
       </div>
 
@@ -300,7 +332,7 @@ export function NodeConfigDrawer() {
           tool={toolToConfigure}
           isOpen={isToolConfigModalOpen}
           onClose={() => { setIsToolConfigModalOpen(false); setToolToConfigure(null); }}
-          onSave={(config) => { const currentIds = (data as any).globalToolIds || []; updateNodeData(activeNode.id, { globalToolIds: [...currentIds, { id: toolToConfigure.id, config }] }); }}
+          onSave={(config) => { const currentIds = (data as AgentNodeData | TaskNodeData).globalToolIds || []; updateNodeData(activeNode.id, { globalToolIds: [...currentIds, { id: toolToConfigure.id, config }] }); }}
         />
       )}
     </div>

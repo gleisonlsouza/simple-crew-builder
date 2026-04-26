@@ -3,29 +3,28 @@ import { useNavigate } from 'react-router-dom';
 import { 
   Plus, 
   Workflow, 
-  Settings, 
-  Key, 
-  MoreVertical, 
   Clock, 
   Layers,
   Search,
   Trash2,
   Edit2,
   X,
-  Moon,
   Upload,
-  HelpCircle
+  MoreVertical
 } from 'lucide-react';
 import { useStore } from '../store/index';
 import { SettingsDrawer } from '../components/SettingsDrawer';
 import { ConfirmationModal } from '../components/ConfirmationModal';
 import { AboutModal } from '../components/AboutModal';
-import logo from '../assets/logo.PNG';
+import { MainSidebar } from '../components/MainSidebar';
+import type { Project } from '../types/store.types';
 
 const Dashboard = () => {
   const navigate = useNavigate();
   const savedProjects = useStore((state) => state.savedProjects);
-  const setIsSettingsOpen = useStore((state) => state.setIsSettingsOpen);
+  const setIsAboutModalOpen = useStore((state) => state.setIsAboutModalOpen);
+  const isAboutModalOpen = useStore((state) => state.isAboutModalOpen);
+  
   const fetchProjects = useStore((state) => state.fetchProjects);
   const fetchCredentials = useStore((state) => state.fetchCredentials);
   const fetchWorkspaces = useStore((state) => state.fetchWorkspaces);
@@ -33,18 +32,33 @@ const Dashboard = () => {
   const updateProjectMetadata = useStore((state) => state.updateProjectMetadata);
 
   const [openMenuId, setOpenMenuId] = React.useState<string | null>(null);
-  const [isSettingsMenuOpen, setIsSettingsMenuOpen] = React.useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = React.useState(false);
   const [isCreateModalOpen, setIsCreateModalOpen] = React.useState(false);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = React.useState(false);
   const [projectToDelete, setProjectToDelete] = React.useState<{id: string, name: string} | null>(null);
   const [editingProject, setEditingProject] = React.useState<{id: string, name: string, description: string} | null>(null);
-  const [isAboutModalOpen, setIsAboutModalOpen] = React.useState(false);
-  const [newProject, setNewProject] = React.useState({ name: '', description: '' });
+  const [newProject, setNewProject] = React.useState({ name: '', description: '', framework: 'crewai' });
+
+  const [searchQuery, setSearchQuery] = React.useState('');
+  const [frameworkFilter, setFrameworkFilter] = React.useState<'all' | 'crewai' | 'langgraph'>('all');
 
   const createNewProject = useStore((state) => state.createNewProject);
   const importProjectJsonAndSave = useStore((state) => state.importProjectJsonAndSave);
   const fileInputRef = React.useRef<HTMLInputElement>(null);
+
+  const filteredProjects = React.useMemo(() => {
+    return savedProjects.filter((project: Project) => {
+      const matchesSearch = 
+        project.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
+        (project.description || '').toLowerCase().includes(searchQuery.toLowerCase());
+      
+      const matchesFramework = 
+        frameworkFilter === 'all' || 
+        project.framework === frameworkFilter;
+
+      return matchesSearch && matchesFramework;
+    });
+  }, [savedProjects, searchQuery, frameworkFilter]);
 
   useEffect(() => {
     fetchProjects();
@@ -60,7 +74,7 @@ const Dashboard = () => {
   }, []);
 
   const handleNewWorkflow = () => {
-    setNewProject({ name: '', description: '' });
+    setNewProject({ name: '', description: '', framework: 'crewai' });
     setIsCreateModalOpen(true);
   };
 
@@ -69,7 +83,7 @@ const Dashboard = () => {
       useStore.getState().showNotification("Please enter a name for the workflow.", "warning");
       return;
     }
-    const created = await createNewProject(newProject.name, newProject.description);
+    const created = await createNewProject(newProject.name, newProject.description, newProject.framework);
     if (created) {
       setIsCreateModalOpen(false);
       navigate(`/workflow/${created.id}`);
@@ -92,7 +106,7 @@ const Dashboard = () => {
         if (imported) {
           navigate(`/workflow/${imported.id}`);
         }
-      } catch (err) {
+      } catch {
         useStore.getState().showNotification("Failed to parse JSON file.", "error");
       }
     };
@@ -105,7 +119,7 @@ const Dashboard = () => {
     navigate(`/workflow/${id}`);
   };
 
-  const handleOpenRename = (project: any) => {
+  const handleOpenRename = (project: Project) => {
     setEditingProject({
       id: project.id,
       name: project.name,
@@ -134,78 +148,7 @@ const Dashboard = () => {
 
   return (
     <div className="flex h-screen bg-brand-bg font-sans transition-colors duration-300">
-      {/* Global Sidebar (n8n Style) */}
-      <aside className="w-16 flex flex-col items-center py-6 bg-brand-card border-r border-brand-border z-10 transition-colors duration-300">
-        <div className="w-12 h-12 mb-10 overflow-hidden cursor-pointer group hover:scale-105 transition-transform duration-300" onClick={() => navigate('/')}>
-          <img src={logo} alt="Simple Crew Builder Logo" className="w-full h-full object-contain" />
-        </div>
-        
-        <nav className="flex flex-col gap-6">
-          <button className="p-3 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 rounded-xl transition-all shadow-sm">
-            <Workflow className="w-6 h-6" />
-          </button>
-          <button className="p-3 text-brand-muted hover:text-brand-text rounded-xl transition-all">
-            <Key className="w-6 h-6" />
-          </button>
-          <div className="relative">
-            <button 
-              onClick={(e) => {
-                e.stopPropagation();
-                setIsSettingsMenuOpen(!isSettingsMenuOpen);
-              }}
-              className={`p-3 rounded-xl transition-all ${isSettingsMenuOpen ? 'bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600' : 'text-brand-muted hover:text-brand-text'}`}
-            >
-              <Settings className="w-6 h-6" />
-            </button>
-            
-            {isSettingsMenuOpen && (
-              <div className="absolute left-full ml-2 bottom-0 w-48 bg-brand-card border border-brand-border rounded-xl shadow-xl z-20 py-1 overflow-hidden animate-in slide-in-from-left-2 duration-150">
-                <button 
-                  onClick={() => {
-                    navigate('/settings');
-                    setIsSettingsMenuOpen(false);
-                  }}
-                  className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-brand-muted hover:text-brand-text hover:bg-brand-bg transition-colors text-left"
-                >
-                  <Settings className="w-4 h-4" />
-                  Settings
-                </button>
-                <button 
-                  onClick={() => {
-                    setIsSettingsOpen(true);
-                    setIsSettingsMenuOpen(false);
-                  }}
-                  className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-brand-muted hover:text-brand-text hover:bg-brand-bg transition-colors text-left"
-                >
-                  <Moon className="w-4 h-4" />
-                  Theme
-                </button>
-                <div className="h-px bg-brand-border my-1 mx-2 opacity-50" />
-                <button 
-                  onClick={() => {
-                    setIsAboutModalOpen(true);
-                    setIsSettingsMenuOpen(false);
-                  }}
-                  className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-brand-muted hover:text-brand-text hover:bg-brand-bg transition-colors text-left"
-                >
-                  <HelpCircle className="w-4 h-4" />
-                  About
-                </button>
-              </div>
-            )}
-          </div>
-        </nav>
-
-        <div className="mt-auto">
-          <button 
-            onClick={() => setIsAboutModalOpen(true)}
-            className="p-3 text-brand-muted hover:text-brand-text hover:bg-brand-bg rounded-xl transition-all"
-            title="About Simple Crew"
-          >
-            <HelpCircle className="w-6 h-6" />
-          </button>
-        </div>
-      </aside>
+      <MainSidebar />
 
       {/* Main Content Area */}
       <main className="flex-1 flex flex-col overflow-hidden">
@@ -216,14 +159,45 @@ const Dashboard = () => {
             <p className="text-brand-muted text-sm mt-0.5">Manage and automate your AI agents</p>
           </div>
 
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-6">
+            <div className="flex items-center bg-brand-bg p-1 rounded-xl border border-brand-border/50">
+              <button 
+                onClick={() => setFrameworkFilter('all')}
+                className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all ${frameworkFilter === 'all' ? 'bg-indigo-600 text-white shadow-md shadow-indigo-500/20' : 'text-brand-muted hover:text-brand-text'}`}
+              >
+                All
+              </button>
+              <button 
+                onClick={() => setFrameworkFilter('crewai')}
+                className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all ${frameworkFilter === 'crewai' ? 'bg-indigo-600 text-white shadow-md shadow-indigo-500/20' : 'text-brand-muted hover:text-brand-text'}`}
+              >
+                CrewAI
+              </button>
+              <button 
+                onClick={() => setFrameworkFilter('langgraph')}
+                className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all ${frameworkFilter === 'langgraph' ? 'bg-indigo-600 text-white shadow-md shadow-indigo-500/20' : 'text-brand-muted hover:text-brand-text'}`}
+              >
+                LangGraph
+              </button>
+            </div>
+
             <div className="relative group">
-              <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-brand-muted group-focus-within:text-indigo-500 transition-colors" />
+              <Search className={`w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 transition-colors ${searchQuery ? 'text-indigo-500' : 'text-brand-muted group-focus-within:text-indigo-500'}`} />
               <input 
                 type="text" 
                 placeholder="Search workflows..."
-                className="pl-10 pr-4 py-2 bg-brand-bg border-transparent focus:border-indigo-500 focus:bg-brand-card rounded-xl text-sm transition-all outline-none w-64 text-brand-text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="pl-10 pr-10 py-2 bg-brand-bg border border-transparent focus:border-indigo-500 focus:bg-brand-card rounded-xl text-sm transition-all outline-none w-64 text-brand-text"
               />
+              {searchQuery && (
+                <button 
+                  onClick={() => setSearchQuery('')}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-brand-muted hover:text-brand-text transition-colors"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              )}
             </div>
             
             <input
@@ -262,12 +236,30 @@ const Dashboard = () => {
               <h3 className="text-xl font-semibold text-brand-text">No workflows found</h3>
               <p className="text-brand-muted mt-2 max-w-xs">Start building your first autonomous agent crew by clicking on "Add Workflow".</p>
             </div>
+          ) : filteredProjects.length === 0 ? (
+            <div className="h-full flex flex-col items-center justify-center text-center opacity-60">
+              <div className="w-20 h-20 bg-brand-card border border-brand-border rounded-full flex items-center justify-center mb-6">
+                <Search className="w-10 h-10 text-brand-muted" />
+              </div>
+              <h3 className="text-xl font-semibold text-brand-text">No matches found</h3>
+              <p className="text-brand-muted mt-2 max-w-xs">We couldn't find any workflows matching your search or filters.</p>
+              <button 
+                onClick={() => {
+                  setSearchQuery('');
+                  setFrameworkFilter('all');
+                }}
+                className="mt-4 text-indigo-500 font-bold hover:underline"
+              >
+                Clear all filters
+              </button>
+            </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-              {savedProjects.map((project: any) => (
+              {filteredProjects.map((project: Project) => (
                 <div 
                   key={project.id}
                   onClick={() => handleEditWorkflow(project.id)}
+                  data-testid="project-card"
                   className="group bg-brand-card border border-brand-border p-6 rounded-2xl hover:shadow-xl hover:shadow-indigo-500/10 hover:border-indigo-500 dark:hover:border-indigo-500/50 transition-all cursor-pointer relative overflow-hidden flex flex-col"
                 >
                   <div className="flex items-start justify-between mb-4">
@@ -276,8 +268,13 @@ const Dashboard = () => {
                     </div>
                   </div>
 
-                  <h3 className="text-lg font-bold text-brand-text mb-2 truncate">{project.name}</h3>
-                  <p className="text-brand-muted text-sm line-clamp-2 mb-6 flex-grow">{project.description || "Sem descrição disponível."}</p>
+                  <div className="flex items-start justify-between mb-2">
+                    <h3 className="text-lg font-bold text-brand-text truncate pr-2">{project.name}</h3>
+                    <span className="shrink-0 px-2.5 py-1 rounded-md text-[10px] font-bold uppercase tracking-wider bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 border border-indigo-100 dark:border-indigo-800/50">
+                      {project.framework === 'langgraph' ? 'LangGraph' : 'CrewAI'}
+                    </span>
+                  </div>
+                  <p className="text-brand-muted text-sm line-clamp-2 mb-6 flex-grow">{project.description || "No description available."}</p>
 
                   <div className="flex items-center justify-between pt-4 border-t border-brand-border">
                     <div className="flex items-center gap-1.5 text-brand-muted text-xs">
@@ -419,18 +416,28 @@ const Dashboard = () => {
       {isCreateModalOpen && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-slate-950/40 backdrop-blur-sm transition-opacity" onClick={() => setIsCreateModalOpen(false)} />
-          <div className="bg-brand-card w-full max-w-md rounded-2xl border border-brand-border shadow-2xl relative z-10 animate-in fade-in zoom-in duration-200">
+          <div 
+            role="dialog" 
+            aria-modal="true" 
+            aria-labelledby="modal-title"
+            className="bg-brand-card w-full max-w-md rounded-2xl border border-brand-border shadow-2xl relative z-10 animate-in fade-in zoom-in duration-200"
+          >
             <div className="px-6 py-4 border-b border-brand-border flex items-center justify-between">
-              <h2 className="text-lg font-bold text-brand-text">Create New Workflow</h2>
-              <button onClick={() => setIsCreateModalOpen(false)} className="p-2 hover:bg-brand-bg rounded-lg text-brand-muted transition-colors">
+              <h2 id="modal-title" className="text-lg font-bold text-brand-text">Create New Workflow</h2>
+              <button 
+                onClick={() => setIsCreateModalOpen(false)} 
+                aria-label="Close modal"
+                className="p-2 hover:bg-brand-bg rounded-lg text-brand-muted transition-colors"
+              >
                 <X className="w-5 h-5" />
               </button>
             </div>
             
             <div className="p-6 space-y-4">
               <div>
-                <label className="block text-sm font-semibold text-brand-text mb-1.5">Name</label>
+                <label htmlFor="workflowName" className="block text-sm font-semibold text-brand-text mb-1.5">Name</label>
                 <input 
+                  id="workflowName"
                   type="text"
                   autoFocus
                   value={newProject.name}
@@ -440,8 +447,26 @@ const Dashboard = () => {
                 />
               </div>
               <div>
-                <label className="block text-sm font-semibold text-brand-text mb-1.5">Description (Optional)</label>
+                <label htmlFor="workflowFramework" className="block text-sm font-semibold text-brand-text mb-1.5">Framework</label>
+                <div className="relative">
+                  <select 
+                    id="workflowFramework"
+                    value={newProject.framework}
+                    onChange={(e) => setNewProject({...newProject, framework: e.target.value})}
+                    className="w-full px-4 py-2.5 bg-brand-bg border border-brand-border rounded-xl focus:border-indigo-500 outline-none text-brand-text transition-all appearance-none font-medium cursor-pointer"
+                  >
+                    <option value="crewai">🤖 CrewAI (Multi-Agent Systems)</option>
+                    <option value="langgraph">⚡ LangGraph (Stateful Graphs)</option>
+                  </select>
+                  <div className="absolute inset-y-0 right-4 flex items-center pointer-events-none text-brand-muted">
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path></svg>
+                  </div>
+                </div>
+              </div>
+              <div>
+                <label htmlFor="workflowDescription" className="block text-sm font-semibold text-brand-text mb-1.5">Description (Optional)</label>
                 <textarea 
+                  id="workflowDescription"
                   value={newProject.description}
                   onChange={(e) => setNewProject({...newProject, description: e.target.value})}
                   className="w-full px-4 py-2.5 bg-brand-bg border border-brand-border rounded-xl focus:border-indigo-500 outline-none text-brand-text transition-all min-h-[100px] resize-none"

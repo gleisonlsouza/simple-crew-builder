@@ -1,4 +1,3 @@
-import { useEffect, useState } from 'react';
 import { AlertOctagon, CheckCircle2, Info, AlertTriangle, X } from 'lucide-react';
 import { useStore } from '../store/index';
 import type { AppState } from '../types/store.types';
@@ -6,15 +5,7 @@ import type { AppState } from '../types/store.types';
 export function Toast() {
   const notification = useStore((state: AppState) => state.notification);
   const clearNotification = useStore((state: AppState) => state.clearNotification);
-  const [isVisible, setIsVisible] = useState(false);
-
-  useEffect(() => {
-    if (notification?.visible) {
-      setIsVisible(true);
-    } else {
-      setIsVisible(false);
-    }
-  }, [notification]);
+  const isVisible = !!notification?.visible;
 
   if (!notification || !isVisible) return null;
 

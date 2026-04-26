@@ -2,6 +2,8 @@ import { render, screen, fireEvent } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { ChatInput } from '../ChatInput';
 import { useStore } from '../../store/index';
+import type { AppState } from '../../types/store.types';
+import type { Mock } from 'vitest';
 
 // Mock the store
 vi.mock('../../store/index', () => ({
@@ -20,7 +22,7 @@ describe('ChatInput Component', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    (useStore as any).mockImplementation((selector: any) => {
+    (useStore as unknown as Mock).mockImplementation((selector: (state: Partial<AppState>) => unknown) => {
       const state = {
         stopExecution: mockStopExecution,
       };
@@ -73,5 +75,33 @@ describe('ChatInput Component', () => {
     fireEvent.click(sendButton);
     
     expect(mockOnSendMessage).not.toHaveBeenCalled();
+  });
+
+  it('auto-focuses input when isLoading changes to false', () => {
+    vi.useFakeTimers();
+    const { rerender } = render(<ChatInput onSendMessage={mockOnSendMessage} isLoading={true} />);
+    
+    // Change to false
+    rerender(<ChatInput onSendMessage={mockOnSendMessage} isLoading={false} />);
+    
+    const textarea = screen.getByPlaceholderText(/Type your message.../i);
+    
+    // Fast-forward timers
+    vi.runAllTimers();
+    
+    expect(textarea).toHaveFocus();
+    vi.useRealTimers();
+  });
+
+  it('enables overflow-y when content exceeds maxHeight', () => {
+    render(<ChatInput onSendMessage={mockOnSendMessage} isLoading={false} />);
+    const textarea = screen.getByPlaceholderText(/Type your message.../i) as HTMLTextAreaElement;
+    
+    // Mock scrollHeight
+    Object.defineProperty(textarea, 'scrollHeight', { configurable: true, value: 200 });
+    
+    fireEvent.change(textarea, { target: { value: 'Very long text...' } });
+    
+    expect(textarea.style.overflowY).toBe('auto');
   });
 });
