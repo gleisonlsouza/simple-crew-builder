@@ -43,7 +43,7 @@ describe('AboutModal', () => {
     
     expect(screen.getByText('Simple Crew')).toBeInTheDocument();
     expect(screen.getByText('Builder')).toBeInTheDocument();
-    expect(screen.getByText('Beta v0.0.6')).toBeInTheDocument();
+    expect(screen.getByText('Beta v0.0.7')).toBeInTheDocument();
     expect(screen.getByText('Gleison Souza')).toBeInTheDocument();
     expect(screen.getByText(/"Create multi-agents easily and intuitively. Let your imagination run wild."/i)).toBeInTheDocument();
   });
