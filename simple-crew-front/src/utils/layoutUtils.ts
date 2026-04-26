@@ -1,75 +1,189 @@
-import dagre from '@dagrejs/dagre';
-import { Position } from '@xyflow/react';
-import type { AppNode, AppEdge } from '../types/nodes.types';
+import { type AppNode, type AppEdge } from '../types/nodes.types';
 
-// Standard dimensions for nodes in SimpleCrew to ensure proper Dagre bounding box calculations
-const NODE_WIDTH = 350; 
-const NODE_HEIGHT = 250; 
+export const getLayoutedElements = (nodes: AppNode[], edges: AppEdge[], direction: 'vertical' | 'horizontal' = 'vertical') => {
+  const isHorizontal = direction === 'horizontal';
+  const newNodes: AppNode[] = JSON.parse(JSON.stringify(nodes));
+  const processed = new Set();
 
-/**
- * Automatically calculates positions for nodes to create a Top-to-Bottom flow.
- */
-export const getLayoutedElements = (nodes: AppNode[], edges: AppEdge[], direction = 'TB') => {
-  const dagreGraph = new dagre.graphlib.Graph().setDefaultEdgeLabel(() => ({}));
+  const topTypes = ['state']; // Schemas removed from globals
+  const spineTypes = ['crew', 'agent', 'router'];
+  const toolTypes = ['tool', 'customTool', 'mcp'];
+  const taskTypes = ['task'];
 
-  // Set rank direction: 'TB' is top to bottom
-  dagreGraph.setGraph({ 
-    rankdir: direction, 
-    nodesep: 50, // horizontal gap between sibling nodes
-    ranksep: 100, // vertical gap between parent/child
+  // 1. Top Shelf (Globals like State)
+  let topX = 100;
+  let topY = 50;
+  newNodes.forEach((node: AppNode) => {
+    if (topTypes.includes(node.type)) {
+      node.position = { x: topX, y: topY };
+      if (isHorizontal) {
+        topY += (node.measured?.height || 150) + 50;
+      } else {
+        topX += (node.measured?.width || 300) + 50;
+      }
+      processed.add(node.id);
+    }
   });
 
-  const nodeMap = new Map(nodes.map(n => [n.id, n]));
-
-  // Left-to-Right order definition
-  const getWeight = (nodeType?: string) => {
-    if (!nodeType) return 10;
-    if (['task', 'taskNode'].includes(nodeType)) return 1;
-    if (['tool', 'customTool', 'globalTool'].includes(nodeType)) return 2;
-    if (nodeType === 'mcp') return 3;
-    return 10;
+  // Helper to position Schemas exactly to the LEFT/TOP of the node they configure
+  const positionConnectedSchemas = (targetId: string, baseX: number, baseY: number) => {
+    const inEdges = edges.filter((e: AppEdge) => e.target === targetId);
+    const schemas = inEdges
+      .map((e: AppEdge) => newNodes.find((n: AppNode) => n.id === e.source && n.type === 'schema'))
+      .filter(Boolean) as AppNode[];
+    
+    let schemaOffset = 0;
+    schemas.forEach((schema: AppNode) => {
+      if (processed.has(schema.id)) return;
+      if (isHorizontal) {
+        // Horizontal: Flow is Left->Right. Inputs are on the Left.
+        // Place schema to the LEFT of the target
+        const schemaWidth = schema.measured?.width || 240;
+        schema.position = { x: baseX - schemaWidth - 100, y: baseY + schemaOffset };
+        schemaOffset += (schema.measured?.height || 150) + 20;
+      } else {
+        // Vertical: Flow is Top->Bottom. Inputs are on the Top.
+        // Place schema ABOVE the target, slightly shifted to the right
+        const schemaHeight = schema.measured?.height || 150;
+        schema.position = { x: baseX + 300, y: baseY - schemaHeight - 100 + schemaOffset };
+        schemaOffset += (schema.measured?.height || 150) + 20;
+      }
+      processed.add(schema.id);
+    });
   };
 
-  // 1. Sort nodes descending to counter Dagre's internal insertion inversion
-  const sortedNodes = [...nodes].sort((a, b) => getWeight(b.type) - getWeight(a.type));
+  // 2. Find Root for the Spine
+  let root: AppNode | undefined = newNodes.find((n: AppNode) => n.type === 'crew');
+  if (!root) {
+    root = newNodes.find((n: AppNode) =>
+      spineTypes.includes(n.type) &&
+      !edges.some((e: AppEdge) => e.target === n.id && spineTypes.includes(newNodes.find((src: AppNode) => src.id === e.source)?.type || ''))
+    );
+  }
 
-  sortedNodes.forEach((node) => {
-    const width = node.measured?.width ?? NODE_WIDTH;
-    const height = node.measured?.height ?? NODE_HEIGHT;
-    dagreGraph.setNode(node.id, { width, height });
-  });
+  // 3. Spine and Ribs Layout (Handle-Aware)
+  const CENTER_X = isHorizontal ? 200 : 800;
+  const CENTER_Y = isHorizontal ? 400 : 150;
+  let currentSpinePos = isHorizontal ? CENTER_X : CENTER_Y;
 
-  // 2. Sort edges descending so the visual Left-to-Right matches Task -> Tool -> MCP
-  const sortedEdges = [...edges].sort((a, b) => {
-    const typeA = nodeMap.get(a.target)?.type;
-    const typeB = nodeMap.get(b.target)?.type;
-    return getWeight(typeB) - getWeight(typeA);
-  });
-
-  sortedEdges.forEach((edge) => {
-    dagreGraph.setEdge(edge.source, edge.target); // Removed the weight property which incorrectly pulls vertical tightness
-  });
-
-  dagre.layout(dagreGraph);
-
-  const newNodes = nodes.map((node) => {
-    const nodeWithPosition = dagreGraph.node(node.id);
-    const width = node.measured?.width ?? NODE_WIDTH;
-    const height = node.measured?.height ?? NODE_HEIGHT;
+  if (root) {
+    let queue: AppNode[] = [root];
     
-    // Dagre positions nodes by their center, React Flow uses top-left
-    return {
-      ...node,
-      targetPosition: 'top' as Position,
-      sourcePosition: 'bottom' as Position,
-      position: {
-        x: nodeWithPosition.x - width / 2,
-        y: nodeWithPosition.y - height / 2,
-      },
-    };
+    while (queue.length > 0) {
+      const levelNodes = [...queue];
+      queue = [];
+      
+      let maxLevelOffset = currentSpinePos;
+
+      // Fan out multiple spine nodes on the same level
+      const crossSpacing = 500;
+      const startingCrossPos = isHorizontal 
+        ? CENTER_Y - ((levelNodes.length - 1) * crossSpacing) / 2
+        : CENTER_X - ((levelNodes.length - 1) * crossSpacing) / 2;
+
+      levelNodes.forEach((node, index) => {
+        if (processed.has(node.id)) return;
+        
+        const crossPos = startingCrossPos + (index * crossSpacing);
+        
+        if (isHorizontal) {
+          node.position = { x: currentSpinePos, y: crossPos };
+        } else {
+          node.position = { x: crossPos, y: currentSpinePos };
+        }
+        processed.add(node.id);
+
+        // POSITION SCHEMAS (Inputs to this node)
+        positionConnectedSchemas(node.id, node.position.x, node.position.y);
+
+        const outEdges = edges.filter((e: AppEdge) => e.source === node.id);
+        const children = outEdges
+          .map((e: AppEdge) => newNodes.find((n: AppNode) => n.id === e.target))
+          .filter(Boolean) as AppNode[];
+
+        const taskChildren = children.filter((c: AppNode) => taskTypes.includes(c.type));
+        const toolChildren = children.filter((c: AppNode) => toolTypes.includes(c.type));
+        const spineChildren = children.filter((c: AppNode) => spineTypes.includes(c.type));
+
+        if (isHorizontal) {
+          // In Horizontal, Ribs (Tasks/Tools) go to the right but on different Y
+          const nodeWidth = node.measured?.width || 250;
+          const ribsBaseX = currentSpinePos + nodeWidth + 150;
+          
+          // Tasks go ABOVE the node center
+          taskChildren.forEach((child: AppNode, i: number) => {
+            if (processed.has(child.id)) return;
+            child.position = { x: ribsBaseX, y: crossPos - 300 - (i * 250) };
+            processed.add(child.id);
+            positionConnectedSchemas(child.id, child.position.x, child.position.y);
+          });
+
+          // Tools go BELOW the node center
+          toolChildren.forEach((child: AppNode, i: number) => {
+            if (processed.has(child.id)) return;
+            child.position = { x: ribsBaseX, y: crossPos + 300 + (i * 250) };
+            processed.add(child.id);
+            positionConnectedSchemas(child.id, child.position.x, child.position.y);
+          });
+        } else {
+          // Vertical layout logic
+          const nodeHeight = node.measured?.height || 200;
+          const currentChildY = currentSpinePos + nodeHeight + 100;
+          
+          // In Vertical, tasks and tools go to the LEFT side of the spine
+          taskChildren.forEach((child: AppNode, i: number) => {
+            if (processed.has(child.id)) return;
+            child.position = { x: crossPos - 700, y: currentChildY + (i * 250) };
+            processed.add(child.id);
+            positionConnectedSchemas(child.id, child.position.x, child.position.y);
+          });
+
+          toolChildren.forEach((child: AppNode, i: number) => {
+            if (processed.has(child.id)) return;
+            child.position = { x: crossPos - 350, y: currentChildY + (i * 250) };
+            processed.add(child.id);
+            positionConnectedSchemas(child.id, child.position.x, child.position.y);
+          });
+        }
+
+        // Queue Spine children for next level
+        spineChildren.forEach((child: AppNode) => {
+          if (!processed.has(child.id)) {
+            queue.push(child);
+          }
+        });
+
+        // Calculate max offset for NEXT level to avoid overlap
+        if (isHorizontal) {
+          const nodeWidth = node.measured?.width || 250;
+          const hasRibs = taskChildren.length > 0 || toolChildren.length > 0;
+          const thisNodeLevelMaxX = currentSpinePos + nodeWidth + (hasRibs ? 700 : 400); 
+          if (thisNodeLevelMaxX > maxLevelOffset) maxLevelOffset = thisNodeLevelMaxX;
+        } else {
+          const nodeHeight = node.measured?.height || 200;
+          const tasksMaxY = currentSpinePos + nodeHeight + 100 + (taskChildren.length * 250);
+          const toolsMaxY = currentSpinePos + nodeHeight + 100 + (toolChildren.length * 250);
+          const spineMaxY = currentSpinePos + nodeHeight + 400;
+          const thisLevelMaxY = Math.max(spineMaxY, tasksMaxY, toolsMaxY);
+          if (thisLevelMaxY > maxLevelOffset) maxLevelOffset = thisLevelMaxY;
+        }
+      });
+
+      currentSpinePos = maxLevelOffset + 100; 
+    }
+  }
+
+  // 4. Fallback for orphans
+  let fallbackX = 100;
+  const fallbackY = currentSpinePos + 100;
+  newNodes.forEach((node: AppNode) => {
+    if (!processed.has(node.id)) {
+      node.position = { x: fallbackX, y: fallbackY };
+      fallbackX += (node.measured?.width || 300) + 50;
+      processed.add(node.id);
+    }
   });
 
-  const newEdges = edges.map(edge => ({ ...edge, type: 'deletable' }));
-
-  return { nodes: newNodes as AppNode[], edges: newEdges as AppEdge[] };
+  return { nodes: newNodes, edges };
 };
+

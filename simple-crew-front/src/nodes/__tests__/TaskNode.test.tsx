@@ -20,6 +20,8 @@ vi.mock('lucide-react', () => ({
   Settings: () => <div data-testid="icon-settings" />,
   ChevronDown: () => <div data-testid="icon-chevron-down" />,
   ChevronUp: () => <div data-testid="icon-chevron-up" />,
+  Wrench: () => <div data-testid="icon-wrench" />,
+  Server: () => <div data-testid="icon-server" />,
 }));
 
 // Mock Handle component
@@ -28,6 +30,7 @@ vi.mock('@xyflow/react', async (importOriginal) => {
   return {
     ...actual,
     Handle: ({ type, id }: any) => <div data-testid={`handle-${type}`} data-handleid={id} className={`react-flow__handle-${type}`} />,
+    useUpdateNodeInternals: () => vi.fn(),
   };
 });
 
@@ -55,6 +58,8 @@ describe('TaskNode', () => {
     setActiveNode: mockSetActiveNode,
     nodeStatuses: {},
     nodeErrors: {},
+    edges: [],
+    currentProjectFramework: 'crewai',
   };
 
   beforeEach(() => {
@@ -106,6 +111,18 @@ describe('TaskNode', () => {
     expect(handle).toHaveAttribute('data-handleid', 'left-target');
   });
 
+  it('contains the expected source handles for CrewAI', () => {
+    const { container } = render(wrap(<TaskNode {...defaultProps} />));
+    const handles = container.querySelectorAll('.react-flow__handle-source');
+    
+    // out-tool, out-custom-tool
+    expect(handles.length).toBe(2);
+    
+    const handleIds = Array.from(handles).map(h => h.getAttribute('data-handleid'));
+    expect(handleIds).toContain('out-tool');
+    expect(handleIds).toContain('out-custom-tool');
+  });
+
   describe('Status Visuals', () => {
     it.each([
       ['waiting', 'icon-clock'],
@@ -143,16 +160,16 @@ describe('TaskNode', () => {
         const collapseBtn = buttons.find(b => b.className.includes('absolute -bottom-3'));
         if (collapseBtn) {
             await user.click(collapseBtn);
-            expect(mockToggleCollapse).toHaveBeenCalledWith('task-1');
+            expect(mockToggleCollapse).toHaveBeenCalledWith('task-1', ['out-tool', 'out-custom-tool']);
         } else {
             throw new Error('Collapse button not found');
         }
     });
 
-    it('hides content when collapsed', () => {
+    it('remains description visible when collapsed (CrewAI preference)', () => {
         const props = { ...defaultProps, data: { ...defaultProps.data, isCollapsed: true } };
         render(wrap(<TaskNode {...props} />));
-        expect(screen.queryByText('Test Description')).not.toBeInTheDocument();
+        expect(screen.getByText('Test Description')).toBeInTheDocument();
     });
   });
 });

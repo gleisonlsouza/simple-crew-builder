@@ -72,6 +72,8 @@ vi.mock('lucide-react', () => ({
   HelpCircle: () => <div />,
   Moon: () => <div />,
   Search: () => <div />,
+  Rows: () => <div />,
+  Columns: () => <div />,
 }));
 
 // --- HEAVY MOCK OF REACT FLOW (@xyflow/react) ---
@@ -162,7 +164,9 @@ describe('Builder Page Smoke Test', () => {
         showNotification: vi.fn(),
         updateProjectMetadata: vi.fn(),
         currentProjectName: 'Test Crew Builder',
-        currentProjectDescription: 'Test'
+        currentProjectDescription: 'Test',
+        canvasLayout: 'vertical',
+        setCanvasLayout: vi.fn()
     };
 
     beforeEach(() => {

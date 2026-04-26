@@ -40,7 +40,7 @@ export const useMermaidExport = () => {
       try {
         const canvas = document.createElement('canvas');
         const ctx = canvas.getContext('2d');
-        if (!ctx) throw new Error('Não foi possível obter o contexto 2D');
+        if (!ctx) throw new Error('Could not get 2D context');
 
         // Lógica: Usar a viewBox para garantir tamanho gigante/real na exportação
         let width = 800;
@@ -113,7 +113,7 @@ export const useMermaidExport = () => {
         
         img.onerror = (err) => {
           console.error('Erro ao carregar imagem purificada:', err);
-          reject(new Error('Navegador bloqueou a renderização do SVG.'));
+          reject(new Error('Browser blocked SVG rendering.'));
         };
         
         img.src = svgDataUri;
@@ -125,11 +125,11 @@ export const useMermaidExport = () => {
   };
 
   const downloadPNG = async (ref: React.RefObject<HTMLDivElement | null>) => {
-    const loadingToast = toast.loading('Gerando imagem PNG...');
+    const loadingToast = toast.loading('Generating PNG image...');
     try {
       const svgEl = ref.current?.querySelector('svg');
       if (!svgEl) {
-        toast.error('Diagrama não encontrado.', { id: loadingToast });
+        toast.error('Diagram not found.', { id: loadingToast });
         return;
       }
       
@@ -143,20 +143,20 @@ export const useMermaidExport = () => {
       link.click();
       document.body.removeChild(link);
       
-      toast.success('Download do PNG iniciado!', { id: loadingToast });
+      toast.success('PNG download started!', { id: loadingToast });
     } catch (err: unknown) {
       console.error('Failed to export PNG:', err);
       const errorMessage = err instanceof Error ? err.message : 'Erro desconhecido';
-      toast.error(`Falha ao exportar PNG: ${errorMessage}`, { id: loadingToast });
+      toast.error(`Failed to export PNG: ${errorMessage}`, { id: loadingToast });
     }
   };
 
   const downloadPDF = async (ref: React.RefObject<HTMLDivElement | null>) => {
-    const loadingToast = toast.loading('Gerando documento PDF...');
+    const loadingToast = toast.loading('Generating PDF document...');
     try {
       const svgEl = ref.current?.querySelector('svg');
       if (!svgEl) {
-        toast.error('Diagrama não encontrado.', { id: loadingToast });
+        toast.error('Diagram not found.', { id: loadingToast });
         return;
       }
       
@@ -188,11 +188,11 @@ export const useMermaidExport = () => {
       pdf.addImage(dataUrl, 'PNG', x, y, finalWidth, finalHeight, undefined, 'FAST');
       pdf.save(`mermaid-diagram-${Date.now()}.pdf`);
       
-      toast.success('Download do PDF iniciado!', { id: loadingToast });
+      toast.success('PDF download started!', { id: loadingToast });
     } catch (err: unknown) {
       console.error('Failed to export PDF:', err);
       const errorMessage = err instanceof Error ? err.message : 'Erro desconhecido';
-      toast.error(`Falha ao exportar PDF: ${errorMessage}`, { id: loadingToast });
+      toast.error(`Failed to export PDF: ${errorMessage}`, { id: loadingToast });
     }
   };
 

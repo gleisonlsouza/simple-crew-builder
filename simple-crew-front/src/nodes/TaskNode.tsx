@@ -1,47 +1,65 @@
-import { memo } from 'react';
-import { Handle, Position, type NodeProps, type Node } from '@xyflow/react';
+import { memo, useEffect } from 'react';
+import { Handle, Position, useUpdateNodeInternals, type NodeProps, type Node } from '@xyflow/react';
 import { useShallow } from 'zustand/shallow';
-import { CheckSquare, Trash2, Loader2, CheckCircle2, AlertCircle, Clock, Settings, ChevronDown, ChevronUp } from 'lucide-react';
+import { CheckSquare, Trash2, Loader2, CheckCircle2, AlertCircle, Clock, Settings, ChevronDown, ChevronUp, Wrench, Server } from 'lucide-react';
 import { useStore } from '../store/index';
 import type { TaskNodeData } from '../types/nodes.types';
 
 
 export const TaskNode = memo(({ id, data }: NodeProps<Node<TaskNodeData, 'task'>>) => {
-  const { deleteNode, toggleCollapse, setActiveNode } = useStore(
+  const { deleteNode, toggleCollapse, setActiveNode, focusNodeTree, framework } = useStore(
     useShallow((state) => ({
       deleteNode: state.deleteNode,
       toggleCollapse: state.toggleCollapse,
       setActiveNode: state.setActiveNode,
+      focusNodeTree: state.focusNodeTree,
+      framework: state.currentProjectFramework,
     }))
   );
+  
+  // Use targeted selectors to avoid re-rendering on every nodes/edges change
+  const layout = useStore(state => state.canvasLayout);
+  
+  // Only subscribe to edges relevant to this node's count
+  const toolsCount = useStore((state) => state.edges.filter(e => e.source === id && (e.sourceHandle === 'out-tool' || e.sourceHandle === 'out-custom-tool')).length);
+  const mcpCount = useStore((state) => state.edges.filter(e => e.source === id && e.sourceHandle === 'out-mcp').length);
+  
+  const updateNodeInternals = useUpdateNodeInternals();
+
+  useEffect(() => {
+    updateNodeInternals(id);
+  }, [layout, id, updateNodeInternals]);
 
   const status = useStore((state) => state.nodeStatuses[id] || 'idle');
   const errors = useStore((state) => state.nodeErrors[id]);
+
+  const isAnyNodeRunning = useStore((state) => 
+    Object.values(state.nodeStatuses || {}).some(s => s === 'running')
+  );
 
   const statusClasses = errors?.length
     ? 'ring-2 ring-red-400 ring-offset-2'
     : status === 'waiting'
       ? 'ring-2 ring-amber-400/50 ring-offset-1'
       : status === 'running'
-        ? 'ring-2 ring-blue-500 ring-offset-2 animate-pulse'
+        ? 'ring-2 ring-blue-500 ring-offset-4 animate-pulse shadow-[0_0_15px_rgba(59,130,246,0.5)]'
         : status === 'success'
-          ? 'ring-2 ring-green-500 ring-offset-2'
+          ? 'ring-2 ring-green-500 ring-offset-2 shadow-[0_0_10px_rgba(34,197,94,0.3)]'
           : status === 'error'
-            ? 'ring-2 ring-red-500 ring-offset-2'
+            ? 'ring-2 ring-red-500 ring-offset-2 shadow-[0_0_10px_rgba(239,68,68,0.3)]'
             : 'hover:ring-2 hover:ring-emerald-400';
 
   return (
     <div
-      data-testid="node-task"
-      onClick={(e) => { e.stopPropagation(); setActiveNode(id); }}
-      className={`group relative bg-white dark:bg-slate-900 rounded-xl shadow-sm hover:shadow-md dark:shadow-none border border-slate-200 dark:border-slate-700 w-56 overflow-visible transition-all duration-300 cursor-pointer ${statusClasses} ${status === 'running' ? 'running' : ''}`}
+      data-testid={`node-task-${id}`}
+      onClick={(e) => { e.stopPropagation(); focusNodeTree(id); }}
+      className={`group relative bg-white dark:bg-slate-900 rounded-xl shadow-sm hover:shadow-md dark:shadow-none border border-slate-200 dark:border-slate-700 w-56 overflow-visible cursor-pointer ${statusClasses} ${status === 'running' ? 'running node-running-active' : ''} ${
+        (data.isDimmed || (isAnyNodeRunning && status !== 'running'))
+          ? 'node-dimmed' 
+          : 'opacity-100 transition-opacity duration-300'
+      } ${data.isTreeRoot ? 'is-tree-root' : ''}`}
       style={{
-        '--node-color': '#10b981',
-        backfaceVisibility: 'hidden',
-        transformStyle: 'preserve-3d',
-        WebkitFontSmoothing: 'antialiased',
-        MozOsxFontSmoothing: 'grayscale',
-        textRendering: 'optimizeLegibility'
+        '--node-color': '#10b981'
       } as React.CSSProperties}
     >
 
@@ -70,6 +88,7 @@ export const TaskNode = memo(({ id, data }: NodeProps<Node<TaskNodeData, 'task'>
         <CheckSquare className="w-4 h-4 text-white" />
         <h3
           className="text-white text-sm font-medium truncate flex-1 cursor-text"
+          onClick={(e) => { e.stopPropagation(); focusNodeTree(id); }}
           onDoubleClick={(e) => { e.stopPropagation(); setActiveNode(id); }}
         >
           {data.name || 'New Task'}
@@ -96,36 +115,113 @@ export const TaskNode = memo(({ id, data }: NodeProps<Node<TaskNodeData, 'task'>
         </div>
       </div>
 
-      {!data.isCollapsed && (
-        <div className="p-3">
-          <div className="space-y-1 mb-1">
-             <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Description</span>
-             <p className="text-xs text-slate-600 dark:text-slate-300 line-clamp-3" title={data.description}>
-               {data.description || 'No description defined'}
-             </p>
+      <div className="p-3">
+        <div className="space-y-1 mb-1">
+           <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Description</span>
+           <p className="text-xs text-slate-600 dark:text-slate-300 line-clamp-3" title={data.description}>
+             {data.description || 'No description defined'}
+           </p>
+        </div>
+      </div>
+
+      {data.isCollapsed && (toolsCount > 0 || mcpCount > 0) && (
+        <div className="px-3 pb-3">
+          <div className="pt-3 border-t border-slate-100 dark:border-slate-800 animate-in fade-in slide-in-from-top-1 duration-200">
+            <div className="flex items-center gap-3">
+              {toolsCount > 0 && (
+                <div className="flex items-center gap-1.5" title={`${toolsCount} ferramentas recolhidas`}>
+                  <Wrench className="w-3.5 h-3.5 text-orange-500" />
+                  <span className="text-[11px] font-bold text-slate-600 dark:text-slate-400">{toolsCount}</span>
+                </div>
+              )}
+              {mcpCount > 0 && (
+                <div className="flex items-center gap-1.5" title={`${mcpCount} servidores MCP recolhidos`}>
+                  <Server className="w-3.5 h-3.5 text-pink-500" />
+                  <span className="text-[11px] font-bold text-slate-600 dark:text-slate-400">{mcpCount}</span>
+                </div>
+              )}
+            </div>
           </div>
         </div>
       )}
 
-      <button
-        onClick={(e) => { e.stopPropagation(); toggleCollapse(id); }}
-        className="absolute -bottom-3 right-4 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-full p-0.5 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-700 shadow-sm z-10 transition-colors text-slate-400 dark:text-slate-500 hover:text-emerald-500 dark:hover:text-emerald-400"
-      >
-        {data.isCollapsed ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronUp className="w-3.5 h-3.5" />}
-      </button>
+      {framework !== 'langgraph' && (
+        <button
+          onClick={(e) => { 
+            e.stopPropagation(); 
+            const allowedHandles = (framework === 'langgraph' || framework === 'crewai')
+              ? ['out-tool', 'out-custom-tool'] 
+              : undefined;
+            toggleCollapse(id, allowedHandles); 
+          }}
+          className="absolute -bottom-3 right-4 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-full p-0.5 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-700 shadow-sm z-10 transition-colors text-slate-400 dark:text-slate-500 hover:text-emerald-500 dark:hover:text-emerald-400"
+        >
+          {data.isCollapsed ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronUp className="w-3.5 h-3.5" />}
+        </button>
+      )}
 
-      {/* Connection Handle - Task connects to Agent (Purple) */}
-      {/* Connection Handle - Task receives from Agent (Blue) */}
-      <div className="absolute left-1/2 -top-[1px] -translate-x-1/2 flex flex-col items-center gap-2 group/h-task -translate-y-full pointer-events-none">
-          <span className="text-[9px] font-bold text-blue-500 bg-white dark:bg-slate-900 px-1 rounded shadow-sm opacity-0 group-hover/h-task:opacity-100 transition-opacity whitespace-nowrap border border-blue-100 dark:border-blue-900/30">Task Instruction</span>
-          <Handle 
-            type="target" 
-            position={Position.Top} 
-            id="left-target"
-            className="!w-3 !h-3 !border-2 !border-white dark:!border-slate-900 !static !translate-x-0 !cursor-crosshair pointer-events-auto shadow-sm" 
-            style={{ backgroundColor: '#3b82f6' }} 
-          />
-      </div>
+      {/* Connection Handles */}
+      {(() => {
+        const isHorizontal = layout === 'horizontal';
+
+        return (
+          <>
+            {/* CrewAI Tools */}
+            {framework === 'crewai' && (
+              <>
+                <Handle 
+                  type="source" 
+                  position={isHorizontal ? Position.Right : Position.Bottom} 
+                  id="out-tool" 
+                  className="!w-3 !h-3 !border-2 !border-white dark:!border-slate-900 !cursor-crosshair pointer-events-auto group/h-tool z-10" 
+                  style={{ 
+                    backgroundColor: '#f97316', 
+                    ...(isHorizontal ? { top: '33%', right: '-6px', left: 'auto' } : { left: '33%' }) 
+                  }} 
+                >
+                   <span className={isHorizontal
+                     ? "absolute left-4 top-1/2 -translate-y-1/2 text-[9px] font-bold text-orange-500 bg-white dark:bg-slate-900 px-1 rounded shadow-sm opacity-0 group-hover/h-tool:opacity-100 transition-opacity whitespace-nowrap border border-orange-100 dark:border-orange-900/30 pointer-events-none"
+                     : "absolute top-4 left-1/2 -translate-x-1/2 text-[9px] font-bold text-orange-500 bg-white dark:bg-slate-900 px-1 rounded shadow-sm opacity-0 group-hover/h-tool:opacity-100 transition-opacity whitespace-nowrap border border-orange-100 dark:border-orange-900/30 pointer-events-none"
+                   }>Tools</span>
+                </Handle>
+
+                <Handle 
+                  type="source" 
+                  position={isHorizontal ? Position.Right : Position.Bottom} 
+                  id="out-custom-tool" 
+                  className="!w-3 !h-3 !border-2 !border-white dark:!border-slate-900 !cursor-crosshair pointer-events-auto group/h-custom-tool z-10" 
+                  style={{ 
+                    backgroundColor: '#fbbf24', 
+                    ...(isHorizontal ? { top: '66%', right: '-6px', left: 'auto' } : { left: '66%' }) 
+                  }} 
+                >
+                   <span className={isHorizontal
+                     ? "absolute left-4 top-1/2 -translate-y-1/2 text-[9px] font-bold text-amber-500 bg-white dark:bg-slate-900 px-1 rounded shadow-sm opacity-0 group-hover/h-custom-tool:opacity-100 transition-opacity whitespace-nowrap border border-amber-100 dark:border-amber-900/30 pointer-events-none"
+                     : "absolute top-4 left-1/2 -translate-x-1/2 text-[9px] font-bold text-amber-500 bg-white dark:bg-slate-900 px-1 rounded shadow-sm opacity-0 group-hover/h-custom-tool:opacity-100 transition-opacity whitespace-nowrap border border-amber-100 dark:border-amber-900/30 pointer-events-none"
+                   }>Custom Tools</span>
+                </Handle>
+              </>
+            )}
+
+            {/* Input Handle */}
+            <div className={isHorizontal
+              ? "absolute top-1/2 -left-[1px] -translate-y-1/2 flex items-center gap-2 group/h-task -translate-x-full pointer-events-none"
+              : "absolute left-1/2 -top-[1px] -translate-x-1/2 flex flex-col items-center gap-2 group/h-task -translate-y-full pointer-events-none"
+            }>
+               <span className="text-[9px] font-bold text-blue-500 bg-white dark:bg-slate-900 px-1 rounded shadow-sm opacity-0 group-hover/h-task:opacity-100 transition-opacity whitespace-nowrap border border-blue-100 dark:border-blue-900/30">Task Instruction</span>
+                <Handle 
+                  type="target" 
+                  position={isHorizontal ? Position.Left : Position.Top} 
+                  id="left-target"
+                  className="!w-3 !h-3 !border-2 !border-white dark:!border-slate-900 !static !translate-x-0 !translate-y-0 !cursor-crosshair pointer-events-auto shadow-sm" 
+                  style={{ backgroundColor: '#3b82f6' }} 
+                />
+            </div>
+
+
+          </>
+        );
+      })()}
     </div>
   );
 });

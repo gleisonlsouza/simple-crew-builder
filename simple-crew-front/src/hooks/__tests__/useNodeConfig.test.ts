@@ -3,9 +3,11 @@ import { renderHook, act } from '@testing-library/react';
 import type { DragEndEvent } from '@dnd-kit/core';
 
 // Mock Zustand store antes de importar
-vi.mock('../../store/index', () => ({
-  useStore: vi.fn(),
-}));
+vi.mock('../../store/index', () => {
+  const useStore = vi.fn();
+  (useStore as any).getState = vi.fn();
+  return { useStore };
+});
 
 import { useStore } from '../../store/index';
 import { useNodeConfig } from '../useNodeConfig';
@@ -51,6 +53,7 @@ describe('useNodeConfig', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     (useStore as unknown as Mock).mockImplementation((selector: (state: AppState) => unknown) => selector(mockStore));
+    (useStore as any).getState.mockReturnValue(mockStore);
   });
 
   it('should return initial values based on active node', () => {
@@ -87,6 +90,7 @@ describe('useNodeConfig', () => {
       };
       const storeWithBrace = { ...mockStore, nodes: [nodeWithBrace] as unknown as AppNode[] } as AppState;
       (useStore as unknown as Mock).mockImplementation((selector: (state: AppState) => unknown) => selector(storeWithBrace));
+      (useStore as any).getState.mockReturnValue(storeWithBrace);
 
       const { result } = renderHook(() => useNodeConfig());
 
@@ -128,6 +132,7 @@ describe('useNodeConfig', () => {
       } as AppState;
       
       (useStore as unknown as Mock).mockImplementation((selector: (state: AppState) => unknown) => selector(storeWithChat));
+      (useStore as any).getState.mockReturnValue(storeWithChat);
 
       const { result } = renderHook(() => useNodeConfig());
 
@@ -157,6 +162,7 @@ describe('useNodeConfig', () => {
       const taskNode = { id: 'task-1', type: 'task', data: { name: 'Test Task' } } as unknown as AppNode;
       const storeWithTask = { ...mockStore, activeNodeId: 'task-1', nodes: [taskNode] } as AppState;
       (useStore as unknown as Mock).mockImplementation((selector: (state: AppState) => unknown) => selector(storeWithTask));
+      (useStore as any).getState.mockReturnValue(storeWithTask);
 
       const { result } = renderHook(() => useNodeConfig());
       await act(async () => {
@@ -169,6 +175,7 @@ describe('useNodeConfig', () => {
       const namelessAgent = { id: 'a1', type: 'agent', data: { name: '' } } as unknown as AppNode;
       const storeNoName = { ...mockStore, activeNodeId: 'a1', nodes: [namelessAgent] } as AppState;
       (useStore as unknown as Mock).mockImplementation((selector: (state: AppState) => unknown) => selector(storeNoName));
+      (useStore as any).getState.mockReturnValue(storeNoName);
       
       const toast = await import('react-hot-toast');
       const spy = vi.spyOn(toast.default, 'error');
@@ -282,6 +289,7 @@ describe('useNodeConfig', () => {
       
       const storeState = { ...mockStore, activeNodeId: 'crew-1', nodes: [crewNode, agentNode, t1, t2], edges: [ { source: 'a1', target: 't1' }, { source: 'a1', target: 't2' }, { source: 'crew-1', target: 'a1' } ] } as unknown as AppState;
       (useStore as unknown as Mock).mockImplementation((selector: (state: AppState) => unknown) => selector(storeState));
+      (useStore as any).getState.mockReturnValue(storeState);
 
       const { result } = renderHook(() => useNodeConfig());
       act(() => {
@@ -298,6 +306,7 @@ describe('useNodeConfig', () => {
       const agent2 = { id: 'a2', type: 'agent', data: { name: 'A2' } } as unknown as AppNode;
       const storeState = { ...mockStore, activeNodeId: 'crew-1', nodes: [crewNode, agent1, agent2], edges: [ { source: 'crew-1', target: 'a1' }, { source: 'crew-1', target: 'a2' } ] } as unknown as AppState;
       (useStore as unknown as Mock).mockImplementation((selector: (state: AppState) => unknown) => selector(storeState));
+      (useStore as any).getState.mockReturnValue(storeState);
 
       renderHook(() => useNodeConfig());
       expect(storeState.updateCrewAgentOrder).toHaveBeenCalledWith('crew-1', ['a1', 'a2']);
@@ -308,6 +317,7 @@ describe('useNodeConfig', () => {
       const agent2 = { id: 'a2', type: 'agent', data: { name: 'New' } } as unknown as AppNode;
       const storeState = { ...mockStore, activeNodeId: 'a2', nodes: [agent1, agent2] } as unknown as AppState;
       (useStore as unknown as Mock).mockImplementation((selector: (state: AppState) => unknown) => selector(storeState));
+      (useStore as any).getState.mockReturnValue(storeState);
 
       const { result } = renderHook(() => useNodeConfig());
       act(() => {
@@ -321,6 +331,7 @@ describe('useNodeConfig', () => {
       const agent2 = { id: 'a2', type: 'agent', data: { name: 'Existing' } } as unknown as AppNode;
       const storeState = { ...mockStore, activeNodeId: 'a2', nodes: [agent2] } as unknown as AppState;
       (useStore as unknown as Mock).mockImplementation((selector: (state: AppState) => unknown) => selector(storeState));
+      (useStore as any).getState.mockReturnValue(storeState);
 
       const { result } = renderHook(() => useNodeConfig());
       act(() => {
@@ -334,6 +345,7 @@ describe('useNodeConfig', () => {
       const namelessTask = { id: 't1', type: 'task', data: { name: '' } } as unknown as AppNode;
       const storeState = { ...mockStore, activeNodeId: 't1', nodes: [namelessTask] } as unknown as AppState;
       (useStore as unknown as Mock).mockImplementation((selector: (state: AppState) => unknown) => selector(storeState));
+      (useStore as any).getState.mockReturnValue(storeState);
       
       const toast = await import('react-hot-toast');
       const spy = vi.spyOn(toast.default, 'error');
@@ -358,6 +370,7 @@ describe('useNodeConfig', () => {
       const taskNode = { id: 't1', type: 'task', data: { description: 'Do {task_var}' } } as unknown as AppNode;
       const storeState = { ...mockStore, nodes: [agentNode, taskNode] } as unknown as AppState;
       (useStore as unknown as Mock).mockImplementation((selector: (state: AppState) => unknown) => selector(storeState));
+      (useStore as any).getState.mockReturnValue(storeState);
 
       const { result } = renderHook(() => useNodeConfig());
       expect(result.current.allProjectVariables).toContain('agent_var');

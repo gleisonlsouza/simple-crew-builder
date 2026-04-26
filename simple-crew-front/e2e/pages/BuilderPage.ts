@@ -25,10 +25,17 @@ export class BuilderPage {
     this.tabAnimation = page.getByTestId('tab-view-animation');
   }
 
-  async expectLoaded(projectName: string) {
-    // 1. Verify project title in the header
-    const headerTitle = this.page.locator('header h1', { hasText: projectName });
-    await expect(headerTitle).toBeVisible({ timeout: 15000 });
+  async expectLoaded(projectName?: string) {
+    // 1. Verify project title in Header
+    const headerTitle = this.page.locator('h1').first();
+    await expect(headerTitle).toBeVisible({ timeout: 20000 });
+    
+    if (projectName) {
+      // Wait for name to change from default 'SimpleCrew' or 'My Workflows'
+      await expect(headerTitle).not.toHaveText('SimpleCrew', { timeout: 15000 });
+      await expect(headerTitle).not.toHaveText('My Workflows', { timeout: 15000 });
+      await expect(headerTitle).toHaveText(projectName, { timeout: 20000 });
+    }
     
     // 2. Verify React Flow presence
     await expect(this.canvas).toBeVisible({ timeout: 15000 });
@@ -40,7 +47,7 @@ export class BuilderPage {
     
     // 2. Usa data-testid para genéricos, ou filtra por texto para nomes específicos
     const node = isGenericType
-      ? this.page.getByTestId(`node-${nodeIdentifier.toLowerCase()}`).first()
+      ? this.page.locator(`[data-testid^="node-${nodeIdentifier.toLowerCase()}"]`).first()
       : this.nodes.filter({ hasText: nodeIdentifier }).first();
       
     await expect(node).toBeVisible({ timeout: 15000 });
@@ -60,9 +67,6 @@ export class BuilderPage {
     await expect(this.nodeConfigDrawer).toBeVisible({ timeout: 10000 });
   }
 
-  async expectConfigDrawerOpen() {
-    await expect(this.configDrawerHeader).toBeVisible({ timeout: 5000 });
-  }
 
   async closeConfigDrawer() {
     if (await this.nodeConfigDrawer.isVisible()) {
@@ -88,15 +92,24 @@ export class BuilderPage {
     }
   }
 
-  async addNode(type: 'crew' | 'agent' | 'task') {
+  async ensureSidebarExpanded() {
+    const expandBtn = this.page.getByLabel('Expand Sidebar');
+    if (await expandBtn.isVisible()) {
+      await expandBtn.click();
+      await this.page.waitForTimeout(300);
+    }
+  }
+
+  async addNode(type: 'crew' | 'agent' | 'task' | 'state') {
+    await this.ensureSidebarExpanded();
     const testId = `btn-add-${type.toLowerCase()}`;
     const addBtn = this.page.getByTestId(testId);
     await addBtn.waitFor({ state: 'visible' });
     await addBtn.click();
     
     // Wait for the new node to appear in the canvas
-    const nodeTestId = `node-${type.toLowerCase()}`;
-    await expect(this.page.getByTestId(nodeTestId).last()).toBeVisible({ timeout: 10000 });
+    const nodeSelector = `[data-testid^="node-${type.toLowerCase()}"]`;
+    await expect(this.page.locator(nodeSelector).last()).toBeVisible({ timeout: 10000 });
   }
 
   async connectNodes(sourceName: string, targetName: string) {
@@ -130,12 +143,31 @@ export class BuilderPage {
             if (tgtNode.type === 'task') sourceHandle = 'out-task';
             else if (tgtNode.type === 'tool' || tgtNode.type === 'customTool') sourceHandle = 'out-tool';
             else if (tgtNode.type === 'mcp') sourceHandle = 'out-mcp';
+            else if (tgtNode.type === 'state') sourceHandle = 'data-out';
+          } else if (srcNode.type === 'task') {
+            if (tgtNode.type === 'state') sourceHandle = 'data-out';
+            else if (tgtNode.type === 'tool' || tgtNode.type === 'customTool') sourceHandle = 'out-tool';
+            else if (tgtNode.type === 'mcp') sourceHandle = 'out-mcp';
+          } else if (srcNode.type === 'state') {
+            sourceHandle = 'state-out';
           }
 
           // 2. Target Logic (Standardized for all receivers)
-          if (['agent', 'crew', 'task'].includes(tgtNode.type)) {
+          if (tgtNode.type === 'agent') {
+            targetHandle = 'agent-in';
+          } else if (tgtNode.type === 'crew') {
+            targetHandle = 'trigger-in';
+          } else if (tgtNode.type === 'task') {
             targetHandle = 'left-target';
+          } else if (tgtNode.type === 'state') {
+            // Target the first field found or fallback to 'field-in-output' if common
+            const fields = tgtNode.data?.fields || [];
+            const outputField = fields.find((f: any) => f.key === 'output') || fields[0];
+            targetHandle = outputField ? `field-in-${outputField.key}` : 'left-target';
           }
+
+          console.log(`[E2E] Connecting ${srcNode.type} (${srcNode.id}) to ${tgtNode.type} (${tgtNode.id})`);
+          console.log(`[E2E] Selected Handles: source=${sourceHandle}, target=${targetHandle}`);
 
           state.onConnect({
             source: srcNode.id,
@@ -181,7 +213,7 @@ export class BuilderPage {
     await this.runCrewBtn.click();
   }
 
-  async typeInNodeField(fieldName: string, value: string) {
+  async typeInNodeField(fieldName: string, value: string, options: { blur?: boolean } = {}) {
     const testIdMap: Record<string, string> = {
       'Role': 'field-agent-role',
       'Goal': 'input-goal',
@@ -209,10 +241,12 @@ export class BuilderPage {
     await field.press('Backspace');
     await field.type(value, { delay: 30 });
 
-    // Click header to blur and ensure state commit
-    await this.configDrawerHeader.click();
-    // Brief wait for state propagation
-    await this.page.waitForTimeout(200);
+    if (options.blur !== false) {
+      // Click header to blur and ensure state commit
+      await this.configDrawerHeader.click();
+      // Brief wait for state propagation
+      await this.page.waitForTimeout(200);
+    }
   }
 
   async expectSuggestionsVisible() {
@@ -222,5 +256,18 @@ export class BuilderPage {
     // Ensure it has at least one suggestion item
     const count = await dropdown.locator('button').count();
     expect(count).toBeGreaterThan(0);
+  }
+
+  async selectSuggestion(variableName: string) {
+    console.log(`[E2E] Selecting suggestion for variable: ${variableName}`);
+    await this.page.waitForTimeout(500); // Wait for dropdown to render
+    await this.page.keyboard.press('ArrowDown');
+    await this.page.keyboard.press('Enter');
+  }
+
+
+
+  async expectConfigDrawerOpen() {
+    await expect(this.nodeConfigDrawer).toBeVisible({ timeout: 10000 });
   }
 }

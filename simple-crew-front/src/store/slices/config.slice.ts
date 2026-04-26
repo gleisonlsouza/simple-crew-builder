@@ -4,12 +4,13 @@ import toast from 'react-hot-toast';
 import type { AppState, ConfigSlice } from '../../types/store.types';
 import type { ModelConfig, Credential, MCPServer, CustomTool, ToolConfig } from '../../types/config.types';
 
+
 const API_URL = import.meta.env.VITE_API_URL || '';
 
 import { initialGlobalTools } from '../initialTools';
 
 const getInitialGlobalTools = (): ToolConfig[] => {
-  const STORAGE_KEY = 'global_tools_v8';
+  const STORAGE_KEY = 'global_tools_v9';
   const persistedRaw = localStorage.getItem(STORAGE_KEY);
   
   if (!persistedRaw) return initialGlobalTools;
@@ -17,19 +18,31 @@ const getInitialGlobalTools = (): ToolConfig[] => {
   try {
     const persistedTools = JSON.parse(persistedRaw) as ToolConfig[];
     
-    // Check for tools in initialGlobalTools that are missing in persistedTools
+    // 1. Find tools in initialGlobalTools that are missing in persistedTools (by ID)
     const missingTools = initialGlobalTools.filter(
       it => !persistedTools.some(pt => pt.id === it.id)
     );
 
+    // 2. Ensure existing tools have all required properties (framework, category, etc.)
+    // This handles the case where the user has an older version in localStorage
+    const updatedPersistedTools = persistedTools.map(pt => {
+      const original = initialGlobalTools.find(it => it.id === pt.id);
+      if (!original) return pt;
+
+      return {
+        ...original, // Default properties (framework, category, description, etc.)
+        ...pt,       // User state (isEnabled, apiKey)
+      };
+    });
+
     if (missingTools.length > 0) {
-      const merged = [...persistedTools, ...missingTools];
+      const merged = [...updatedPersistedTools, ...missingTools];
       // Persist the merged list so next time we don't have to re-merge
       localStorage.setItem(STORAGE_KEY, JSON.stringify(merged));
       return merged;
     }
 
-    return persistedTools;
+    return updatedPersistedTools;
   } catch (error) {
     console.error('Error hydrating global tools:', error);
     return initialGlobalTools;
@@ -43,7 +56,9 @@ export const createConfigSlice: StateCreator<AppState, [], [], ConfigSlice> = (s
   globalTools: getInitialGlobalTools(),
   customTools: [],
   mcpServers: [],
+  skills: [],
   systemAiModelId: localStorage.getItem('default_system_ai_model_id'),
+
   embeddingModelId: localStorage.getItem('default_embedding_model_id'),
 
   fetchCredentials: async () => {
@@ -198,10 +213,10 @@ export const createConfigSlice: StateCreator<AppState, [], [], ConfigSlice> = (s
     set({ defaultModel: model });
   },
 
-  updateToolConfig: (id: string, config: Partial<ModelConfig>) => {
+  updateToolConfig: (id: string, config: Partial<ToolConfig>) => {
     set((state) => {
       const newTools = state.globalTools.map((t) => t.id === id ? { ...t, ...config } : t);
-      localStorage.setItem('global_tools_v8', JSON.stringify(newTools));
+      localStorage.setItem('global_tools_v9', JSON.stringify(newTools));
       return { globalTools: newTools };
     });
   },
@@ -307,6 +322,68 @@ export const createConfigSlice: StateCreator<AppState, [], [], ConfigSlice> = (s
       toast.success('MCP Server removed.');
     } catch (error) { toast.error((error as Error).message); }
   },
+  
+  fetchSkills: async () => {
+    try {
+      const response = await fetch(`${API_URL}/api/v1/skills`);
+      if (!response.ok) throw new Error('Failed to fetch skills');
+      set({ skills: await response.json() });
+    } catch (error) { console.error(error); }
+  },
+
+  importSkill: async (url: string) => {
+    try {
+      const response = await fetch(`${API_URL}/api/v1/skills/import`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url }),
+      });
+      if (!response.ok) {
+        const errorData = await response.json();
+        const fullDetail: string = errorData.detail || 'Failed to import skill';
+        // Take only the first line for the toast (backend may return multiline messages)
+        const toastMessage = fullDetail.split('\n')[0];
+        console.error('[importSkill] Backend error:', fullDetail);
+        throw new Error(toastMessage);
+      }
+      toast.success("Skill imported successfully!");
+      await get().fetchSkills();
+    } catch (error) { 
+      toast.error((error as Error).message);
+      throw error; // Re-throw so the component can reset its loading state
+    }
+  },
+
+  uploadSkill: async (file: File) => {
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      const response = await fetch(`${API_URL}/api/v1/skills/upload`, {
+        method: 'POST',
+        body: formData,
+      });
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.detail || 'Failed to upload skill');
+      }
+      toast.success("Skill uploaded successfully");
+      await get().fetchSkills();
+    } catch (error) {
+      toast.error((error as Error).message);
+      throw error;
+    }
+  },
+
+  deleteSkill: async (id: string) => {
+
+    try {
+      const response = await fetch(`${API_URL}/api/v1/skills/${id}`, { method: 'DELETE' });
+      if (!response.ok) throw new Error('Failed to delete skill');
+      toast.success("Skill removed");
+      await get().fetchSkills();
+    } catch (error) { toast.error((error as Error).message); }
+  },
+
 
   fetchSettings: async () => {
     try {

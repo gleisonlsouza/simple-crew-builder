@@ -4,7 +4,7 @@ import queue
 from unittest.mock import patch, MagicMock
 import uuid
 
-from app.schemas import GraphData, Node, NodeData, Edge
+from app.schemas import GraphData, CrewNode, AgentNode, TaskNode, Edge, CrewNodeData, AgentNodeData, TaskNodeData
 from app.models import MCPServer, User, AppSettings
 
 # Para facilitar a chamada, precisamos do run_crew_stream
@@ -13,17 +13,17 @@ from app.crew_builder import run_crew_stream
 def create_mock_graph():
     return GraphData(
         nodes=[
-            Node(
+            CrewNode(
                 id="crew-1",
                 type="crew",
                 position={"x": 0, "y": 0},
-                data=NodeData(name="Main Crew")
+                data=CrewNodeData(name="Main Crew")
             ),
-            Node(
+            AgentNode(
                 id="agent-1",
                 type="agent",
                 position={"x": 0, "y": 0},
-                data=NodeData(
+                data=AgentNodeData(
                     name="Test Agent",
                     role="Tester",
                     goal="Test the SSE",
@@ -31,11 +31,11 @@ def create_mock_graph():
                     mcpServerIds=["mocked-mcp-id"]
                 )
             ),
-            Node(
+            TaskNode(
                 id="task-1",
                 type="task",
                 position={"x": 0, "y": 0},
-                data=NodeData(
+                data=TaskNodeData(
                     name="Test Task",
                     description="Do something",
                     expected_output="Done"

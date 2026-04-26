@@ -139,7 +139,7 @@ describe('DeletableEdge', () => {
     
     const baseEdge = screen.getByTestId('base-edge');
     expect(baseEdge.style.stroke).toBe('rgb(59, 130, 246)'); // #3b82f6 in RGB
-    expect(baseEdge.style.strokeWidth).toBe('3');
+    expect(baseEdge.style.strokeWidth).toBe('4');
   });
 
   it('changes style based on node status (success)', () => {

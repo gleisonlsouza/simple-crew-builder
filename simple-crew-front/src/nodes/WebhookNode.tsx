@@ -1,5 +1,5 @@
-import { memo } from 'react';
-import { Handle, Position, type NodeProps, type Node } from '@xyflow/react';
+import { memo, useEffect } from 'react';
+import { Handle, Position, useUpdateNodeInternals, type NodeProps, type Node } from '@xyflow/react';
 import { useShallow } from 'zustand/shallow';
 import { Globe, Trash2, Settings, AlertCircle, Clock, Loader2, CheckCircle2 } from 'lucide-react';
 import { useStore } from '../store/index';
@@ -15,8 +15,18 @@ export const WebhookNode = memo(({ id, data }: NodeProps<Node<WebhookNodeData, '
     }))
   );
 
+  const isAnyNodeRunning = useStore((state) => 
+    Object.values(state.nodeStatuses || {}).some(s => s === 'running')
+  );
+
   const status = useStore((state) => (state.nodeStatuses[id] as NodeStatus) || 'idle');
   const errors = useStore((state) => state.nodeErrors[id]);
+  const layout = useStore(state => state.canvasLayout);
+  const updateNodeInternals = useUpdateNodeInternals();
+
+  useEffect(() => {
+    updateNodeInternals(id);
+  }, [layout, id, updateNodeInternals]);
 
   const statusClasses = errors?.length
     ? 'ring-2 ring-red-400 ring-offset-2'
@@ -32,7 +42,11 @@ export const WebhookNode = memo(({ id, data }: NodeProps<Node<WebhookNodeData, '
 
   return (
     <div
-      className={`group relative bg-white dark:bg-slate-900 rounded-xl shadow-sm hover:shadow-md dark:shadow-none border border-slate-200 dark:border-slate-700 w-56 overflow-visible transition-colors transition-shadow duration-300 cursor-pointer ${statusClasses}`}
+      className={`group relative bg-white dark:bg-slate-900 rounded-xl shadow-sm hover:shadow-md dark:shadow-none border border-slate-200 dark:border-slate-700 w-56 overflow-visible cursor-pointer ${statusClasses} ${status === 'running' ? 'node-running-active' : ''} ${
+        (data.isDimmed || (isAnyNodeRunning && status !== 'running'))
+          ? 'node-dimmed' 
+          : 'opacity-100 transition-opacity duration-300'
+      }`}
       style={{
         '--node-color': '#f97316',
       } as React.CSSProperties}
@@ -130,17 +144,27 @@ export const WebhookNode = memo(({ id, data }: NodeProps<Node<WebhookNodeData, '
         </div>
       </div>
 
-      {/* Output Handle (Bottom) */}
-      <div className="absolute left-1/2 -bottom-[1px] -translate-x-1/2 flex flex-col items-center gap-1 group/h-webhook translate-y-full pointer-events-none">
-        <Handle 
-          type="source" 
-          position={Position.Bottom} 
-          id="right-source" 
-          className="!w-3 !h-3 !border-2 !border-white dark:!border-slate-900 !static !translate-x-0 !cursor-crosshair pointer-events-auto shadow-sm"
-          style={{ backgroundColor: '#f97316' }}
-        />
-        <span className="text-[9px] font-bold text-orange-500 bg-white dark:bg-slate-900 px-1 rounded shadow-sm opacity-0 group-hover/h-webhook:opacity-100 transition-opacity whitespace-nowrap border border-orange-100 dark:border-orange-900/30">Connect Crew</span>
-      </div>
+      {/* Output Handle */}
+      {(() => {
+        const isHorizontal = layout === 'horizontal';
+        const position = isHorizontal ? Position.Right : Position.Bottom;
+        const wrapperClass = isHorizontal
+          ? "absolute top-1/2 -right-[1px] -translate-y-1/2 flex items-center gap-2 group/h-webhook translate-x-full pointer-events-none"
+          : "absolute left-1/2 -bottom-[1px] -translate-x-1/2 flex flex-col items-center gap-1 group/h-webhook translate-y-full pointer-events-none";
+
+        return (
+          <div className={wrapperClass}>
+            <Handle 
+              type="source" 
+              position={position} 
+              id="right-source" 
+              className="!w-3 !h-3 !border-2 !border-white dark:!border-slate-900 !static !translate-x-0 !translate-y-0 !cursor-crosshair pointer-events-auto shadow-sm"
+              style={{ backgroundColor: '#f97316' }}
+            />
+            <span className="text-[9px] font-bold text-orange-500 bg-white dark:bg-slate-900 px-1 rounded shadow-sm opacity-0 group-hover/h-webhook:opacity-100 transition-opacity whitespace-nowrap border border-orange-100 dark:border-orange-900/30">Connect Crew</span>
+          </div>
+        );
+      })()}
     </div>
   );
 });

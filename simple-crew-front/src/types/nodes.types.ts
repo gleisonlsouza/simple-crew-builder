@@ -35,6 +35,30 @@ export interface AgentNodeData extends Record<string, unknown> {
   response_template?: string;
   taskOrder?: string[];
   disabledToolIds?: string[];
+  selectedStateId?: string;
+  selectedStateKey?: string;
+  showStateConnections?: boolean;
+  identitySkillIds?: string[];
+}
+
+
+export interface LangGraphAgentData extends Record<string, unknown> {
+  name: string;
+  role: string;
+  goal: string;
+  backstory: string;
+  llm_id?: string;
+  selectedStateId?: string;
+  selectedStateKey?: string;
+  showStateConnections?: boolean;
+  identitySkillIds?: string[];
+}
+
+
+export interface LangGraphTaskData extends Record<string, unknown> {
+  name: string;
+  description: string;
+  expected_output: string;
 }
 
 export interface TaskNodeData extends Record<string, unknown> {
@@ -73,6 +97,11 @@ export interface CrewNodeData extends Record<string, unknown> {
   output_log_file?: string;
   embedder?: string; // Stored as a JSON string for easy editing
   prompt_file?: string;
+  /** LangGraph only: the state key to surface as the final output.
+   *  Use '__FULL_STATE__' (or leave undefined) to return the entire state object. */
+  outputKey?: string;
+  selectedStateId?: string;
+  showStateConnections?: boolean;
 }
 
 export interface ChatNodeData extends Record<string, unknown> {
@@ -117,7 +146,51 @@ export interface McpNodeData extends Record<string, unknown> {
   url?: string;
 }
 
-export type AppNode =
+export interface StateField {
+  id: string; // unique ID for the UI list rendering
+  key: string; // e.g., 'messages', 'intent'
+  type: string; // Can be 'string', 'integer', or a Dynamic Schema Name
+  reducer: 'overwrite' | 'append'; // Represents LangGraph reducers (e.g., add_messages)
+  defaultValue?: unknown;
+}
+
+export interface StateNodeData extends Record<string, unknown> {
+  name: string;
+  description?: string;
+  fields: StateField[];
+}
+
+export interface SchemaField {
+  id: string; 
+  key: string; 
+  type: 'string' | 'integer' | 'boolean' | 'float' | 'list' | 'dict';
+  description: string; // Crucial for LLMs to understand the extraction target
+  defaultValue?: unknown;
+}
+
+export interface SchemaNodeData extends Record<string, unknown> {
+  name: string;
+  description?: string;
+  fields: SchemaField[];
+}
+
+export type RouterOperator = 'is_equal' | 'is_not_equal' | 'contains' | 'is_true' | 'is_false' | 'is_empty' | 'greater_than' | 'less_than';
+
+export interface RouteCondition {
+  id: string;
+  label: string; // The name of the path (e.g., "Review Required")
+  field: string; // The field from the State to check
+  operator: RouterOperator;
+  value: unknown;
+}
+
+export interface RouterNodeData extends Record<string, unknown> {
+  name: string;
+  conditions: RouteCondition[];
+  defaultRouteLabel: string;
+}
+
+export type AppNode = 
   | Node<AgentNodeData, 'agent'>
   | Node<TaskNodeData, 'task'>
   | Node<CrewNodeData, 'crew'>
@@ -125,6 +198,21 @@ export type AppNode =
   | Node<WebhookNodeData, 'webhook'>
   | Node<ToolNodeData, 'tool'>
   | Node<CustomToolNodeData, 'customTool'>
-  | Node<McpNodeData, 'mcp'>;
+  | Node<McpNodeData, 'mcp'>
+  | Node<StateNodeData, 'state'>
+  | Node<RouterNodeData, 'router'>
+  | Node<SchemaNodeData, 'schema'>;
 
 export type AppEdge = Edge;
+
+export interface StateFieldInfo {
+  key: string;
+  type: string;
+  subKeys?: string[];
+}
+
+export interface StateNodeInfo {
+  id: string;
+  name: string;
+  fields: StateFieldInfo[];
+}

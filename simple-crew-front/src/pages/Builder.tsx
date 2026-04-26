@@ -1,6 +1,5 @@
 import React, { useCallback, useRef, useEffect } from 'react';
 import { v4 as uuidv4 } from 'uuid';
-import { Toaster } from 'react-hot-toast';
 import {
   ReactFlow,
   Background,
@@ -15,7 +14,7 @@ import {
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import { useShallow } from 'zustand/shallow';
-import { Play, Sparkles, Save, Loader2, ArrowLeft, Wand2 } from 'lucide-react';
+import { Play, Sparkles, Save, Loader2, ArrowLeft, Wand2, Rows, Columns } from 'lucide-react';
 import { useParams, useNavigate } from 'react-router-dom';
 import type { AppNode } from '../types/nodes.types';
 
@@ -30,13 +29,18 @@ import { WebhookNode } from '../nodes/WebhookNode';
 import { ToolNode } from '../nodes/ToolNode';
 import { CustomToolNode } from '../nodes/CustomToolNode';
 import { McpNode } from '../nodes/McpNode';
+import { StateNode } from '../nodes/StateNode';
+import { SchemaNode } from '../nodes/SchemaNode';
+import { RouterNode } from '../nodes/RouterNode';
 import { Sidebar } from '../components/Sidebar';
 
 
 import { NodeConfigDrawer } from '../components/NodeConfigDrawer';
+import { StateNodeModal } from '../components/modals/StateNodeModal';
+import { SchemaNodeModal } from '../components/modals/SchemaNodeModal';
+import { RouterNodeModal } from '../components/modals/RouterNodeModal';
 import { DeletableEdge } from '../nodes/DeletableEdge';
 import { ExportDropdown } from '../components/ExportDropdown';
-import { Toast } from '../components/Toast';
 import { ConsoleDrawer } from '../components/ConsoleDrawer';
 import { SettingsDrawer } from '../components/SettingsDrawer';
 import { UsabilityCardsDrawer } from '../components/UsabilityCardsDrawer';
@@ -53,6 +57,9 @@ const nodeTypes = {
   tool: ToolNode,
   customTool: CustomToolNode,
   mcp: McpNode,
+  state: StateNode,
+  schema: SchemaNode,
+  router: RouterNode,
 };
 
 const edgeTypes = {
@@ -76,8 +83,8 @@ const FlowCanvas = () => {
   const { screenToFlowPosition, getNode, fitView } = useReactFlow();
 
   // 2. SELETORES ATÔMICOS: Fim do useShallow gigante. Acesso rápido à memória.
-  const nodes = useStore((state) => state.nodes);
-  const edges = useStore((state) => state.edges);
+  const nodes = useStore(useShallow((state) => state.nodes));
+  const edges = useStore(useShallow((state) => state.edges));
   const onNodesChange = useStore((state) => state.onNodesChange);
   const onEdgesChange = useStore((state) => state.onEdgesChange);
   const onConnect = useStore((state) => state.onConnect);
@@ -93,28 +100,94 @@ const FlowCanvas = () => {
     animated: true
   }), [theme]);
 
+  const focusEdge = useStore((state) => state.focusEdge);
+
+  // CORREÇÃO 1: Memoizando as funções de clique para não quebrar a performance do React Flow
+  const handlePaneClick = useCallback(() => focusEdge(null), [focusEdge]);
+  const handleNodeClick = useCallback(() => focusEdge(null), [focusEdge]);
+  const handleEdgeClick = useCallback((_: React.MouseEvent, edge: Edge) => focusEdge(edge.id), [focusEdge]);
+
   const isValidConnection = useCallback((connection: Connection | Edge) => {
     const sourceNode = getNode(connection.source);
     const targetNode = getNode(connection.target);
 
     if (!sourceNode || !targetNode || !sourceNode.type || !targetNode.type) return false;
 
+    // RULE: State Node connection to Graph (Crew) State Input
+    if (targetNode.type === 'crew' && connection.targetHandle === 'state-in') {
+      // 1. Only state nodes can connect here
+      if (sourceNode.type !== 'state') return false;
+      
+      // 2. Only ONE state connection allowed per Graph
+      const hasStateConnected = edges.some(e => e.target === connection.target && e.targetHandle === 'state-in');
+      if (hasStateConnected) return false;
+
+      return true;
+    }
+
+    // RULE: Schema Node connection to Agent Input
+    if (connection.targetHandle === 'schema-input') {
+      // 1. Only schema nodes can connect here
+      if (sourceNode.type !== 'schema') return false;
+      // 2. Only one schema per agent allowed
+      if (targetNode.type === 'agent') {
+        const hasSchemaConnected = edges.some(e => e.target === connection.target && e.targetHandle === 'schema-input');
+        if (hasSchemaConnected) return false;
+        return true;
+      }
+      // State nodes no longer accept schema edges (schemas are discovered from canvas)
+      return false;
+    }
+
     if (['chat', 'webhook'].includes(sourceNode.type) && targetNode.type === 'crew') return true;
-    if (sourceNode.type === 'crew' && targetNode.type === 'agent') return connection.targetHandle === 'left-target';
+    if (sourceNode.type === 'crew' && targetNode.type === 'agent') return connection.targetHandle === 'agent-in';
 
     if (sourceNode.type === 'agent') {
       if (['task', 'taskNode', 'agentTask'].includes(targetNode.type)) return connection.sourceHandle === 'out-task';
       if (['tool', 'customTool'].includes(targetNode.type)) return connection.sourceHandle === 'out-tool';
       if (targetNode.type === 'mcp') return connection.sourceHandle === 'out-mcp';
+      
+      // Execution Output Handle connects to other Agents or Routers
+      if (connection.sourceHandle === 'agent-out') {
+        return ['agent', 'router'].includes(targetNode.type as string);
+      }
+      
+      // Data Output Handle connects directly to a state field map
+      if (connection.sourceHandle === 'data-out') {
+        return targetNode.type === 'state' && (connection.targetHandle?.startsWith('field-in-') || false);
+      }
     }
-    return false;
-  }, [getNode]);
 
+    if (sourceNode.type === 'task') {
+      if (['tool', 'customTool'].includes(targetNode.type)) return connection.sourceHandle === 'out-tool';
+      if (targetNode.type === 'state') return connection.sourceHandle === 'data-out';
+    }
+
+    // RULE: Router Connections (Source)
+    if (sourceNode.type === 'router') {
+      // Routers can connect to any agent, task, or other router via their path handles
+      if (targetNode.type === 'agent') return connection.targetHandle === 'agent-in';
+      return ['task', 'router'].includes(targetNode.type as string);
+    }
+
+    // RULE: Execution Flow into Router
+    if (targetNode.type === 'router' && connection.targetHandle === 'router-in') {
+      // Agents or Crew can trigger a router
+      return ['agent', 'crew'].includes(sourceNode.type as string);
+    }
+
+    return false;
+  }, [getNode, edges]);
+
+  // CORREÇÃO 2: Revisar a lógica do fitView. 
+  // Removi o isDirty da dependência para evitar que a câmera tente focar
+  // no exato momento em que o usuário arrasta um nó pela primeira vez.
   useEffect(() => {
-    if (isDirty && nodes.length > 0) {
+    // Recomendo ter uma flag no store tipo 'hasLoaded' em vez de usar isDirty para isso
+    if (nodes.length > 0 && !isDirty) { 
       setTimeout(() => fitView({ duration: 800, padding: 0.3 }), 100);
     }
-  }, [isDirty, nodes.length, fitView]);
+  }, [nodes.length, fitView, isDirty]); // Adicionado isDirty para silenciar o lint, mas a lógica de !isDirty garante que só rode no início
 
   const onDragOver = useCallback((event: React.DragEvent) => {
     event.preventDefault();
@@ -138,6 +211,9 @@ const FlowCanvas = () => {
     else if (type === 'tool') data = { name: 'New Tool', toolId: '' };
     else if (type === 'customTool') data = { name: 'New Custom Tool', toolId: '' };
     else if (type === 'mcp') data = { name: 'New MCP Server', serverId: '' };
+    else if (type === 'state') data = { name: 'State', fields: [{ id: 'f1', key: 'output', type: 'string', description: 'Main output' }] };
+    else if (type === 'schema') data = { name: 'Schema', fields: [] };
+    else if (type === 'router') data = { name: 'Conditional Router', conditions: [], defaultRouteLabel: 'Default' };
     else return;
 
     addNode({ id: getId(), type: type as AppNode['type'], position, data } as AppNode);
@@ -145,16 +221,21 @@ const FlowCanvas = () => {
     useStore.getState().setIsUsabilityDrawerOpen(false);
   }, [screenToFlowPosition, addNode, validateGraph]);
 
-  return (
-    <ReactFlow
-      nodes={nodes} edges={edges} onNodesChange={onNodesChange} onEdgesChange={onEdgesChange} onConnect={onConnect}
-      nodeTypes={nodeTypes} edgeTypes={edgeTypes} isValidConnection={isValidConnection}
-      onDragOver={onDragOver} onDrop={onDrop}
-      fitViewOptions={FIT_VIEW_OPTIONS}
-      minZoom={0.2} maxZoom={4}
-      defaultEdgeOptions={defaultEdgeOptions}
-      connectionLineType={ConnectionLineType.SmoothStep}
-    >
+
+  
+    return (
+      <ReactFlow
+        nodes={nodes} edges={edges} onNodesChange={onNodesChange} onEdgesChange={onEdgesChange} onConnect={onConnect}
+        onPaneClick={handlePaneClick}
+        onNodeClick={handleNodeClick}
+        onEdgeClick={handleEdgeClick}
+        nodeTypes={nodeTypes} edgeTypes={edgeTypes} isValidConnection={isValidConnection}
+        onDragOver={onDragOver} onDrop={onDrop}
+        fitViewOptions={FIT_VIEW_OPTIONS}
+        minZoom={0.2} maxZoom={4}
+        defaultEdgeOptions={defaultEdgeOptions}
+        connectionLineType={ConnectionLineType.SmoothStep}
+      >
       <Background gap={16} size={1} color="var(--canvas-dots)" style={{ backgroundColor: 'var(--bg-main)' }} variant={BackgroundVariant.Dots} />
       <Controls className="!bg-brand-card !border-brand-border !text-brand-muted hover:!bg-brand-bg !shadow-md !rounded-lg mb-4 ml-4" />
       <MiniMap className="!bg-brand-card !border-brand-border !shadow-md !rounded-lg overflow-hidden mb-4 mr-4" zoomable pannable nodeColor={getMiniMapNodeColor} />
@@ -172,28 +253,33 @@ function FlowBuilder() {
     isExecuting, startRealExecution, executionResult, setIsConsoleExpanded, setIsConsoleOpen,
     isChatVisible, setIsChatVisible, resetUIState,
     loadProject, saveProject, currentProjectId, isSaving, resetProject, validateGraph,
-    showNotification, updateProjectMetadata, currentProjectName, currentProjectDescription
+    showNotification, updateProjectMetadata, currentProjectName, currentProjectDescription,
+    canvasLayout, setCanvasLayout
   } = useStore(
-    useShallow((state) => ({
-      isExecuting: state.isExecuting,
-      startRealExecution: state.startRealExecution,
-      executionResult: state.executionResult,
-      setIsConsoleExpanded: state.setIsConsoleExpanded,
-      setIsConsoleOpen: state.setIsConsoleOpen,
-      isChatVisible: state.isChatVisible,
-      setIsChatVisible: state.setIsChatVisible,
-      resetUIState: state.resetUIState,
-      loadProject: state.loadProject,
-      saveProject: state.saveProject,
-      currentProjectId: state.currentProjectId,
-      isSaving: state.isSaving,
-      resetProject: state.resetProject,
-      validateGraph: state.validateGraph,
-      showNotification: state.showNotification,
-      updateProjectMetadata: state.updateProjectMetadata,
-      currentProjectName: state.currentProjectName,
-      currentProjectDescription: state.currentProjectDescription
-    }))
+    useShallow((state) => {
+      return {
+        isExecuting: state.isExecuting,
+        startRealExecution: state.startRealExecution,
+        executionResult: state.executionResult,
+        setIsConsoleExpanded: state.setIsConsoleExpanded,
+        setIsConsoleOpen: state.setIsConsoleOpen,
+        isChatVisible: state.isChatVisible,
+        setIsChatVisible: state.setIsChatVisible,
+        resetUIState: state.resetUIState,
+        loadProject: state.loadProject,
+        saveProject: state.saveProject,
+        currentProjectId: state.currentProjectId,
+        isSaving: state.isSaving,
+        resetProject: state.resetProject,
+        validateGraph: state.validateGraph,
+        showNotification: state.showNotification,
+        updateProjectMetadata: state.updateProjectMetadata,
+        currentProjectName: state.currentProjectName,
+        currentProjectDescription: state.currentProjectDescription,
+        canvasLayout: state.canvasLayout,
+        setCanvasLayout: state.setCanvasLayout
+      };
+    })
   );
 
   const lastLoadedId = useRef<string | null>(null);
@@ -227,9 +313,9 @@ function FlowBuilder() {
   useEffect(() => {
     return () => {
       resetUIState();
-      resetProject();
+      // REMOVED: resetProject(); - This was causing race conditions during navigation resets
     };
-  }, [resetUIState, resetProject]);
+  }, [resetUIState]);
 
   const [activeView, setActiveView] = React.useState<'editor' | 'animation' | 'executions'>('editor');
   const [isEditingTitle, setIsEditingTitle] = React.useState(false);
@@ -339,8 +425,22 @@ function FlowBuilder() {
           </button>
         </div>
 
-        <div className="flex items-center gap-3">
-          {activeView === 'editor' && (
+          <div className="flex items-center gap-2">
+            {activeView === 'editor' && (
+              <button
+                onClick={() => setCanvasLayout(canvasLayout === 'vertical' ? 'horizontal' : 'vertical')}
+                className="flex items-center justify-center w-9 h-9 rounded-lg bg-brand-bg/40 border border-brand-border text-brand-muted hover:text-indigo-500 hover:border-indigo-500/50 hover:bg-indigo-500/5 transition-all duration-300 shadow-sm group"
+                title={`Switch to ${canvasLayout === 'vertical' ? 'Horizontal' : 'Vertical'} flow orientation`}
+              >
+                {canvasLayout === 'vertical' ? (
+                  <Columns className="w-4 h-4 transition-transform group-hover:rotate-180 duration-500" />
+                ) : (
+                  <Rows className="w-4 h-4 transition-transform group-hover:rotate-180 duration-500" />
+                )}
+              </button>
+            )}
+
+            {activeView === 'editor' && (
             <button
               onClick={() => useStore.getState().applyAutoLayout()}
               className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium text-violet-600 dark:text-violet-400 bg-violet-50 dark:bg-violet-900/20 hover:bg-violet-100 dark:hover:bg-violet-900/40 transition-colors shadow-sm border border-violet-200 dark:border-violet-800"
@@ -421,8 +521,9 @@ function FlowBuilder() {
         <NodeConfigDrawer />
         {activeView === 'editor' && !isChatVisible && <ConsoleDrawer />}
         <SettingsDrawer />
-        <Toast />
-        <Toaster position="bottom-right" />
+        <StateNodeModal />
+        <SchemaNodeModal />
+        <RouterNodeModal />
         <ResizableChatPanel />
       </div>
     </div>

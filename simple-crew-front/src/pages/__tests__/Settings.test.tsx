@@ -48,6 +48,7 @@ vi.mock('lucide-react', () => ({
   Layout: () => <div />,
   Type: () => <div />,
   Database: () => <div />,
+  BookOpen: () => <div />,
 }));
 
 // Mock child components
@@ -104,6 +105,11 @@ describe('Settings Page Smoke Test', () => {
         setActiveWorkspaceId: vi.fn(),
         fetchCustomTools: vi.fn(),
         fetchMCPServers: vi.fn(),
+        skills: [],
+        fetchSkills: vi.fn(),
+        importSkill: vi.fn(),
+        uploadSkill: vi.fn(),
+        deleteSkill: vi.fn(),
     };
 
     beforeEach(() => {

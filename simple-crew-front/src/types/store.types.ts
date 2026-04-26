@@ -12,8 +12,10 @@ import {
   type ToolConfig, 
   type CustomTool, 
   type MCPServer, 
-  type Credential 
+  type Credential,
+  type AgentSkill
 } from './config.types';
+
 
 export type NodeStatus = 'idle' | 'running' | 'success' | 'error' | 'waiting';
 
@@ -29,6 +31,7 @@ export interface ExportedProject {
   description?: string;
   workspaceId?: string | null;
   workspaceName?: string | null;
+  canvasLayout?: 'vertical' | 'horizontal';
 }
 
 export interface Project {
@@ -43,6 +46,7 @@ export interface Project {
     customTools?: CustomTool[];
     mcpServers?: MCPServer[];
     version: string;
+    canvasLayout: 'vertical' | 'horizontal';
   };
   created_at: string;
   updated_at: string;
@@ -98,6 +102,7 @@ export interface GraphSlice {
   executionResult: string | null;
   messages: ChatMessage[];
   activeNodeId: string | null;
+  focusedTreeRootId: string | null;
   onNodesChange: (changes: NodeChange<AppNode>[]) => void;
   onEdgesChange: (changes: EdgeChange[]) => void;
   onConnect: (connection: Connection) => void;
@@ -105,19 +110,25 @@ export interface GraphSlice {
   deleteNode: (nodeId: string) => void;
   updateNodeData: (nodeId: string, data: Partial<AppNode['data']>) => void;
   addNode: (node: AppNode) => void;
-  addNodeWithAutoPosition: (type: 'agent' | 'task' | 'crew' | 'chat' | 'webhook' | 'tool' | 'customTool' | 'mcp', data: Partial<AppNode['data']>) => void;
+  addNodeWithAutoPosition: (type: 'agent' | 'task' | 'crew' | 'chat' | 'webhook' | 'tool' | 'customTool' | 'mcp' | 'state' | 'router' | 'schema', data: Partial<AppNode['data']>) => void;
   setNodeStatus: (id: string, status: NodeStatus) => void;
   setNodeWarnings: (warnings: Record<string, string[]>) => void;
   setActiveNode: (id: string | null) => void;
-  toggleCollapse: (nodeId: string) => void;
+  toggleCollapse: (nodeId: string, allowedHandles?: string[]) => void;
   updateCrewAgentOrder: (crewId: string, newOrder: string[]) => void;
   updateCrewTaskOrder: (crewId: string, newOrder: string[]) => void;
   updateAgentTaskOrder: (agentId: string, newOrder: string[]) => void;
+  updateStateConnection: (nodeId: string, stateId: string | null, showLine: boolean, fieldKey?: string | null) => void;
   validateGraph: () => boolean;
   setExecutionResult: (result: string | null) => void;
   setMessages: (messages: ChatMessage[] | ((prev: ChatMessage[]) => ChatMessage[])) => void;
   clearChat: () => void;
   resetProject: () => void;
+  resetExecutionVisuals: () => void;
+  finalizeExecutionVisuals: () => void;
+  focusEdge: (edgeId: string | null) => void;
+  focusNodeTree: (nodeId: string | null) => void;
+  clearDimmedState: () => void;
   applyAutoLayout: () => void;
 }
 
@@ -130,8 +141,16 @@ export interface UISlice {
   isChatVisible: boolean;
   isAboutModalOpen: boolean;
   isSidebarCollapsed: boolean;
+  isStateModalOpen: boolean;
+  activeStateNodeId: string | null;
+  isSchemaModalOpen: boolean;
+  activeSchemaNodeId: string | null;
+  isRouterModalOpen: boolean;
+  activeRouterNodeId: string | null;
   notification: AppNotification | null;
+  canvasLayout: 'vertical' | 'horizontal';
   toggleTheme: () => void;
+  setCanvasLayout: (layout: 'vertical' | 'horizontal') => void;
   setIsSettingsOpen: (open: boolean) => void;
   setIsConsoleOpen: (open: boolean) => void;
   setIsConsoleExpanded: (expanded: boolean) => void;
@@ -139,6 +158,12 @@ export interface UISlice {
   setIsChatVisible: (visible: boolean) => void;
   setIsAboutModalOpen: (open: boolean) => void;
   setIsSidebarCollapsed: (collapsed: boolean) => void;
+  openStateModal: (nodeId: string) => void;
+  closeStateModal: () => void;
+  openSchemaModal: (nodeId: string) => void;
+  closeSchemaModal: () => void;
+  openRouterModal: (nodeId: string) => void;
+  closeRouterModal: () => void;
   resetUIState: () => void;
   showNotification: (message: string, type: 'success' | 'error' | 'warning' | 'info') => void;
   clearNotification: () => void;
@@ -180,7 +205,9 @@ export interface ConfigSlice {
   globalTools: ToolConfig[];
   customTools: CustomTool[];
   mcpServers: MCPServer[];
+  skills: AgentSkill[];
   systemAiModelId: string | null;
+
   embeddingModelId: string | null;
   defaultModel: string;
   fetchCredentials: () => Promise<void>;
@@ -205,7 +232,13 @@ export interface ConfigSlice {
   addMCPServer: (server: Omit<MCPServer, 'id'>) => Promise<void>;
   updateMCPServer: (id: string, server: Partial<MCPServer>) => Promise<void>;
   deleteMCPServer: (id: string) => Promise<void>;
+  fetchSkills: () => Promise<void>;
+  importSkill: (url: string) => Promise<void>;
+  uploadSkill: (file: File) => Promise<void>;
+  deleteSkill: (id: string) => Promise<void>;
+
   fetchSettings: () => Promise<void>;
+
   updateSettings: (settings: { active_workspace_id?: string | null; system_ai_model_id?: string | null; embedding_model_id?: string | null }) => Promise<void>;
 }
 

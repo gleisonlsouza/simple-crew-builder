@@ -30,9 +30,9 @@
         
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">65.11% </span>
+                <span class="strong">65.9% </span>
                 <span class="quiet">Branches</span>
-                <span class='fraction'>56/86</span>
+                <span class='fraction'>58/88</span>
             </div>
         
             
@@ -447,7 +447,15 @@
 <a name='L382'></a><a href='#L382'>382</a>
 <a name='L383'></a><a href='#L383'>383</a>
 <a name='L384'></a><a href='#L384'>384</a>
-<a name='L385'></a><a href='#L385'>385</a></td><td class="line-coverage quiet"><span class="cline-any cline-neutral">&nbsp;</span>
+<a name='L385'></a><a href='#L385'>385</a>
+<a name='L386'></a><a href='#L386'>386</a>
+<a name='L387'></a><a href='#L387'>387</a>
+<a name='L388'></a><a href='#L388'>388</a>
+<a name='L389'></a><a href='#L389'>389</a>
+<a name='L390'></a><a href='#L390'>390</a>
+<a name='L391'></a><a href='#L391'>391</a>
+<a name='L392'></a><a href='#L392'>392</a></td><td class="line-coverage quiet"><span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -489,6 +497,7 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -572,7 +581,9 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -588,17 +599,8 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-yes">1x</span>
-<span class="cline-any cline-yes">1x</span>
-<span class="cline-any cline-yes">1x</span>
-<span class="cline-any cline-yes">1x</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-yes">1x</span>
 <span class="cline-any cline-yes">1x</span>
 <span class="cline-any cline-yes">1x</span>
@@ -606,9 +608,21 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-yes">1x</span>
 <span class="cline-any cline-yes">1x</span>
 <span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -870,6 +884,7 @@ interface CrewFormProps {
   handleTaskDragEnd: (event: DragEndEvent) =&gt; void;
   sensors: ReturnType&lt;typeof useSensors&gt;;
   models: ModelConfig[];
+  framework: string;
 }
 &nbsp;
 export const CrewForm: React.FC&lt;CrewFormProps&gt; = memo(({
@@ -884,7 +899,8 @@ export const CrewForm: React.FC&lt;CrewFormProps&gt; = memo(({
   handleAgentDragEnd,
   handleTaskDragEnd,
   sensors,
-  models
+  models,
+  framework
 }) =&gt; {
   const [activeTab, setActiveTab] = useState&lt;'basic' | 'orch' | 'settings' | 'llm'&gt;('basic');
 &nbsp;
@@ -952,60 +968,65 @@ export const CrewForm: React.FC&lt;CrewFormProps&gt; = memo(({
               &lt;/p&gt;
             &lt;/div&gt;
 &nbsp;
-            &lt;div className="flex flex-col gap-3 pt-4 border-t border-brand-border/30"&gt;
-              &lt;div className="flex justify-between items-center"&gt;
-                &lt;label className="text-xs font-bold text-brand-muted uppercase tracking-wider"&gt;Execution Variables&lt;/label&gt;
-                &lt;button 
-                  onClick={() =&gt; updateNodeData(nodeId, { inputs: { ...(data.inputs || <span class="branch-1 cbranch-no" title="branch not covered" >{})</span>, [`input_${Date.now()}`]: '' } })} 
-                  className="px-2 py-1 bg-blue-500/10 border border-blue-500/20 text-blue-600 rounded-md text-[10px] font-bold uppercase hover:bg-blue-500/20 transition-colors"
-                &gt;
-                  &lt;Plus className="w-3 h-3 inline mr-1" /&gt;
-                  Add Variable
-                &lt;/button&gt;
-              &lt;/div&gt;
-              &lt;p className="text-[10px] text-brand-muted px-1 italic"&gt;Use {'{variable}'} syntax in agent goals or task descriptions.&lt;/p&gt;
-              
-              {Object.entries(data.inputs || <span class="branch-1 cbranch-no" title="branch not covered" >{})</span>.map(([key, value], idx) =&gt; (
-                &lt;div key={idx} className="flex gap-2 items-center min-w-0"&gt;
-                  &lt;input
-                    className="bg-brand-bg/50 border border-brand-border rounded-lg px-2.5 py-1.5 text-xs text-brand-text flex-1 min-w-0 focus:border-blue-500 outline-none transition-colors"
-                    value={key.startsWith('input_') ? '' : key}
-                    placeholder="Key"
-                    onChange={(e) =&gt; {
-                      const newInputs: Record&lt;string, string&gt; = { ...(data.inputs as Record&lt;string, string&gt;) };
-                      delete newInputs[key];
-                      newInputs[e.target.value || <span class="branch-1 cbranch-no" title="branch not covered" >`input_${idx}`] = v</span>alue as string;
-                      updateNodeData(nodeId, { inputs: newInputs });
-                    }}
-                  /&gt;
-                  &lt;input
-                    className="bg-brand-bg/50 border border-brand-border rounded-lg px-2.5 py-1.5 text-xs text-secondary flex-1 min-w-0 focus:border-blue-500 outline-none transition-colors"
-                    value={value as string}
-                    placeholder="Default Value"
-                    onChange={(e) =&gt; {
-                      const newInputs: Record&lt;string, string&gt; = { ...(data.inputs as Record&lt;string, string&gt;) };
-                      newInputs[key] = e.target.value;
-                      updateNodeData(nodeId, { inputs: newInputs });
-                    }}
-                  /&gt;
-                  &lt;button
-                    onClick={() =&gt; {
-                      const newInputs: Record&lt;string, string&gt; = { ...(data.inputs as Record&lt;string, string&gt;) };
-                      delete newInputs[key];
-                      updateNodeData(nodeId, { inputs: newInputs });
-                    }}
-                    className="flex-shrink-0 p-1.5 text-brand-muted hover:text-rose-500 transition-colors"
+            {framework !== 'langgraph' &amp;&amp; (
+              &lt;div className="flex flex-col gap-3 pt-4 border-t border-brand-border/30"&gt;
+                &lt;div className="flex justify-between items-center"&gt;
+                  &lt;label className="text-xs font-bold text-brand-muted uppercase tracking-wider"&gt;Execution Variables&lt;/label&gt;
+                  &lt;button 
+                    onClick={() =&gt; updateNodeData(nodeId, { inputs: { ...(data.inputs || <span class="branch-1 cbranch-no" title="branch not covered" >{})</span>, [`input_${Date.now()}`]: '' } })} 
+                    className="px-2 py-1 bg-blue-500/10 border border-blue-500/20 text-blue-600 rounded-md text-[10px] font-bold uppercase hover:bg-blue-500/20 transition-colors"
+                    data-testid="btn-add-variable"
                   &gt;
-                    &lt;Trash2 className="w-3.5 h-3.5" /&gt;
+                    &lt;Plus className="w-3 h-3 inline mr-1" /&gt;
+                    Add Variable
                   &lt;/button&gt;
                 &lt;/div&gt;
-              ))}
-              {Object.entries(data.inputs || <span class="branch-1 cbranch-no" title="branch not covered" >{})</span>.length === 0 &amp;&amp; (
-<span class="branch-1 cbranch-no" title="branch not covered" >                &lt;div className="text-center py-4 border border-dashed border-brand-border rounded-xl"&gt;</span>
-                   &lt;p className="text-[10px] text-brand-muted italic uppercase tracking-widest"&gt;No variables defined.&lt;/p&gt;
-                &lt;/div&gt;
-              )}
-            &lt;/div&gt;
+                &lt;p className="text-[10px] text-brand-muted px-1 italic"&gt;Use {'{variable}'} syntax in agent goals or task descriptions.&lt;/p&gt;
+                
+                {Object.entries(data.inputs || <span class="branch-1 cbranch-no" title="branch not covered" >{})</span>.map(([key, value], idx) =&gt; (
+                  &lt;div key={idx} className="flex gap-2 items-center min-w-0"&gt;
+                    &lt;input
+                      className="bg-brand-bg/50 border border-brand-border rounded-lg px-2.5 py-1.5 text-xs text-brand-text flex-1 min-w-0 focus:border-blue-500 outline-none transition-colors"
+                      value={key.startsWith('input_') ? '' : key}
+                      placeholder="Key"
+                      data-testid="input-variable-key"
+                      onChange={(e) =&gt; {
+                        const newInputs: Record&lt;string, string&gt; = { ...(data.inputs as Record&lt;string, string&gt;) };
+                        delete newInputs[key];
+                        newInputs[e.target.value || <span class="branch-1 cbranch-no" title="branch not covered" >`input_${idx}`] = v</span>alue as string;
+                        updateNodeData(nodeId, { inputs: newInputs });
+                      }}
+                    /&gt;
+                    &lt;input
+                      className="bg-brand-bg/50 border border-brand-border rounded-lg px-2.5 py-1.5 text-xs text-secondary flex-1 min-w-0 focus:border-blue-500 outline-none transition-colors"
+                      value={value as string}
+                      placeholder="Default Value"
+                      data-testid="input-variable-value"
+                      onChange={(e) =&gt; {
+                        const newInputs: Record&lt;string, string&gt; = { ...(data.inputs as Record&lt;string, string&gt;) };
+                        newInputs[key] = e.target.value;
+                        updateNodeData(nodeId, { inputs: newInputs });
+                      }}
+                    /&gt;
+                    &lt;button
+                      onClick={() =&gt; {
+                        const newInputs: Record&lt;string, string&gt; = { ...(data.inputs as Record&lt;string, string&gt;) };
+                        delete newInputs[key];
+                        updateNodeData(nodeId, { inputs: newInputs });
+                      }}
+                      className="flex-shrink-0 p-1.5 text-brand-muted hover:text-rose-500 transition-colors"
+                    &gt;
+                      &lt;Trash2 className="w-3.5 h-3.5" /&gt;
+                    &lt;/button&gt;
+                  &lt;/div&gt;
+                ))}
+                {Object.entries(data.inputs || <span class="branch-1 cbranch-no" title="branch not covered" >{})</span>.length === 0 &amp;&amp; (
+<span class="branch-1 cbranch-no" title="branch not covered" >                  &lt;div className="text-center py-4 border border-dashed border-brand-border rounded-xl"&gt;</span>
+                    &lt;p className="text-[10px] text-brand-muted italic uppercase tracking-widest"&gt;No variables defined.&lt;/p&gt;
+                  &lt;/div&gt;
+                )}
+              &lt;/div&gt;
+            )}
           &lt;/div&gt;
         )}
 &nbsp;
@@ -1222,7 +1243,7 @@ export const CrewForm: React.FC&lt;CrewFormProps&gt; = memo(({
             <div class='footer quiet pad2 space-top1 center small'>
                 Code coverage generated by
                 <a href="https://istanbul.js.org/" target="_blank" rel="noopener noreferrer">istanbul</a>
-                at 2026-04-05T23:14:12.181Z
+                at 2026-04-22T00:11:14.568Z
             </div>
         <script src="../../prettify.js"></script>
         <script>

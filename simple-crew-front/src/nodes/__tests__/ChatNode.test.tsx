@@ -14,6 +14,7 @@ vi.mock('@xyflow/react', async (importOriginal) => {
   return {
     ...actual,
     Handle: ({ type, id }: any) => <div data-testid={`handle-${type}`} data-handleid={id} className={`react-flow__handle-${type}`} />,
+    useUpdateNodeInternals: () => vi.fn(),
   };
 });
 
@@ -49,6 +50,7 @@ describe('ChatNode', () => {
   const defaultState = {
     deleteNode: mockDeleteNode,
     setActiveNode: mockSetActiveNode,
+    nodeStatuses: {},
   };
 
   beforeEach(() => {

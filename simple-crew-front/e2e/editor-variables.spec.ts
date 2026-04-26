@@ -6,7 +6,6 @@ import { BuilderPage } from './pages/BuilderPage';
 test.describe('Editor Variables Suggestion (CT07)', () => {
   test('should show suggestion dropdown when typing { in HighlightedTextField', async ({ page }) => {
     // 1. Setup - Mock basic API but we will build the workflow manually
-    // 1. Setup - Mock empty projects to test the full "Add Workflow" journey
     await setupBaseApiMocks(page, { projects: [] });
 
     const dashboard = new DashboardPage(page);
@@ -21,26 +20,32 @@ test.describe('Editor Variables Suggestion (CT07)', () => {
     await builder.openNodeConfig('Crew');
     await builder.setCrewVariable('company_info');
     await builder.closeConfigDrawer();
+    
+    // Wait for store to sync variable
+    await page.waitForFunction(() => {
+      const store = (window as any).__SIMPLE_CREW_STORE__;
+      if (!store) return false;
+      const nodes = store.getState().nodes;
+      const crew = nodes.find((n: any) => n.type === 'crew');
+      return crew && crew.data.inputs && Object.keys(crew.data.inputs).some(k => !k.startsWith('input_'));
+    });
 
     // 4. Journey: Add Agent and trigger suggestion
     await builder.addNode('agent');
     await builder.openNodeConfig('Agent');
     
-    // Note: We use "Goal" as the label for the field
-    await builder.typeInNodeField('Goal', 'Research about {');
-
-    // 5. Assertions
+    // Type prefix
+    await builder.typeInNodeField('Goal', 'Research about ', { blur: false });
+    // Type trigger character sequentially
+    const goalField = builder.nodeConfigDrawer.getByTestId('input-goal').locator('textarea, input').first();
+    await goalField.pressSequentially('{', { delay: 100 });
+    
     await builder.expectSuggestionsVisible();
+    await page.waitForTimeout(500); // Allow dropdown to fully render
+    await builder.selectSuggestion('company_info');
     
-    // Wait for the specific variable name to appear in the dropdown
-    const suggestionItem = page.getByTestId('suggestion-dropdown').getByText('company_info');
-    await expect(suggestionItem).toBeVisible({ timeout: 15000 });
-    
-    // Select the suggestion
-    await suggestionItem.click();
-    
-    // Verify it was inserted
-    const field = page.locator('textarea').filter({ hasText: /Research about \{company_info\}/ });
-    await expect(field).toBeVisible();
+    // Verify it was inserted by checking the textarea's value
+    const resultField = builder.nodeConfigDrawer.getByTestId('input-goal').locator('textarea');
+    await expect(resultField).toHaveValue(/Research about \{company_info\}/, { timeout: 10000 });
   });
 });

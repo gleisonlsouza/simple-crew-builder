@@ -21,6 +21,7 @@ vi.mock('lucide-react', () => ({
   Settings: () => <div data-testid="icon-settings" />,
   Clock: () => <div data-testid="icon-clock" />,
   AlertCircle: () => <div data-testid="icon-alert-circle" />,
+  Server: () => <div data-testid="icon-server" />,
 }));
 
 // Mock Handle component
@@ -29,6 +30,7 @@ vi.mock('@xyflow/react', async (importOriginal) => {
   return {
     ...actual,
     Handle: ({ type, id }: any) => <div data-testid={`handle-${type}`} data-handleid={id} className={`react-flow__handle-${type}`} />,
+    useUpdateNodeInternals: () => vi.fn(),
   };
 });
 
@@ -64,6 +66,8 @@ describe('CrewNode', () => {
     edges: [],
     nodeStatuses: {},
     nodeErrors: {},
+    currentProjectFramework: 'crewai',
+    layout: 'vertical',
   };
 
   beforeEach(() => {
@@ -107,14 +111,24 @@ describe('CrewNode', () => {
     expect(screen.getByTestId('crew-process')).toHaveTextContent('sequential');
   });
 
-  it('contains target handle on top and source handle on right-source', () => {
+  it('contains target handles on top and source handle on right-source', () => {
+    (useStore as unknown as Mock).mockImplementation((selector: any) => 
+        selector({ 
+            ...defaultState, 
+            currentProjectFramework: 'langgraph' 
+        })
+    );
     const { container } = render(wrap(<CrewNode {...defaultProps} />));
     
-    const target = container.querySelector('.react-flow__handle-target');
+    const targets = container.querySelectorAll('.react-flow__handle-target');
     const source = container.querySelector('.react-flow__handle-source');
     
-    expect(target).toBeInTheDocument();
+    expect(targets.length).toBe(2);
     expect(source).toBeInTheDocument();
+    
+    const targetIds = Array.from(targets).map(t => t.getAttribute('data-handleid'));
+    expect(targetIds).toContain('trigger-in');
+    expect(targetIds).toContain('state-in');
     
     // Source handle is now at the right-source
     expect(source).toHaveAttribute('data-handleid', 'right-source');
@@ -134,11 +148,17 @@ describe('CrewNode', () => {
       source: 'crew-1',
       target: 'agent-1',
       sourceHandle: 'right-source',
-      targetHandle: 'left-target'
+      targetHandle: 'trigger-in'
     });
   });
 
   it('toggles collapse state', async () => {
+    (useStore as unknown as Mock).mockImplementation((selector: any) => 
+        selector({ 
+            ...defaultState, 
+            currentProjectFramework: 'custom' 
+        })
+    );
     const user = userEvent.setup();
     render(wrap(<CrewNode {...defaultProps} />));
     

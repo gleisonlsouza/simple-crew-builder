@@ -1,5 +1,5 @@
-import { memo, useState } from 'react';
-import { Handle, Position, type NodeProps, type Node } from '@xyflow/react';
+import { memo, useState, useEffect } from 'react';
+import { Handle, Position, useUpdateNodeInternals, type NodeProps, type Node } from '@xyflow/react';
 import { useShallow } from 'zustand/shallow';
 import { Settings, Trash2, Settings2, Loader2, CheckCircle2, AlertCircle, Clock } from 'lucide-react';
 import { useStore } from '../store/index';
@@ -15,6 +15,16 @@ export const ToolNode = memo(({ id, data }: NodeProps<Node<ToolNodeData, 'tool'>
       globalTools: state.globalTools,
       setActiveNode: state.setActiveNode,
     }))
+  );
+  const layout = useStore(state => state.canvasLayout);
+  const updateNodeInternals = useUpdateNodeInternals();
+
+  useEffect(() => {
+    updateNodeInternals(id);
+  }, [layout, id, updateNodeInternals]);
+
+  const isAnyNodeRunning = useStore((state) => 
+    Object.values(state.nodeStatuses || {}).some(s => s === 'running')
   );
 
   const [isConfigOpen, setIsConfigOpen] = useState(false);
@@ -41,7 +51,11 @@ export const ToolNode = memo(({ id, data }: NodeProps<Node<ToolNodeData, 'tool'>
     <>
       <div
         onClick={(e) => { e.stopPropagation(); setActiveNode(id); }}
-        className={`group relative bg-white dark:bg-slate-900 rounded-xl shadow-sm hover:shadow-md dark:shadow-none border border-slate-200 dark:border-slate-700 w-52 overflow-visible transition-all duration-300 cursor-pointer ${statusClasses} ${status === 'running' ? 'running' : ''}`}
+        className={`group relative bg-white dark:bg-slate-900 rounded-xl shadow-sm hover:shadow-md dark:shadow-none border border-slate-200 dark:border-slate-700 w-52 overflow-visible cursor-pointer ${statusClasses} ${status === 'running' ? 'node-running-active' : ''} ${
+          (data.isDimmed || (isAnyNodeRunning && status !== 'running'))
+            ? 'node-dimmed' 
+            : 'opacity-100 transition-opacity duration-300'
+        }`}
       >
         {status === 'waiting' && (
           <div className="absolute -top-2 -right-2 bg-white dark:bg-slate-900 rounded-full p-0.5 shadow-md z-20 border border-slate-100 dark:border-slate-800 animate-in zoom-in duration-200">
@@ -102,7 +116,7 @@ export const ToolNode = memo(({ id, data }: NodeProps<Node<ToolNodeData, 'tool'>
                   }
                 }}
                 onClick={(e) => e.stopPropagation()}
-                className="w-full bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-lg px-2 py-1.5 text-[11px] font-medium transition-all focus:ring-1 focus:ring-blue-500 outline-none shadow-sm text-slate-700 dark:text-slate-300 nodrag"
+                className="w-full bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-lg px-2 py-1.5 text-[11px] font-medium transition-[opacity,filter,color,background-color,border-color] focus:ring-1 focus:ring-blue-500 outline-none shadow-sm text-slate-700 dark:text-slate-300 nodrag"
               >
                 <option value="">Select Tool...</option>
                 {globalTools.filter(t => t.isEnabled).map(tool => (
@@ -131,15 +145,24 @@ export const ToolNode = memo(({ id, data }: NodeProps<Node<ToolNodeData, 'tool'>
           </div>
         </div>
 
-        <div className="absolute left-1/2 -top-[1px] -translate-x-1/2 flex flex-col items-center gap-2 group/h-tool -translate-y-full pointer-events-none">
-             <span className="text-[9px] font-bold text-orange-500 bg-white dark:bg-slate-900 px-1 rounded shadow-sm opacity-0 group-hover/h-tool:opacity-100 transition-opacity whitespace-nowrap border border-orange-100 dark:border-orange-900/30">Tool Link</span>
-             <Handle 
-               type="target" 
-               position={Position.Top} 
-               className="!w-3 !h-3 !border-2 !border-white dark:!border-slate-900 !static !translate-x-0 !cursor-crosshair pointer-events-auto shadow-sm" 
-               style={{ backgroundColor: '#f97316' }} 
-             />
-        </div>
+        {(() => {
+        const isHorizontal = layout === 'horizontal';
+
+          return (
+            <div className={isHorizontal
+              ? "absolute top-1/2 -left-[1px] -translate-y-1/2 flex items-center gap-2 group/h-tool -translate-x-full pointer-events-none"
+              : "absolute left-1/2 -top-[1px] -translate-x-1/2 flex flex-col items-center gap-2 group/h-tool -translate-y-full pointer-events-none"
+            }>
+               <span className="text-[9px] font-bold text-orange-500 bg-white dark:bg-slate-900 px-1 rounded shadow-sm opacity-0 group-hover/h-tool:opacity-100 transition-opacity whitespace-nowrap border border-orange-100 dark:border-orange-900/30">Tool Link</span>
+               <Handle 
+                 type="target" 
+                 position={isHorizontal ? Position.Left : Position.Top} 
+                 className="!w-3 !h-3 !border-2 !border-white dark:!border-slate-900 !static !translate-x-0 !translate-y-0 !cursor-crosshair pointer-events-auto shadow-sm" 
+                 style={{ backgroundColor: '#f97316' }} 
+               />
+            </div>
+          );
+        })()}
       </div>
 
       {requiresConfig && (

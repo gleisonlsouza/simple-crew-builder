@@ -91,13 +91,13 @@ describe('HighlightedTextField', () => {
       const wrapper = container.firstChild;
       const input = screen.getByPlaceholderText('Test Placeholder');
 
-      expect(wrapper).not.toHaveClass('border-indigo-500');
+      expect(wrapper).not.toHaveClass('border-indigo-600');
       
       await user.click(input);
-      expect(wrapper).toHaveClass('border-indigo-500');
+      expect(wrapper).toHaveClass('border-indigo-600');
       
       await user.tab(); // move focus away
-      expect(wrapper).not.toHaveClass('border-indigo-500');
+      expect(wrapper).not.toHaveClass('border-indigo-600');
     });
   });
 
@@ -123,10 +123,10 @@ describe('HighlightedTextField', () => {
       const textarea = screen.getByRole('textbox');
 
       await user.click(textarea);
-      expect(wrapper).toHaveClass('border-indigo-500');
+      expect(wrapper).toHaveClass('border-indigo-600');
       
       fireEvent.blur(textarea); // user.tab() might not work as expected with complex editor focus
-      expect(wrapper).not.toHaveClass('border-indigo-500');
+      expect(wrapper).not.toHaveClass('border-indigo-600');
     });
 
     it('hides placeholder when focused', async () => {

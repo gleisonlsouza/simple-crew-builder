@@ -28,6 +28,7 @@ interface HighlightedTextFieldProps {
   language?: 'none' | 'python';
   rows?: number;
   'data-testid'?: string;
+  footer?: React.ReactNode;
 }
 
 const HighlightedTextField: React.FC<HighlightedTextFieldProps> = ({
@@ -39,13 +40,26 @@ const HighlightedTextField: React.FC<HighlightedTextFieldProps> = ({
   className = '',
   language = 'none',
   rows = 3,
-  'data-testid': dataTestId
+  'data-testid': dataTestId,
+  footer
 }) => {
   const [isFocused, setIsFocused] = React.useState(false);
+  const [localValue, setLocalValue] = React.useState(value);
   const containerRef = React.useRef<HTMLDivElement>(null);
   const inputRef = React.useRef<HTMLInputElement>(null);
 
+  React.useEffect(() => {
+    // Sync local value with prop value when prop changes
+    // This is critical for external updates like AI suggestions or variable insertions
+    if (value !== localValue) {
+      setLocalValue(value);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [value]);
+
+
   const handleValueChange = (code: string) => {
+    setLocalValue(code);
     let textarea: HTMLTextAreaElement | HTMLInputElement | null = null;
     
     if (type === 'textarea' && containerRef.current) {
@@ -103,38 +117,40 @@ const HighlightedTextField: React.FC<HighlightedTextFieldProps> = ({
 
   return (
     <div className={`
-      relative w-full rounded-xl border transition-all duration-200 overflow-hidden bg-brand-bg/30
-      ${isFocused ? 'border-indigo-500 ring-4 ring-indigo-500/10' : 'border-brand-border'} 
+      relative w-full rounded-xl border transition-all duration-200 overflow-hidden bg-brand-bg flex flex-col
+      ${isFocused ? 'border-indigo-600 ring-2 ring-indigo-600/20 shadow-lg shadow-indigo-500/5' : 'border-brand-border'} 
       ${className}
     `}
     data-testid={dataTestId}
     >
       {type === 'textarea' ? (
-        <div ref={containerRef} className="min-h-full">
+        <div ref={containerRef} className="flex-1 w-full flex flex-col">
           <Editor
-            value={value}
+            value={localValue}
             onValueChange={handleValueChange}
             highlight={(code: string) => highlightWithPrism(code)}
-          padding={16}
-          onKeyDown={onKeyDown}
-          onFocus={() => setIsFocused(true)}
-          onBlur={() => setIsFocused(false)}
-          placeholder={isFocused ? '' : placeholder}
-          className="code-editor-wrapper min-h-full"
-          textareaClassName="code-editor-textarea"
-          style={{
-            fontSize: 14,
-            lineHeight: '1.5rem',
-            minHeight: rows ? `${rows * 1.5}rem` : 'inherit',
-          }}
-        />
+            padding={0}
+            onKeyDown={onKeyDown}
+            onFocus={() => setIsFocused(true)}
+            onBlur={() => setIsFocused(false)}
+            placeholder={isFocused ? '' : placeholder}
+            className="code-editor-wrapper w-full flex-1"
+            textareaClassName="code-editor-textarea !p-4 !outline-none !border-none !bg-transparent !shadow-none !ring-0 !min-h-[100px]"
+            preClassName="!p-4"
+            style={{
+              fontSize: 14,
+              lineHeight: '1.5rem',
+              minHeight: rows ? `${rows * 1.5}rem` : 'inherit',
+              width: '100%',
+              backgroundColor: 'transparent'
+            }}
+          />
         </div>
       ) : (
-        /* For simple input, we still use the manual way but simpler, or just a regular input if highlighting isn't critical */
         <div className="relative">
              <input
                 ref={inputRef}
-                value={value}
+                value={localValue}
                 onChange={(e) => handleValueChange(e.target.value)}
                 onKeyDown={onKeyDown as React.KeyboardEventHandler<HTMLInputElement>}
                 onFocus={() => setIsFocused(true)}
@@ -143,7 +159,13 @@ const HighlightedTextField: React.FC<HighlightedTextFieldProps> = ({
                 className="w-full bg-transparent border-none px-4 py-3 text-sm text-brand-text outline-none focus:ring-0"
                 spellCheck={false}
              />
-             {/* Simple inputs usually don't need complex highlighting for code, but if we need it for {vars}, we can add it back later */}
+        </div>
+      )}
+
+      {/* Attachment Footer */}
+      {footer && (
+        <div className="mt-auto border-t border-brand-border/30 border-dashed bg-brand-bg/50 px-3 pb-3 pt-2">
+          {footer}
         </div>
       )}
     </div>

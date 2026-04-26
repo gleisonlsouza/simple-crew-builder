@@ -25,7 +25,7 @@ export class DashboardPage {
     await project.click();
   }
 
-  async createWorkflow(name: string, description: string = 'Test workflow') {
+  async createWorkflow(name: string, description: string = 'Test workflow', framework: 'crewai' | 'langgraph' = 'crewai') {
     const addBtn = this.page.getByRole('button', { name: /Add Workflow/i });
     await addBtn.waitFor({ state: 'visible' });
     await addBtn.click();
@@ -37,6 +37,9 @@ export class DashboardPage {
     // Use labels if associated
     await modal.getByLabel(/Name/i).fill(name);
     await modal.getByLabel(/Description/i).fill(description);
+
+    // Select framework
+    await modal.locator('select#workflowFramework').selectOption(framework);
 
     const createBtn = modal.getByRole('button', { name: 'Create Workflow' });
     await createBtn.click();

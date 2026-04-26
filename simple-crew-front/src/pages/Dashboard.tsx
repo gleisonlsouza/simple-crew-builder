@@ -39,9 +39,26 @@ const Dashboard = () => {
   const [editingProject, setEditingProject] = React.useState<{id: string, name: string, description: string} | null>(null);
   const [newProject, setNewProject] = React.useState({ name: '', description: '', framework: 'crewai' });
 
+  const [searchQuery, setSearchQuery] = React.useState('');
+  const [frameworkFilter, setFrameworkFilter] = React.useState<'all' | 'crewai' | 'langgraph'>('all');
+
   const createNewProject = useStore((state) => state.createNewProject);
   const importProjectJsonAndSave = useStore((state) => state.importProjectJsonAndSave);
   const fileInputRef = React.useRef<HTMLInputElement>(null);
+
+  const filteredProjects = React.useMemo(() => {
+    return savedProjects.filter((project: Project) => {
+      const matchesSearch = 
+        project.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
+        (project.description || '').toLowerCase().includes(searchQuery.toLowerCase());
+      
+      const matchesFramework = 
+        frameworkFilter === 'all' || 
+        project.framework === frameworkFilter;
+
+      return matchesSearch && matchesFramework;
+    });
+  }, [savedProjects, searchQuery, frameworkFilter]);
 
   useEffect(() => {
     fetchProjects();
@@ -142,14 +159,45 @@ const Dashboard = () => {
             <p className="text-brand-muted text-sm mt-0.5">Manage and automate your AI agents</p>
           </div>
 
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-6">
+            <div className="flex items-center bg-brand-bg p-1 rounded-xl border border-brand-border/50">
+              <button 
+                onClick={() => setFrameworkFilter('all')}
+                className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all ${frameworkFilter === 'all' ? 'bg-indigo-600 text-white shadow-md shadow-indigo-500/20' : 'text-brand-muted hover:text-brand-text'}`}
+              >
+                All
+              </button>
+              <button 
+                onClick={() => setFrameworkFilter('crewai')}
+                className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all ${frameworkFilter === 'crewai' ? 'bg-indigo-600 text-white shadow-md shadow-indigo-500/20' : 'text-brand-muted hover:text-brand-text'}`}
+              >
+                CrewAI
+              </button>
+              <button 
+                onClick={() => setFrameworkFilter('langgraph')}
+                className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all ${frameworkFilter === 'langgraph' ? 'bg-indigo-600 text-white shadow-md shadow-indigo-500/20' : 'text-brand-muted hover:text-brand-text'}`}
+              >
+                LangGraph
+              </button>
+            </div>
+
             <div className="relative group">
-              <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-brand-muted group-focus-within:text-indigo-500 transition-colors" />
+              <Search className={`w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 transition-colors ${searchQuery ? 'text-indigo-500' : 'text-brand-muted group-focus-within:text-indigo-500'}`} />
               <input 
                 type="text" 
                 placeholder="Search workflows..."
-                className="pl-10 pr-4 py-2 bg-brand-bg border-transparent focus:border-indigo-500 focus:bg-brand-card rounded-xl text-sm transition-all outline-none w-64 text-brand-text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="pl-10 pr-10 py-2 bg-brand-bg border border-transparent focus:border-indigo-500 focus:bg-brand-card rounded-xl text-sm transition-all outline-none w-64 text-brand-text"
               />
+              {searchQuery && (
+                <button 
+                  onClick={() => setSearchQuery('')}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-brand-muted hover:text-brand-text transition-colors"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              )}
             </div>
             
             <input
@@ -188,9 +236,26 @@ const Dashboard = () => {
               <h3 className="text-xl font-semibold text-brand-text">No workflows found</h3>
               <p className="text-brand-muted mt-2 max-w-xs">Start building your first autonomous agent crew by clicking on "Add Workflow".</p>
             </div>
+          ) : filteredProjects.length === 0 ? (
+            <div className="h-full flex flex-col items-center justify-center text-center opacity-60">
+              <div className="w-20 h-20 bg-brand-card border border-brand-border rounded-full flex items-center justify-center mb-6">
+                <Search className="w-10 h-10 text-brand-muted" />
+              </div>
+              <h3 className="text-xl font-semibold text-brand-text">No matches found</h3>
+              <p className="text-brand-muted mt-2 max-w-xs">We couldn't find any workflows matching your search or filters.</p>
+              <button 
+                onClick={() => {
+                  setSearchQuery('');
+                  setFrameworkFilter('all');
+                }}
+                className="mt-4 text-indigo-500 font-bold hover:underline"
+              >
+                Clear all filters
+              </button>
+            </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-              {savedProjects.map((project: Project) => (
+              {filteredProjects.map((project: Project) => (
                 <div 
                   key={project.id}
                   onClick={() => handleEditWorkflow(project.id)}
@@ -209,7 +274,7 @@ const Dashboard = () => {
                       {project.framework === 'langgraph' ? 'LangGraph' : 'CrewAI'}
                     </span>
                   </div>
-                  <p className="text-brand-muted text-sm line-clamp-2 mb-6 flex-grow">{project.description || "Sem descrição disponível."}</p>
+                  <p className="text-brand-muted text-sm line-clamp-2 mb-6 flex-grow">{project.description || "No description available."}</p>
 
                   <div className="flex items-center justify-between pt-4 border-t border-brand-border">
                     <div className="flex items-center gap-1.5 text-brand-muted text-xs">
@@ -391,7 +456,7 @@ const Dashboard = () => {
                     className="w-full px-4 py-2.5 bg-brand-bg border border-brand-border rounded-xl focus:border-indigo-500 outline-none text-brand-text transition-all appearance-none font-medium cursor-pointer"
                   >
                     <option value="crewai">🤖 CrewAI (Multi-Agent Systems)</option>
-                    <option value="langgraph" disabled>⚡ LangGraph (Stateful Graphs) - Coming Soon</option>
+                    <option value="langgraph">⚡ LangGraph (Stateful Graphs)</option>
                   </select>
                   <div className="absolute inset-y-0 right-4 flex items-center pointer-events-none text-brand-muted">
                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path></svg>

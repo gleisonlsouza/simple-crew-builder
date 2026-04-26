@@ -64,7 +64,21 @@ export const migrateNodes = (nodes: AppNode[]): AppNode[] => {
 
 
 export const migrateEdges = (edges: AppEdge[], nodes: AppNode[] = []): AppEdge[] => {
-  return edges.map(edge => {
+  // BACKWARD COMPAT: Strip orphaned schema→state edges before migration.
+  // Old saved projects may still have edges with targetHandle "schema-input"
+  // pointing at a state node. The StateNode no longer has that handle, so
+  // React Flow throws "Couldn't create edge for target handle id: null".
+  // We filter them out here using the original (pre-migration) DB values.
+  const cleanedEdges = edges.filter(edge => {
+    const targetNode = nodes.find(n => n.id === edge.target);
+    if (targetNode?.type === 'state' && edge.targetHandle === 'schema-input') {
+      return false; // Drop orphaned schema→state edge
+    }
+    return true;
+  });
+
+  return cleanedEdges.map(edge => {
+
     let sourceHandle = edge.sourceHandle;
     let targetHandle = edge.targetHandle;
 
@@ -74,15 +88,35 @@ export const migrateEdges = (edges: AppEdge[], nodes: AppNode[] = []): AppEdge[]
     // 1. Resolve sourceHandle based strictly on Source Node's architecture
     if (sourceNode) {
       if (sourceNode.type === 'agent') {
+        // Specific specialized handles
         if (targetNode?.type === 'task') sourceHandle = 'out-task';
-        else if (targetNode?.type === 'tool' || targetNode?.type === 'customTool') sourceHandle = 'out-tool';
+        else if (targetNode?.type === 'tool') sourceHandle = 'out-tool';
+        else if (targetNode?.type === 'customTool') sourceHandle = 'out-custom-tool';
         else if (targetNode?.type === 'mcp') sourceHandle = 'out-mcp';
+        // Flow handles
+        else if (targetNode?.type === 'agent' || targetNode?.type === 'crew' || targetNode?.type === 'router') sourceHandle = 'agent-out';
+        else if (targetNode?.type === 'state') sourceHandle = 'data-out';
+        else if (sourceHandle === 'right' || sourceHandle === 'right-source') sourceHandle = 'agent-out';
+        // Fallback checks
         else if (sourceHandle?.startsWith('out-task')) sourceHandle = 'out-task';
         else if (sourceHandle?.startsWith('out-tool')) sourceHandle = 'out-tool';
         else if (sourceHandle?.startsWith('out-mcp')) sourceHandle = 'out-mcp';
-        else sourceHandle = 'out-task'; // Ultimate fallback for Agent sources
+        else if (sourceHandle === 'data-out') sourceHandle = 'data-out';
+        else sourceHandle = 'out-task'; 
+      } else if (sourceNode.type === 'task') {
+        if (targetNode?.type === 'tool') sourceHandle = 'out-tool';
+        else if (targetNode?.type === 'customTool') sourceHandle = 'out-custom-tool';
+        else if (targetNode?.type === 'mcp') sourceHandle = 'out-mcp';
+        else sourceHandle = 'out-tool'; // Default for task outlets in CrewAI is tool-related
       } else if (['crew', 'chat', 'webhook'].includes(sourceNode.type)) {
         sourceHandle = 'right-source';
+      } else if (sourceNode.type === 'router') {
+        // Router handles are dynamic (route-xxx). Only fallback if corrupt.
+        if (!sourceHandle || sourceHandle === 'right' || sourceHandle === 'right-source') {
+          sourceHandle = 'route-default';
+        }
+      } else if (sourceNode.type === 'state') {
+        sourceHandle = 'state-out';
       }
     } else {
        // Fallback for missing nodes/legacy edges
@@ -93,8 +127,31 @@ export const migrateEdges = (edges: AppEdge[], nodes: AppNode[] = []): AppEdge[]
 
     // 2. Resolve targetHandle based strictly on Target Node's architecture
     if (targetNode) {
-      if (['agent', 'task', 'crew'].includes(targetNode.type)) {
+      if (targetNode.type === 'agent') {
+        if (sourceNode?.type === 'schema' || sourceHandle === 'schema-output') {
+          targetHandle = 'schema-input';
+        } else {
+          // Backward compatibility: left-target is now agent-in
+          targetHandle = 'agent-in';
+        }
+      } else if (targetNode.type === 'crew') {
+        // State nodes connect to the dedicated 'state-in' handle;
+        // triggers (chat/webhook/legacy 'left-target') connect to 'trigger-in'.
+        if (sourceNode?.type === 'state' || targetHandle === 'state-in') {
+          targetHandle = 'state-in';
+        } else {
+          targetHandle = 'trigger-in';
+        }
+      } else if (targetNode.type === 'task') {
         targetHandle = 'left-target';
+      } else if (targetNode.type === 'router') {
+        targetHandle = 'router-in'; // Router uses router-in
+      } else if (targetNode.type === 'state') {
+        // State nodes use dynamically generated handles per field
+        if (!targetHandle || !targetHandle.startsWith('field-in-')) {
+          // If corrupted, default to first field fallback or let it clear
+          targetHandle = undefined; 
+        }
       } else {
         targetHandle = undefined;
       }
@@ -107,7 +164,7 @@ export const migrateEdges = (edges: AppEdge[], nodes: AppNode[] = []): AppEdge[]
 
     return {
       ...edge,
-      type: edge.type || 'smoothstep',
+      type: edge.type || 'deletable',
       sourceHandle,
       targetHandle,
     };

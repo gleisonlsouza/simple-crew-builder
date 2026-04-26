@@ -21,6 +21,7 @@ vi.mock('lucide-react', () => ({
   Clock: () => <div data-testid="icon-clock" />,
   Cpu: () => <div data-testid="icon-cpu" />,
   Settings: () => <div data-testid="icon-settings" />,
+  Server: () => <div data-testid="icon-server" />,
 }));
 
 // Mock the store
@@ -57,6 +58,7 @@ describe('AgentNode', () => {
     nodeStatuses: {},
     nodeErrors: {},
     models: defaultModels,
+    currentProjectFramework: 'crewai',
   };
 
   beforeEach(() => {
@@ -100,7 +102,8 @@ describe('AgentNode', () => {
     const user = userEvent.setup();
     render(wrap(<AgentNode {...defaultProps} />));
     
-    const select = screen.getByRole('combobox');
+    const selects = screen.getAllByRole('combobox');
+    const select = selects[0];
     expect(select).toHaveValue('model-1');
     
     await user.selectOptions(select, 'model-2');
@@ -127,7 +130,7 @@ describe('AgentNode', () => {
     
     if (actualCollapseBtn) {
         await user.click(actualCollapseBtn);
-        expect(mockToggleCollapse).toHaveBeenCalledWith('agent-1');
+        expect(mockToggleCollapse).toHaveBeenCalledWith('agent-1', ['out-task', 'out-tool', 'out-custom-tool', 'out-mcp']);
     } else {
         throw new Error('Collapse button not found');
     }
@@ -151,20 +154,27 @@ describe('AgentNode', () => {
   });
 
   it('contains the expected handles for the vertical architecture', () => {
+    (useStore as unknown as Mock).mockImplementation((selector: any) => selector({ 
+        ...defaultState, 
+        currentProjectFramework: 'langgraph' 
+    }));
     const { container } = render(wrap(<AgentNode {...defaultProps} />));
     
-    // Check for handles using their data attributes or class names if possible, 
-    // but React Flow handles are usually div.react-flow__handle
+    // Check for handles using their data attributes or class names
     const handles = container.querySelectorAll('.react-flow__handle');
     
-    // We expect 4 handles: left-target (top), out-task (bottom 25%), out-tool (bottom 50%), out-mcp (bottom 75%)
-    expect(handles.length).toBe(4);
+    // We expect 8 handles: agent-in, schema-input (Top), out-task, out-tool, out-custom-tool, out-mcp, data-out, agent-out (Bottom)
+    expect(handles.length).toBe(8);
     
     const handleIds = Array.from(handles).map(h => h.getAttribute('data-handleid'));
-    expect(handleIds).toContain('left-target');
+    expect(handleIds).toContain('agent-in');
+    expect(handleIds).toContain('schema-input');
     expect(handleIds).toContain('out-task');
     expect(handleIds).toContain('out-tool');
+    expect(handleIds).toContain('out-custom-tool');
     expect(handleIds).toContain('out-mcp');
+    expect(handleIds).toContain('data-out');
+    expect(handleIds).toContain('agent-out');
   });
 
   it('opens config drawer on settings button click', async () => {

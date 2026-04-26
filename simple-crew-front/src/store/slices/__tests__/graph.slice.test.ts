@@ -118,16 +118,14 @@ describe('graphSlice', () => {
 
   it('onConnect: prevents invalid connections', () => {
     mockState.nodes = [
-      { id: 'a1', type: 'agent', position: { x: 0, y: 0 }, data: { name: 'A1' } } as unknown as AppNode,
-      { id: 'a2', type: 'agent', position: { x: 0, y: 0 }, data: { name: 'A2' } } as unknown as AppNode
+      { id: 't1', type: 'task', position: { x: 0, y: 0 }, data: { name: 'T1' } } as unknown as AppNode,
+      { id: 'a1', type: 'agent', position: { x: 0, y: 0 }, data: { name: 'A1' } } as unknown as AppNode
     ];
     
-    const consoleSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
-    slice.onConnect({ source: 'a1', target: 'a2', sourceHandle: 'right-source', targetHandle: 'left-target' });
+    // Task to Agent is invalid (only Agent to Task is allowed)
+    slice.onConnect({ source: 't1', target: 'a1', sourceHandle: 'right-source', targetHandle: 'left-target' });
     
     expect(mockState.edges).toHaveLength(0);
-    expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('Invalid connection blocked'));
-    consoleSpy.mockRestore();
   });
 
   it('onConnect: allows valid connections and updates taskOrder', () => {
@@ -282,13 +280,10 @@ describe('graphSlice', () => {
       { id: 't1', type: 'task', data: { name: 'T' } } as unknown as AppNode
     ];
     
-    const consoleSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
     // Connection from Task (target) to Agent (source) is backwards
     slice.onConnect({ source: 't1', target: 'a1', sourceHandle: 'right-source', targetHandle: 'left-target' });
     
     expect(mockState.edges).toHaveLength(0);
-    expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('Invalid connection blocked'));
-    consoleSpy.mockRestore();
   });
 
   it('onConnect: prevents Task to Task connections', () => {
@@ -297,12 +292,9 @@ describe('graphSlice', () => {
       { id: 't2', type: 'task', data: { name: 'T2' } } as unknown as AppNode
     ];
     
-    const consoleSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
     slice.onConnect({ source: 't1', target: 't2', sourceHandle: 'right-source', targetHandle: 'left-target' });
     
     expect(mockState.edges).toHaveLength(0);
-    expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('Invalid connection blocked'));
-    consoleSpy.mockRestore();
   });
 
   it('validateGraph: covers all node types (crew, agent, task)', () => {

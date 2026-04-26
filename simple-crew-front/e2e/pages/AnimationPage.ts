@@ -23,9 +23,26 @@ export class AnimationPage {
   }
 
   async startCrew() {
+    // Wait for button to be enabled if it's currently disabled
+    await expect(this.startBtn).toBeEnabled({ timeout: 10000 });
     await this.startBtn.click();
-    // Wait for the terminal to leave the idle state (placeholder disappears)
-    await expect(this.page.getByText(/Aguardando início/i)).not.toBeVisible({ timeout: 10000 });
+    
+    // Wait for the terminal to receive the first log entry
+    const terminal = this.page.locator('[data-testid="simulation-log-container"]');
+    
+    // Ensure the terminal is expanded
+    const expandBtn = this.page.getByTestId('btn-log-expand');
+    if (await expandBtn.isVisible()) {
+      await expandBtn.click();
+    }
+    
+    await expect(terminal).toBeVisible({ timeout: 10000 });
+    
+    // Wait for the "Aguardando" text to disappear first, confirming the execution actually started
+    await expect(terminal).not.toContainText('Aguardando início...', { timeout: 10000 });
+    
+    // Search within the simulation-log-container for the specific log entry
+    await expect(terminal).toContainText('Starting Real Crew Execution', { timeout: 10000 });
   }
 
   async expectMissionAccomplished(timeout = 30000) {

@@ -19,12 +19,20 @@ test.describe('Execution Animation (CT10)', () => {
 
     // 2. Journey: Create New Workflow
     await dashboard.goto();
-    await dashboard.createWorkflow('Animation Journey');
+    await dashboard.createWorkflow('Animation Journey', 'Simulation with LangGraph', 'langgraph');
 
-    // 3. Journey: Orchestration (Nodes & Connections)
+    await builder.expectLoaded('Animation Journey');
+
+    // 3. Journey: Build Graph
     await builder.addNode('crew');
     await builder.addNode('agent');
     await builder.addNode('task');
+    
+    // In LangGraph, ensure State node exists (might be added by mock, but let's be sure)
+    const stateNode = page.locator('[data-testid^="node-state"]');
+    if (await stateNode.count() === 0) {
+      await builder.addNode('state');
+    }
     
     // Connect them: Crew -> Agent -> Task
     try {
@@ -32,15 +40,18 @@ test.describe('Execution Animation (CT10)', () => {
       await builder.connectNodes('Agent', 'Task');
       
       // Verify connections in UI
-      await expect(page.locator('.react-flow__edge')).toHaveCount(2, { timeout: 5000 });
+      await expect(page.locator('.react-flow__edge')).toHaveCount(2, { timeout: 10000 });
+
     } catch (e) {
       console.error('Connection Orchestration Failed:', e);
-      // Take a screenshot mid-test if connection fails
       await page.screenshot({ path: 'test-results/connection-failure.png' });
       throw e;
     }
 
     // 4. Journey: Config & Save
+    await builder.openNodeConfig('Crew');
+    await builder.typeInNodeField('Graph Name', 'Real Execution Crew');
+    await builder.closeConfigDrawer();
     await builder.openNodeConfig('Agent');
     await expect(page.getByRole('heading', { name: /Agent Configuration/i })).toBeVisible({ timeout: 10000 });
     await builder.typeInNodeField('Role', 'Tester');

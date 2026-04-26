@@ -1,7 +1,7 @@
-import { memo } from 'react';
-import { Handle, Position, type NodeProps, type Node } from '@xyflow/react';
+import { memo, useEffect } from 'react';
+import { Handle, Position, useUpdateNodeInternals, type NodeProps, type Node } from '@xyflow/react';
 import { useShallow } from 'zustand/shallow';
-import { Terminal, Trash2 } from 'lucide-react';
+import { Terminal, Trash2, Loader2, CheckCircle2, AlertCircle, Clock } from 'lucide-react';
 import { useStore } from '../store/index';
 import type { CustomToolNodeData } from '../types/nodes.types';
 import type { NodeStatus } from '../types/store.types';
@@ -15,6 +15,16 @@ export const CustomToolNode = memo(({ id, data }: NodeProps<Node<CustomToolNodeD
       setActiveNode: state.setActiveNode,
     }))
   );
+
+  const isAnyNodeRunning = useStore((state) => 
+    Object.values(state.nodeStatuses || {}).some(s => s === 'running')
+  );
+  const layout = useStore(state => state.canvasLayout);
+  const updateNodeInternals = useUpdateNodeInternals();
+
+  useEffect(() => {
+    updateNodeInternals(id);
+  }, [layout, id, updateNodeInternals]);
 
   const selectedTool = customTools.find(t => t.id === data.toolId);
 
@@ -36,8 +46,33 @@ export const CustomToolNode = memo(({ id, data }: NodeProps<Node<CustomToolNodeD
   return (
     <div
       onClick={(e) => { e.stopPropagation(); setActiveNode(id); }}
-      className={`group relative bg-white dark:bg-slate-900 rounded-xl shadow-sm hover:shadow-md dark:shadow-none border border-slate-200 dark:border-slate-700 w-52 overflow-visible transition-all duration-300 cursor-pointer ${statusClasses} ${status === 'running' ? 'running' : ''}`}
+      className={`group relative bg-white dark:bg-slate-900 rounded-xl shadow-sm hover:shadow-md dark:shadow-none border border-slate-200 dark:border-slate-700 w-52 overflow-visible transition-opacity duration-300 cursor-pointer ${statusClasses} ${status === 'running' ? 'node-running-active' : ''} ${
+        (data.isDimmed || (isAnyNodeRunning && status !== 'running'))
+          ? 'node-dimmed' 
+          : 'opacity-100'
+      }`}
     >
+      {status === 'waiting' && (
+        <div className="absolute -top-2 -right-2 bg-white dark:bg-slate-900 rounded-full p-0.5 shadow-md z-20 border border-slate-100 dark:border-slate-800 animate-in zoom-in duration-200">
+          <Clock className="w-5 h-5 text-amber-500" />
+        </div>
+      )}
+      {status === 'running' && (
+        <div className="absolute -top-2 -right-2 bg-white dark:bg-slate-900 rounded-full p-0.5 shadow-md z-20 border border-slate-100 dark:border-slate-800">
+          <Loader2 className="w-5 h-5 text-blue-500 animate-spin" />
+        </div>
+      )}
+      {status === 'success' && (
+        <div className="absolute -top-2 -right-2 bg-white dark:bg-slate-900 rounded-full p-0.5 shadow-md z-20 border border-slate-100 dark:border-slate-800">
+          <CheckCircle2 className="w-5 h-5 text-green-500" />
+        </div>
+      )}
+      {status === 'error' && (
+        <div className="absolute -top-2 -right-2 bg-white dark:bg-slate-900 rounded-full p-0.5 shadow-md z-20 border border-slate-100 dark:border-slate-800 animate-in zoom-in duration-200">
+          <AlertCircle className="w-5 h-5 text-red-500" />
+        </div>
+      )}
+
       <div className="bg-gradient-to-r from-orange-500 to-amber-600 px-3 py-2 flex items-center gap-2 rounded-t-xl relative">
         <Terminal className="w-4 h-4 text-white" />
         <h3 className="text-white text-[11px] font-bold truncate flex-1 uppercase tracking-wider">Custom Tool</h3>
@@ -60,7 +95,7 @@ export const CustomToolNode = memo(({ id, data }: NodeProps<Node<CustomToolNodeD
                 updateNodeData(id, { toolId: e.target.value, name: tool?.name || 'Tool' });
               }}
               onClick={(e) => e.stopPropagation()}
-              className="w-full bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-lg px-2 py-1.5 text-[11px] font-medium transition-all focus:ring-1 focus:ring-emerald-500 outline-none shadow-sm text-slate-700 dark:text-slate-300"
+              className="w-full bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-lg px-2 py-1.5 text-[11px] font-medium transition-[opacity,filter,color,background-color,border-color] focus:ring-1 focus:ring-emerald-500 outline-none shadow-sm text-slate-700 dark:text-slate-300"
             >
               <option value="">Select Tool...</option>
               {customTools.map(tool => (
@@ -79,15 +114,24 @@ export const CustomToolNode = memo(({ id, data }: NodeProps<Node<CustomToolNodeD
         </div>
       </div>
 
-      <div className="absolute left-1/2 -top-[1px] -translate-x-1/2 flex flex-col items-center gap-2 group/h-tool -translate-y-full pointer-events-none">
-          <span className="text-[9px] font-bold text-orange-500 bg-white dark:bg-slate-900 px-1 rounded shadow-sm opacity-0 group-hover/h-tool:opacity-100 transition-opacity whitespace-nowrap border border-orange-100 dark:border-orange-900/30">Tool Link</span>
-          <Handle 
-            type="target" 
-            position={Position.Top} 
-            className="!w-3 !h-3 !border-2 !border-white dark:!border-slate-900 !static !translate-x-0 !cursor-crosshair pointer-events-auto shadow-sm" 
-            style={{ backgroundColor: '#f97316' }} 
-          />
-      </div>
+      {(() => {
+        const isHorizontal = layout === 'horizontal';
+
+        return (
+          <div className={isHorizontal
+            ? "absolute top-1/2 -left-[1px] -translate-y-1/2 flex items-center gap-2 group/h-tool -translate-x-full pointer-events-none"
+            : "absolute left-1/2 -top-[1px] -translate-x-1/2 flex flex-col items-center gap-2 group/h-tool -translate-y-full pointer-events-none"
+          }>
+             <span className="text-[9px] font-bold text-orange-500 bg-white dark:bg-slate-900 px-1 rounded shadow-sm opacity-0 group-hover/h-tool:opacity-100 transition-opacity whitespace-nowrap border border-orange-100 dark:border-orange-900/30">Tool Link</span>
+             <Handle 
+               type="target" 
+               position={isHorizontal ? Position.Left : Position.Top} 
+               className="!w-3 !h-3 !border-2 !border-white dark:!border-slate-900 !static !translate-x-0 !translate-y-0 !cursor-crosshair pointer-events-auto shadow-sm" 
+               style={{ backgroundColor: '#f97316' }} 
+             />
+          </div>
+        );
+      })()}
     </div>
   );
 });

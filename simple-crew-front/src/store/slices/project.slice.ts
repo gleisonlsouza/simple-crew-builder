@@ -1,7 +1,7 @@
 import type { StateCreator } from 'zustand';
 import toast from 'react-hot-toast';
 import type { NodeStatus, AppState, ProjectSlice, ExportedProject } from '../../types/store.types';
-import type { AppNode } from '../../types/nodes.types';
+import type { AppNode, AgentNodeData, TaskNodeData, CustomToolNodeData } from '../../types/nodes.types';
 import type { MCPServer, CustomTool } from '../../types/config.types';
 import { migrateEdges, migrateNodes, validateDependencies } from '../helpers';
 import { migrateLegacyWorkflow } from '../../utils/workflowAdapter';
@@ -55,7 +55,8 @@ export const createProjectSlice: StateCreator<AppState, [], [], ProjectSlice> = 
       nodeStatuses: {},
       nodeErrors: {},
       nodeWarnings: {},
-      activeNodeId: null
+      activeNodeId: null,
+      canvasLayout: snapshot.canvasLayout || 'vertical'
     });
   },
 
@@ -92,7 +93,8 @@ export const createProjectSlice: StateCreator<AppState, [], [], ProjectSlice> = 
           edges: state.edges,
           customTools: state.customTools,
           globalTools: state.globalTools,
-          version: "1.0"
+          version: "1.0",
+          canvasLayout: state.canvasLayout
         },
         framework: state.currentProjectFramework || 'crewai'
       };
@@ -152,7 +154,9 @@ export const createProjectSlice: StateCreator<AppState, [], [], ProjectSlice> = 
   },
 
   loadProject: async (projectId: string) => {
-    if (projectId === get().currentProjectId) return;
+    if (projectId === get().currentProjectId) {
+      return;
+    }
     try {
       await Promise.all([
         get().fetchModels(),
@@ -160,11 +164,12 @@ export const createProjectSlice: StateCreator<AppState, [], [], ProjectSlice> = 
         get().fetchCustomTools(),
         get().fetchCredentials(),
         get().fetchWorkspaces(),
-        get().fetchSettings()
+        get().fetchSettings(),
+        get().fetchSkills()
       ]);
 
       const response = await fetch(`${API_URL}/api/v1/projects/${projectId}`);
-      if (!response.ok) throw new Error('Falha ao carregar projeto');
+      if (!response.ok) throw new Error('Failed to load project');
       const project = await response.json();
 
       const canvas_data = project.canvas_data;
@@ -176,11 +181,11 @@ export const createProjectSlice: StateCreator<AppState, [], [], ProjectSlice> = 
         if (!mergedMcp.some((m) => m.id === p.id)) mergedMcp.push(p);
       });
 
-      const globalTools = get().customTools;
-      const projectTools: CustomTool[] = canvas_data.customTools || [];
-      const mergedTools = [...globalTools];
-      projectTools.forEach((p) => {
-        if (!mergedTools.some(m => m.id === p.id)) mergedTools.push(p);
+      const globalCustomTools = get().customTools;
+      const projectCustomTools: CustomTool[] = canvas_data.customTools || [];
+      const mergedCustomTools = [...globalCustomTools];
+      projectCustomTools.forEach((p) => {
+        if (!mergedCustomTools.some(m => m.id === p.id)) mergedCustomTools.push(p);
       });
 
       const { migratedNodes: legacyNodes, migratedEdges: legacyEdges } = migrateLegacyWorkflow(
@@ -202,7 +207,7 @@ export const createProjectSlice: StateCreator<AppState, [], [], ProjectSlice> = 
       set({
         nodes: migratedNodes,
         edges: migrateEdges(legacyEdges, migratedNodes),
-        customTools: mergedTools,
+        customTools: mergedCustomTools,
         mcpServers: mergedMcp,
         currentProjectId: project.id,
         currentProjectName: project.name,
@@ -218,9 +223,12 @@ export const createProjectSlice: StateCreator<AppState, [], [], ProjectSlice> = 
         messages: INITIAL_CHAT_MESSAGES,
         isConsoleOpen: false,
         isConsoleExpanded: false,
-        isChatVisible: false
+        isChatVisible: false,
+        canvasLayout: canvas_data.canvasLayout || 'vertical'
       });
       toast.success(`Project "${project.name}" loaded!`);
+      // Ensure a clean slate (UI-only) right after load
+      get().resetExecutionVisuals();
     } catch (error) {
       toast.error((error as Error).message);
     }
@@ -238,7 +246,7 @@ export const createProjectSlice: StateCreator<AppState, [], [], ProjectSlice> = 
       }
 
       await get().fetchProjects();
-      toast.success("Projeto removido.");
+      toast.success("Project removed.");
     } catch (error) {
       toast.error((error as Error).message);
     }
@@ -252,7 +260,8 @@ export const createProjectSlice: StateCreator<AppState, [], [], ProjectSlice> = 
       canvas_data: {
         nodes: [],
         edges: [],
-        version: "1.0"
+        version: "1.0",
+        canvasLayout: "vertical"
       }
     };
 
@@ -426,11 +435,11 @@ export const createProjectSlice: StateCreator<AppState, [], [], ProjectSlice> = 
       projectMcp.forEach((p) => {
         if (!mergedMcp.some(m => m.id === p.id)) mergedMcp.push(p);
       });
-      const globalTools = get().customTools;
-      const projectTools: CustomTool[] = project.customTools || [];
-      const mergedTools = [...globalTools];
-      projectTools.forEach((p) => {
-        if (!mergedTools.some(m => m.id === p.id)) mergedTools.push(p);
+      const globalCustomTools = get().customTools;
+      const projectCustomTools: CustomTool[] = project.customTools || [];
+      const mergedCustomTools = [...globalCustomTools];
+      projectCustomTools.forEach((p) => {
+        if (!mergedCustomTools.some(m => m.id === p.id)) mergedCustomTools.push(p);
       });
 
       const { migratedNodes: legacyNodes, migratedEdges: legacyEdges } = migrateLegacyWorkflow(
@@ -461,7 +470,7 @@ export const createProjectSlice: StateCreator<AppState, [], [], ProjectSlice> = 
       set({
         nodes: migratedNodes,
         edges: migrateEdges(legacyEdges, migratedNodes),
-        customTools: mergedTools,
+        customTools: mergedCustomTools,
         mcpServers: mergedMcp,
         currentProjectName: project.name || null,
         currentProjectDescription: project.description || null,
@@ -474,7 +483,8 @@ export const createProjectSlice: StateCreator<AppState, [], [], ProjectSlice> = 
         currentProjectId: null,
         nodeStatuses: {},
         nodeErrors: {},
-        nodeWarnings: warnings
+        nodeWarnings: warnings,
+        canvasLayout: project.canvasLayout || 'vertical'
       });
       get().showNotification("Project uploaded successfully!", "success");
       return true;
@@ -501,7 +511,8 @@ export const createProjectSlice: StateCreator<AppState, [], [], ProjectSlice> = 
             edges: migrateEdges(migratedEdges, finalNodes),
             customTools: project.customTools || [],
             mcpServers: project.mcpServers || [],
-            version: project.version || "1.0"
+            version: project.version || "1.0",
+            canvasLayout: project.canvasLayout || "vertical"
           };
         })()
       };
@@ -531,6 +542,9 @@ export const createProjectSlice: StateCreator<AppState, [], [], ProjectSlice> = 
   },
 
   startRealExecution: async () => {
+    // 1. Reset visual state for a clean slate
+    get().resetExecutionVisuals();
+
     const state = get();
     const initialStatuses: Record<string, NodeStatus> = {};
     state.nodes.forEach((node: AppNode) => {
@@ -545,12 +559,36 @@ export const createProjectSlice: StateCreator<AppState, [], [], ProjectSlice> = 
       isConsoleOpen: true,
       isConsoleExpanded: false
     });
+    // Identify active custom tools (LangGraph nodes + CrewAI agent/task data)
+    const activeToolIds = new Set<string>();
+    const currentNodes = get().nodes;
+
+    currentNodes.forEach(node => {
+      // LangGraph Pattern: Standalone custom tool node
+      if (node.type === 'customTool' && (node.data as CustomToolNodeData)?.toolId) {
+        activeToolIds.add((node.data as CustomToolNodeData).toolId);
+      }
+      // CrewAI Pattern: Tools assigned directly inside an Agent's configuration
+      if (node.type === 'agent' && Array.isArray((node.data as AgentNodeData)?.customToolIds)) {
+        (node.data as AgentNodeData).customToolIds?.forEach((id: string) => activeToolIds.add(id));
+      }
+      // CrewAI Pattern: Tools assigned directly to a Task node
+      if (node.type === 'task' && Array.isArray((node.data as TaskNodeData)?.customToolIds)) {
+        (node.data as TaskNodeData).customToolIds?.forEach((id: string) => activeToolIds.add(id));
+      }
+    });
+
+    // Get full objects from global state
+    const allCustomTools = get().customTools || [];
+    const activeCustomToolsFull = allCustomTools.filter(tool => activeToolIds.has(tool.id));
+
+
     const payload = {
       version: "1.0",
       nodes: state.nodes,
       edges: state.edges,
       globalTools: state.globalTools,
-      customTools: state.customTools
+      customTools: activeCustomToolsFull
     };
 
     let capturedResult: string | null = null;
@@ -567,7 +605,7 @@ export const createProjectSlice: StateCreator<AppState, [], [], ProjectSlice> = 
         signal: controller.signal
       });
       if (!response.ok) {
-        let errorMsg = "Erro inesperado do Backend";
+        let errorMsg = "Unexpected Backend Error";
         try {
           const errorData = await response.json();
           errorMsg = errorData.detail || errorMsg;
@@ -577,17 +615,20 @@ export const createProjectSlice: StateCreator<AppState, [], [], ProjectSlice> = 
         throw new Error(errorMsg);
       }
       const reader = response.body?.getReader();
-      if (!reader) throw new Error("Stream API não suportado pelo Browser");
+      if (!reader) throw new Error("Stream API not supported by Browser");
       const decoder = new TextDecoder("utf-8");
       let hasError = false;
       while (true) {
         const result = await reader.read();
         if (result.done) {
-          if (get().isExecuting && !hasError) {
-            const newStatuses: Record<string, NodeStatus> = { ...get().nodeStatuses };
-            state.nodes.forEach(n => { if (newStatuses[n.id] === 'running') newStatuses[n.id] = 'success'; });
-            set({ nodeStatuses: newStatuses, isExecuting: false });
-          } else {
+            if (get().isExecuting && !hasError) {
+              const newStatuses: Record<string, NodeStatus> = { ...get().nodeStatuses };
+              state.nodes.forEach(n => { if (newStatuses[n.id] === 'running') newStatuses[n.id] = 'success'; });
+              set({ nodeStatuses: newStatuses, isExecuting: false });
+              
+              // 2. Finalize visuals (Post-Execution state)
+              get().finalizeExecutionVisuals();
+            } else {
             set({ isExecuting: false });
           }
           break;
@@ -600,6 +641,31 @@ export const createProjectSlice: StateCreator<AppState, [], [], ProjectSlice> = 
             if (event.type === 'heartbeat') continue;
             else if (event.type === 'status') get().setNodeStatus(event.nodeId, event.status);
             else if (event.type === 'task_completed') get().setNodeStatus(event.task_id, 'success');
+            else if (event.type === 'route_taken') {
+              // 1. Highlight the specific edge taken by the router (STRICT MATCH)
+              // 2. Update the Router node data with the winning handle for internal UI highlight
+              set((state) => ({
+                edges: state.edges.map(edge => {
+                  if (edge.source === event.nodeId && edge.sourceHandle === event.sourceHandle) {
+                    return {
+                      ...edge,
+                      animated: true,
+                      style: { ...edge.style, stroke: '#10b981', strokeWidth: 4 } // Success Green
+                    };
+                  }
+                  return edge;
+                }),
+                nodes: state.nodes.map(node => {
+                  if (node.id === event.nodeId) {
+                    return {
+                      ...node,
+                      data: { ...node.data, executedRoute: event.sourceHandle }
+                    };
+                  }
+                  return node;
+                }) as AppNode[]
+              }));
+            }
             else if (event.type === 'log') {
               // eslint-disable-next-line no-control-regex
               const stripAnsi = (str: string) => str.replace(/[\u001b\u009b][[()#;?]*(?:[0-9]{1,4}(?:;[0-9]{0,4})*)?[0-9A-ORZcf-nqry=><]/g, '');
@@ -621,7 +687,7 @@ export const createProjectSlice: StateCreator<AppState, [], [], ProjectSlice> = 
                 const newStatuses: Record<string, NodeStatus> = { ...get().nodeStatuses };
                 state.nodes.forEach(n => { if (newStatuses[n.id] === 'running') newStatuses[n.id] = 'success'; });
                 set({ nodeStatuses: newStatuses, isConsoleExpanded: true, executionResult: resultStr });
-                get().showNotification("Pipeline de Agentes concluído!", "success");
+                get().showNotification("Agent Pipeline completed!", "success");
 
               }
             } else if (event.type === 'done') {
@@ -649,10 +715,10 @@ export const createProjectSlice: StateCreator<AppState, [], [], ProjectSlice> = 
     } catch (err) {
       const error = err as Error;
       if (error.name === 'AbortError') {
-        get().showNotification("Pipeline de Agentes interrompido pelo usuário.", "warning");
+        get().showNotification("Agent Pipeline stopped by user.", "warning");
       } else {
         console.error(error);
-        state.showNotification(`Falha na API Inteligente: ${error.message}`, "error");
+        state.showNotification(`Intelligent API Failure: ${error.message}`, "error");
       }
       return null;
     } finally {

@@ -31,6 +31,7 @@ export interface ToolConfig {
   apiKey?: string;
   requiresKey: boolean;
   category?: string;
+  framework?: 'crewai' | 'langgraph' | 'both';
   user_config_schema?: {
     fields: Record<string, {
       type: 'string' | 'number' | 'boolean' | 'select';
@@ -64,3 +65,14 @@ export interface MCPServer {
   url?: string;
   headers?: Record<string, string>;
 }
+
+export interface AgentSkill {
+  id: string;
+  name: string;
+  description?: string;
+  content: string;
+  source_url?: string;
+  created_at: string;
+  is_vectorized?: boolean;
+}
+

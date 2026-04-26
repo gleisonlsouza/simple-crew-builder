@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, memo } from 'react';
 import {
   BaseEdge,
   EdgeLabelRenderer,
@@ -10,7 +10,7 @@ import { useShallow } from 'zustand/shallow';
 import { useStore } from '../store/index';
 import type { NodeStatus } from '../types/store.types';
 
-export function DeletableEdge({
+export const DeletableEdge = memo(({
   id,
   source,
   target,
@@ -22,7 +22,8 @@ export function DeletableEdge({
   targetPosition,
   style = {},
   markerEnd,
-}: EdgeProps) {
+  data,
+}: EdgeProps) => {
   const [edgePath, labelX, labelY] = getSmoothStepPath({
     sourceX,
     sourceY,
@@ -52,13 +53,17 @@ export function DeletableEdge({
     if (isRunning) strokeColor = '#3b82f6';
     else if (isSuccess) strokeColor = '#10b981';
 
+    const isDimmed = data?.isDimmed;
+
     return {
       ...style,
       stroke: strokeColor,
-      strokeWidth: isRunning ? 3 : (style.strokeWidth as number || 2),
-      transition: 'stroke 0.5s ease, stroke-width 0.5s ease',
+      strokeWidth: isRunning ? 4 : (style.strokeWidth as number || 3),
+      transition: 'stroke 0.5s ease, stroke-width 0.5s ease, opacity 0.5s ease, filter 0.5s ease',
+      opacity: isDimmed ? 0.15 : 1,
+      filter: isDimmed ? 'grayscale(1)' : 'none',
     };
-  }, [sourceStatus, targetStatus, style]);
+  }, [sourceStatus, targetStatus, style, data?.isDimmed]);
 
   return (
     <>
@@ -92,7 +97,7 @@ export function DeletableEdge({
                 event.stopPropagation();
                 deleteEdge(id);
               }}
-              className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-xl rounded-md p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/30 hover:border-red-300 transition-all cursor-pointer flex items-center justify-center pointer-events-auto translate-y-0 active:scale-90"
+              className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-xl rounded-md p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/30 hover:border-red-300 transition-[opacity,filter,color,background-color,border-color] cursor-pointer flex items-center justify-center pointer-events-auto translate-y-0 active:scale-90"
               title="Delete connection"
               aria-label="Excluir conexão"
             >
@@ -103,4 +108,4 @@ export function DeletableEdge({
       </EdgeLabelRenderer>
     </>
   );
-}
+});

@@ -1,5 +1,5 @@
-import { memo } from 'react';
-import { Handle, Position, type NodeProps, type Node } from '@xyflow/react';
+import { memo, useEffect } from 'react';
+import { Handle, Position, useUpdateNodeInternals, type NodeProps, type Node } from '@xyflow/react';
 import { useShallow } from 'zustand/shallow';
 import { MessageCircle, Trash2, Settings } from 'lucide-react';
 import { useStore } from '../store/index';
@@ -13,9 +13,23 @@ export const ChatNode = memo(({ id, data }: NodeProps<Node<ChatNodeData, 'chat'>
     }))
   );
 
+  const isAnyNodeRunning = useStore((state) => 
+    Object.values(state.nodeStatuses || {}).some(s => s === 'running')
+  );
+  const layout = useStore(state => state.canvasLayout);
+  const updateNodeInternals = useUpdateNodeInternals();
+
+  useEffect(() => {
+    updateNodeInternals(id);
+  }, [layout, id, updateNodeInternals]);
+
   return (
     <div 
-      className="group relative bg-white dark:bg-slate-900 rounded-xl shadow-sm hover:shadow-md dark:shadow-none border border-slate-200 dark:border-slate-700 w-48 overflow-visible transition-colors transition-shadow duration-300 cursor-pointer hover:ring-2 hover:ring-cyan-400"
+      className={`group relative bg-white dark:bg-slate-900 rounded-xl shadow-sm hover:shadow-md dark:shadow-none border border-slate-200 dark:border-slate-700 w-48 overflow-visible cursor-pointer ${
+        (data.isDimmed || isAnyNodeRunning)
+          ? 'node-dimmed' 
+          : 'opacity-100 transition-opacity duration-300 hover:ring-2 hover:ring-cyan-400'
+      }`}
       onClick={() => setActiveNode(id)}
     >
       {/* Header */}
@@ -64,17 +78,26 @@ export const ChatNode = memo(({ id, data }: NodeProps<Node<ChatNodeData, 'chat'>
         </button>
       </div>
 
-      {/* Output Handle (Bottom) */}
-      <div className="absolute left-1/2 -bottom-[1px] -translate-x-1/2 flex flex-col items-center gap-1 group/h-chat translate-y-full pointer-events-none">
-        <Handle 
-          type="source" 
-          position={Position.Bottom} 
-          id="right-source" 
-          className="!w-3 !h-3 !border-2 !border-white dark:!border-slate-900 !static !translate-x-0 !cursor-crosshair pointer-events-auto shadow-sm"
-          style={{ backgroundColor: '#06b6d4' }}
-        />
-        <span className="text-[9px] font-bold text-cyan-500 bg-white dark:bg-slate-900 px-1 rounded shadow-sm opacity-0 group-hover/h-chat:opacity-100 transition-opacity whitespace-nowrap border border-cyan-100 dark:border-cyan-900/30">Connect Crew</span>
-      </div>
+      {/* Output Handle */}
+      {(() => {
+        const isHorizontal = layout === 'horizontal';
+
+        return (
+          <div className={isHorizontal
+            ? "absolute top-1/2 -right-[1px] -translate-y-1/2 flex items-center gap-2 group/h-chat translate-x-full pointer-events-none"
+            : "absolute left-1/2 -bottom-[1px] -translate-x-1/2 flex flex-col items-center gap-1 group/h-chat translate-y-full pointer-events-none"
+          }>
+            <Handle 
+              type="source" 
+              position={isHorizontal ? Position.Right : Position.Bottom} 
+              id="right-source" 
+              className="!w-3 !h-3 !border-2 !border-white dark:!border-slate-900 !static !translate-x-0 !translate-y-0 !cursor-crosshair pointer-events-auto shadow-sm"
+              style={{ backgroundColor: '#06b6d4' }}
+            />
+            <span className="text-[9px] font-bold text-cyan-500 bg-white dark:bg-slate-900 px-1 rounded shadow-sm opacity-0 group-hover/h-chat:opacity-100 transition-opacity whitespace-nowrap border border-cyan-100 dark:border-cyan-900/30">Connect Crew</span>
+          </div>
+        );
+      })()}
     </div>
   );
 });

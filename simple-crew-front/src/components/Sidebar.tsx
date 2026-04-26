@@ -1,5 +1,6 @@
 import React, { useRef, useState } from 'react';
-import { User, CheckSquare, Users, Upload, Settings, PlusCircle, FolderOpen, X, ExternalLink, Plus, LayoutTemplate, ChevronLeft, ChevronRight } from 'lucide-react';
+import { User, CheckSquare, Users, Upload, Settings, PlusCircle, FolderOpen, X, ExternalLink, Plus, LayoutTemplate, ChevronLeft, ChevronRight, Database, Split, FileCode } from 'lucide-react';
+import { FRAMEWORK_CONFIG } from '../config/frameworks.config';
 import { useReactFlow } from '@xyflow/react';
 import toast from 'react-hot-toast';
 import { useStore } from '../store/index';
@@ -15,6 +16,9 @@ export function Sidebar() {
   const updateProjectWorkspaceId = useStore((state) => state.updateProjectWorkspaceId);
   const setIsExplorerOpen = useStore((state) => state.setIsExplorerOpen);
   const setCurrentExplorerWsId = useStore((state) => state.setCurrentExplorerWsId);
+  const currentProjectFramework = useStore((state) => state.currentProjectFramework);
+
+  const rules = FRAMEWORK_CONFIG[currentProjectFramework || 'crewai'];
   
   const isSidebarCollapsed = useStore((state) => state.isSidebarCollapsed);
   const setIsSidebarCollapsed = useStore((state) => state.setIsSidebarCollapsed);
@@ -104,185 +108,291 @@ export function Sidebar() {
       <div className="flex-1 overflow-y-auto p-4 custom-scrollbar">
         <div className="flex flex-col gap-3">
           {/* Crew Node */}
-          <div
-            className={`bg-brand-card border border-brand-border rounded-lg p-3 flex items-center ${isSidebarCollapsed ? 'justify-center' : 'justify-between'} cursor-grab hover:shadow-md hover:border-violet-400 dark:hover:border-violet-500 transition-all active:cursor-grabbing group relative`}
-            onDragStart={(event) => onDragStart(event, 'crew')}
-            draggable
-            title={isSidebarCollapsed ? "Drag Crew to canvas" : ""}
-          >
-            <div className="flex items-center gap-3">
-              <div className="bg-violet-100 dark:bg-violet-900/30 p-2 rounded-md group-hover:bg-violet-500 group-hover:text-white transition-colors">
-                <Users className="w-4 h-4 text-violet-600 dark:text-violet-400 group-hover:text-white" />
+          {rules.allowedNodes.includes('crew') && (
+            <div
+              className={`bg-brand-card border border-brand-border rounded-lg p-3 flex items-center ${isSidebarCollapsed ? 'justify-center' : 'justify-between'} cursor-grab hover:shadow-md hover:border-violet-400 dark:hover:border-violet-500 transition-all active:cursor-grabbing group relative`}
+              onDragStart={(event) => onDragStart(event, 'crew')}
+              draggable
+              title={isSidebarCollapsed ? `Drag ${rules.labels.crew} to canvas` : ""}
+            >
+              <div className="flex items-center gap-3">
+                <div className="bg-violet-100 dark:bg-violet-900/30 p-2 rounded-md group-hover:bg-violet-500 group-hover:text-white transition-colors">
+                  <Users className="w-4 h-4 text-violet-600 dark:text-violet-400 group-hover:text-white" />
+                </div>
+                {!isSidebarCollapsed && <span className="text-sm font-medium text-brand-text">{rules.labels.crew}</span>}
               </div>
-              {!isSidebarCollapsed && <span className="text-sm font-medium text-brand-text">Crew</span>}
+              {!isSidebarCollapsed && (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    const state = useStore.getState();
+                    state.addNodeWithAutoPosition('crew', { process: 'sequential', isCollapsed: false });
+                    setTimeout(() => fitView({ padding: 0.2, duration: 400 }), 50);
+                  }}
+                  className="p-1.5 hover:bg-violet-100 dark:hover:bg-violet-900/50 rounded-md text-violet-600 dark:text-violet-400 transition-colors"
+                  aria-label={`Add ${rules.labels.crew} to canvas`}
+                  data-testid="btn-add-crew"
+                >
+                  <PlusCircle className="w-4 h-4" />
+                </button>
+              )}
             </div>
-            {!isSidebarCollapsed && (
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  const state = useStore.getState();
-                  state.addNodeWithAutoPosition('crew', { process: 'sequential', isCollapsed: false });
-                  setTimeout(() => fitView({ padding: 0.2, duration: 400 }), 50);
-                }}
-                className="p-1.5 hover:bg-violet-100 dark:hover:bg-violet-900/50 rounded-md text-violet-600 dark:text-violet-400 transition-colors"
-                aria-label="Add Crew to canvas"
-                data-testid="btn-add-crew"
-              >
-                <PlusCircle className="w-4 h-4" />
-              </button>
-            )}
-          </div>
+          )}
 
           {/* Agent Node */}
-          <div
-            className={`bg-brand-card border border-brand-border rounded-lg p-3 flex items-center ${isSidebarCollapsed ? 'justify-center' : 'justify-between'} cursor-grab hover:shadow-md hover:border-blue-400 dark:hover:border-blue-500 transition-all active:cursor-grabbing group relative`}
-            onDragStart={(event) => onDragStart(event, 'agent')}
-            draggable
-            title={isSidebarCollapsed ? "Drag Agent to canvas" : ""}
-          >
-            <div className="flex items-center gap-3">
-              <div className="bg-blue-100 dark:bg-blue-900/30 p-2 rounded-md group-hover:bg-blue-500 group-hover:text-white transition-colors">
-                <User className="w-4 h-4 text-blue-600 dark:text-blue-400 group-hover:text-white" />
+          {rules.allowedNodes.includes('agent') && (
+            <div
+              className={`bg-brand-card border border-brand-border rounded-lg p-3 flex items-center ${isSidebarCollapsed ? 'justify-center' : 'justify-between'} cursor-grab hover:shadow-md hover:border-blue-400 dark:hover:border-blue-500 transition-all active:cursor-grabbing group relative`}
+              onDragStart={(event) => onDragStart(event, 'agent')}
+              draggable
+              title={isSidebarCollapsed ? "Drag Agent to canvas" : ""}
+            >
+              <div className="flex items-center gap-3">
+                <div className="bg-blue-100 dark:bg-blue-900/30 p-2 rounded-md group-hover:bg-blue-500 group-hover:text-white transition-colors">
+                  <User className="w-4 h-4 text-blue-600 dark:text-blue-400 group-hover:text-white" />
+                </div>
+                {!isSidebarCollapsed && <span className="text-sm font-medium text-brand-text">Agent</span>}
               </div>
-              {!isSidebarCollapsed && <span className="text-sm font-medium text-brand-text">Agent</span>}
+              {!isSidebarCollapsed && (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    const state = useStore.getState();
+                    const timestamp = Date.now().toString().slice(-4);
+                    state.addNodeWithAutoPosition('agent', { name: `New Agent ${timestamp}`, role: '', goal: '', backstory: '', isCollapsed: false });
+                    setTimeout(() => fitView({ padding: 0.2, duration: 400 }), 50);
+                  }}
+                  className="p-1.5 hover:bg-blue-100 dark:hover:bg-blue-900/50 rounded-md text-blue-600 dark:text-blue-400 transition-colors"
+                  aria-label="Add Agent to canvas"
+                  data-testid="btn-add-agent"
+                >
+                  <PlusCircle className="w-4 h-4" />
+                </button>
+              )}
             </div>
-            {!isSidebarCollapsed && (
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  const state = useStore.getState();
-                  const timestamp = Date.now().toString().slice(-4);
-                  state.addNodeWithAutoPosition('agent', { name: `New Agent ${timestamp}`, role: '', goal: '', backstory: '', isCollapsed: false });
-                  setTimeout(() => fitView({ padding: 0.2, duration: 400 }), 50);
-                }}
-                className="p-1.5 hover:bg-blue-100 dark:hover:bg-blue-900/50 rounded-md text-blue-600 dark:text-blue-400 transition-colors"
-                aria-label="Add Agent to canvas"
-                data-testid="btn-add-agent"
-              >
-                <PlusCircle className="w-4 h-4" />
-              </button>
-            )}
-          </div>
+          )}
 
           {/* Task Node */}
-          <div
-            className={`bg-brand-card border border-brand-border rounded-lg p-3 flex items-center ${isSidebarCollapsed ? 'justify-center' : 'justify-between'} cursor-grab hover:shadow-md hover:border-emerald-400 dark:hover:border-emerald-500 transition-all active:cursor-grabbing group relative`}
-            onDragStart={(event) => onDragStart(event, 'task')}
-            draggable
-            title={isSidebarCollapsed ? "Drag Task to canvas" : ""}
-          >
-            <div className="flex items-center gap-3">
-              <div className="bg-emerald-100 dark:bg-emerald-900/30 p-2 rounded-md group-hover:bg-emerald-500 group-hover:text-white transition-colors">
-                <CheckSquare className="w-4 h-4 text-emerald-600 dark:text-emerald-400 group-hover:text-white" />
+          {rules.allowedNodes.includes('task') && (
+            <div
+              className={`bg-brand-card border border-brand-border rounded-lg p-3 flex items-center ${isSidebarCollapsed ? 'justify-center' : 'justify-between'} cursor-grab hover:shadow-md hover:border-emerald-400 dark:hover:border-emerald-500 transition-all active:cursor-grabbing group relative`}
+              onDragStart={(event) => onDragStart(event, 'task')}
+              draggable
+              title={isSidebarCollapsed ? `Drag ${rules.labels.task} to canvas` : ""}
+            >
+              <div className="flex items-center gap-3">
+                <div className="bg-emerald-100 dark:bg-emerald-900/30 p-2 rounded-md group-hover:bg-emerald-500 group-hover:text-white transition-colors">
+                  <CheckSquare className="w-4 h-4 text-emerald-600 dark:text-emerald-400 group-hover:text-white" />
+                </div>
+                {!isSidebarCollapsed && <span className="text-sm font-medium text-brand-text">{rules.labels.task}</span>}
               </div>
-              {!isSidebarCollapsed && <span className="text-sm font-medium text-brand-text">Task</span>}
+              {!isSidebarCollapsed && (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    const state = useStore.getState();
+                    const timestamp = Date.now().toString().slice(-4);
+                    state.addNodeWithAutoPosition('task', { name: `New ${rules.labels.task} ${timestamp}`, description: '', expected_output: '' });
+                    setTimeout(() => fitView({ padding: 0.2, duration: 400 }), 50);
+                  }}
+                  className="p-1.5 hover:bg-emerald-100 dark:hover:bg-emerald-900/50 rounded-md text-emerald-600 dark:text-emerald-400 transition-colors"
+                  aria-label={`Add ${rules.labels.task} to canvas`}
+                  data-testid="btn-add-task"
+                >
+                  <PlusCircle className="w-4 h-4" />
+                </button>
+              )}
             </div>
-            {!isSidebarCollapsed && (
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  const state = useStore.getState();
-                  const timestamp = Date.now().toString().slice(-4);
-                  state.addNodeWithAutoPosition('task', { name: `New Task ${timestamp}`, description: '', expected_output: '' });
-                  setTimeout(() => fitView({ padding: 0.2, duration: 400 }), 50);
-                }}
-                className="p-1.5 hover:bg-emerald-100 dark:hover:bg-emerald-900/50 rounded-md text-emerald-600 dark:text-emerald-400 transition-colors"
-                aria-label="Add Task to canvas"
-                data-testid="btn-add-task"
-              >
-                <PlusCircle className="w-4 h-4" />
-              </button>
-            )}
-          </div>
+          )}
+
+          {/* New LangGraph Nodes: State, Router, Schema */}
+          {rules.allowedNodes.includes('state') && (
+            <div
+              className={`bg-brand-card border border-brand-border rounded-lg p-3 flex items-center ${isSidebarCollapsed ? 'justify-center' : 'justify-between'} cursor-grab hover:shadow-md hover:border-amber-400 dark:hover:border-amber-500 transition-all active:cursor-grabbing group relative`}
+              onDragStart={(event) => onDragStart(event, 'state')}
+              draggable
+              title={isSidebarCollapsed ? "Drag State to canvas" : ""}
+            >
+              <div className="flex items-center gap-3">
+                <div className="bg-amber-100 dark:bg-amber-900/30 p-2 rounded-md group-hover:bg-amber-500 group-hover:text-white transition-colors">
+                  <Database className="w-4 h-4 text-amber-600 dark:text-amber-400 group-hover:text-white" />
+                </div>
+                {!isSidebarCollapsed && <span className="text-sm font-medium text-brand-text">State</span>}
+              </div>
+              {!isSidebarCollapsed && (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    const state = useStore.getState();
+                    state.addNodeWithAutoPosition('state', { name: 'New State', description: '' });
+                    setTimeout(() => fitView({ padding: 0.2, duration: 400 }), 50);
+                  }}
+                  className="p-1.5 hover:bg-amber-100 dark:hover:bg-amber-900/50 rounded-md text-amber-600 dark:text-amber-400 transition-colors"
+                  aria-label="Add State to canvas"
+                  data-testid="btn-add-state"
+                >
+                  <PlusCircle className="w-4 h-4" />
+                </button>
+              )}
+            </div>
+          )}
+
+          {rules.allowedNodes.includes('router') && (
+            <div
+              className={`bg-brand-card border border-brand-border rounded-lg p-3 flex items-center ${isSidebarCollapsed ? 'justify-center' : 'justify-between'} cursor-grab hover:shadow-md hover:border-cyan-400 dark:hover:border-cyan-500 transition-all active:cursor-grabbing group relative`}
+              onDragStart={(event) => onDragStart(event, 'router')}
+              draggable
+              title={isSidebarCollapsed ? "Drag Router to canvas" : ""}
+            >
+              <div className="flex items-center gap-3">
+                <div className="bg-cyan-100 dark:bg-cyan-900/30 p-2 rounded-md group-hover:bg-cyan-500 group-hover:text-white transition-colors">
+                  <Split className="w-4 h-4 text-cyan-600 dark:text-cyan-400 group-hover:text-white" />
+                </div>
+                {!isSidebarCollapsed && <span className="text-sm font-medium text-brand-text">Router</span>}
+              </div>
+              {!isSidebarCollapsed && (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    const state = useStore.getState();
+                    state.addNodeWithAutoPosition('router', { name: 'New Router', description: '' });
+                    setTimeout(() => fitView({ padding: 0.2, duration: 400 }), 50);
+                  }}
+                  className="p-1.5 hover:bg-cyan-100 dark:hover:bg-cyan-900/50 rounded-md text-cyan-600 dark:text-cyan-400 transition-colors"
+                  aria-label="Add Router to canvas"
+                  data-testid="btn-add-router"
+                >
+                  <PlusCircle className="w-4 h-4" />
+                </button>
+              )}
+            </div>
+          )}
+
+          {rules.allowedNodes.includes('schema') && (
+            <div
+              className={`bg-brand-card border border-brand-border rounded-lg p-3 flex items-center ${isSidebarCollapsed ? 'justify-center' : 'justify-between'} cursor-grab hover:shadow-md hover:border-purple-400 dark:hover:border-purple-500 transition-all active:cursor-grabbing group relative`}
+              onDragStart={(event) => onDragStart(event, 'schema')}
+              draggable
+              title={isSidebarCollapsed ? "Drag Schema to canvas" : ""}
+            >
+              <div className="flex items-center gap-3">
+                <div className="bg-purple-100 dark:bg-purple-900/30 p-2 rounded-md group-hover:bg-purple-500 group-hover:text-white transition-colors">
+                  <FileCode className="w-4 h-4 text-purple-600 dark:text-purple-400 group-hover:text-white" />
+                </div>
+                {!isSidebarCollapsed && <span className="text-sm font-medium text-brand-text">Schema</span>}
+              </div>
+              {!isSidebarCollapsed && (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    const state = useStore.getState();
+                    state.addNodeWithAutoPosition('schema', { name: 'New Schema', description: '' });
+                    setTimeout(() => fitView({ padding: 0.2, duration: 400 }), 50);
+                  }}
+                  className="p-1.5 hover:bg-purple-100 dark:hover:bg-purple-900/50 rounded-md text-purple-600 dark:text-purple-400 transition-colors"
+                  aria-label="Add Schema to canvas"
+                  data-testid="btn-add-schema"
+                >
+                  <PlusCircle className="w-4 h-4" />
+                </button>
+              )}
+            </div>
+          )}
 
           <div className="my-2 border-t border-brand-border opacity-50" />
 
           {/* Tool Node */}
-          <div
-            className={`bg-brand-card border border-brand-border rounded-lg p-3 flex items-center ${isSidebarCollapsed ? 'justify-center' : 'justify-between'} cursor-grab hover:shadow-md hover:border-blue-400 dark:hover:border-blue-500 transition-all active:cursor-grabbing group relative`}
-            onDragStart={(event) => onDragStart(event, 'tool')}
-            draggable
-            title={isSidebarCollapsed ? "Drag Tool to canvas" : ""}
-          >
-            <div className="flex items-center gap-3">
-              <div className="bg-blue-100 dark:bg-blue-900/30 p-2 rounded-md group-hover:bg-blue-500 group-hover:text-white transition-colors">
-                <Settings className="w-4 h-4 text-blue-600 dark:text-blue-400 group-hover:text-white" />
+          {rules.allowedNodes.includes('tool') && (
+            <div
+              className={`bg-brand-card border border-brand-border rounded-lg p-3 flex items-center ${isSidebarCollapsed ? 'justify-center' : 'justify-between'} cursor-grab hover:shadow-md hover:border-blue-400 dark:hover:border-blue-500 transition-all active:cursor-grabbing group relative`}
+              onDragStart={(event) => onDragStart(event, 'tool')}
+              draggable
+              title={isSidebarCollapsed ? "Drag Tool to canvas" : ""}
+            >
+              <div className="flex items-center gap-3">
+                <div className="bg-blue-100 dark:bg-blue-900/30 p-2 rounded-md group-hover:bg-blue-500 group-hover:text-white transition-colors">
+                  <Settings className="w-4 h-4 text-blue-600 dark:text-blue-400 group-hover:text-white" />
+                </div>
+                {!isSidebarCollapsed && <span className="text-sm font-medium text-brand-text">Global Tool</span>}
               </div>
-              {!isSidebarCollapsed && <span className="text-sm font-medium text-brand-text">Global Tool</span>}
+              {!isSidebarCollapsed && (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    const state = useStore.getState();
+                    state.addNodeWithAutoPosition('tool', { name: 'New Tool', toolId: '' });
+                    setTimeout(() => fitView({ padding: 0.2, duration: 400 }), 50);
+                  }}
+                  className="p-1.5 hover:bg-blue-100 dark:hover:bg-blue-900/50 rounded-md text-blue-600 dark:text-blue-400 transition-colors"
+                  aria-label="Add Tool to canvas"
+                >
+                  <PlusCircle className="w-4 h-4" />
+                </button>
+              )}
             </div>
-            {!isSidebarCollapsed && (
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  const state = useStore.getState();
-                  state.addNodeWithAutoPosition('tool', { name: 'New Tool', toolId: '' });
-                  setTimeout(() => fitView({ padding: 0.2, duration: 400 }), 50);
-                }}
-                className="p-1.5 hover:bg-blue-100 dark:hover:bg-blue-900/50 rounded-md text-blue-600 dark:text-blue-400 transition-colors"
-                aria-label="Add Tool to canvas"
-              >
-                <PlusCircle className="w-4 h-4" />
-              </button>
-            )}
-          </div>
+          )}
 
           {/* Custom Tool Node */}
-          <div
-            className={`bg-brand-card border border-brand-border rounded-lg p-3 flex items-center ${isSidebarCollapsed ? 'justify-center' : 'justify-between'} cursor-grab hover:shadow-md hover:border-emerald-400 dark:hover:border-emerald-500 transition-all active:cursor-grabbing group relative`}
-            onDragStart={(event) => onDragStart(event, 'customTool')}
-            draggable
-            title={isSidebarCollapsed ? "Drag Custom Tool to canvas" : ""}
-          >
-            <div className="flex items-center gap-3">
-              <div className="bg-emerald-100 dark:bg-emerald-900/30 p-2 rounded-md group-hover:bg-emerald-500 group-hover:text-white transition-colors">
-                <PlusCircle className="w-4 h-4 text-emerald-600 dark:text-emerald-400 group-hover:text-white" />
+          {rules.allowedNodes.includes('customTool') && (
+            <div
+              className={`bg-brand-card border border-brand-border rounded-lg p-3 flex items-center ${isSidebarCollapsed ? 'justify-center' : 'justify-between'} cursor-grab hover:shadow-md hover:border-emerald-400 dark:hover:border-emerald-500 transition-all active:cursor-grabbing group relative`}
+              onDragStart={(event) => onDragStart(event, 'customTool')}
+              draggable
+              title={isSidebarCollapsed ? "Drag Custom Tool to canvas" : ""}
+            >
+              <div className="flex items-center gap-3">
+                <div className="bg-emerald-100 dark:bg-emerald-900/30 p-2 rounded-md group-hover:bg-emerald-500 group-hover:text-white transition-colors">
+                  <PlusCircle className="w-4 h-4 text-emerald-600 dark:text-emerald-400 group-hover:text-white" />
+                </div>
+                {!isSidebarCollapsed && <span className="text-sm font-medium text-brand-text">Custom Tool</span>}
               </div>
-              {!isSidebarCollapsed && <span className="text-sm font-medium text-brand-text">Custom Tool</span>}
+              {!isSidebarCollapsed && (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    const state = useStore.getState();
+                    state.addNodeWithAutoPosition('customTool', { name: 'New Custom Tool', toolId: '' });
+                    setTimeout(() => fitView({ padding: 0.2, duration: 400 }), 50);
+                  }}
+                  className="p-1.5 hover:bg-emerald-100 dark:hover:bg-emerald-900/50 rounded-md text-emerald-600 dark:text-emerald-400 transition-colors"
+                  aria-label="Add Custom Tool to canvas"
+                >
+                  <PlusCircle className="w-4 h-4" />
+                </button>
+              )}
             </div>
-            {!isSidebarCollapsed && (
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  const state = useStore.getState();
-                  state.addNodeWithAutoPosition('customTool', { name: 'New Custom Tool', toolId: '' });
-                  setTimeout(() => fitView({ padding: 0.2, duration: 400 }), 50);
-                }}
-                className="p-1.5 hover:bg-emerald-100 dark:hover:bg-emerald-900/50 rounded-md text-emerald-600 dark:text-emerald-400 transition-colors"
-                aria-label="Add Custom Tool to canvas"
-              >
-                <PlusCircle className="w-4 h-4" />
-              </button>
-            )}
-          </div>
+          )}
 
           {/* MCP Node */}
-          <div
-            className={`bg-brand-card border border-brand-border rounded-lg p-3 flex items-center ${isSidebarCollapsed ? 'justify-center' : 'justify-between'} cursor-grab hover:shadow-md hover:border-orange-400 dark:hover:border-orange-500 transition-all active:cursor-grabbing group relative`}
-            onDragStart={(event) => onDragStart(event, 'mcp')}
-            draggable
-            title={isSidebarCollapsed ? "Drag MCP Server to canvas" : ""}
-          >
-            <div className="flex items-center gap-3">
-              <div className="bg-orange-100 dark:bg-orange-900/30 p-2 rounded-md group-hover:bg-orange-500 group-hover:text-white transition-colors">
-                <Upload className="w-4 h-4 text-orange-600 dark:text-orange-400 group-hover:text-white" />
+          {rules.allowedNodes.includes('mcp') && (
+            <div
+              className={`bg-brand-card border border-brand-border rounded-lg p-3 flex items-center ${isSidebarCollapsed ? 'justify-center' : 'justify-between'} cursor-grab hover:shadow-md hover:border-orange-400 dark:hover:border-orange-500 transition-all active:cursor-grabbing group relative`}
+              onDragStart={(event) => onDragStart(event, 'mcp')}
+              draggable
+              title={isSidebarCollapsed ? "Drag MCP Server to canvas" : ""}
+            >
+              <div className="flex items-center gap-3">
+                <div className="bg-orange-100 dark:bg-orange-900/30 p-2 rounded-md group-hover:bg-orange-500 group-hover:text-white transition-colors">
+                  <Upload className="w-4 h-4 text-orange-600 dark:text-orange-400 group-hover:text-white" />
+                </div>
+                {!isSidebarCollapsed && <span className="text-sm font-medium text-brand-text">MCP Server</span>}
               </div>
-              {!isSidebarCollapsed && <span className="text-sm font-medium text-brand-text">MCP Server</span>}
+              {!isSidebarCollapsed && (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    const state = useStore.getState();
+                    state.addNodeWithAutoPosition('mcp', { name: 'New MCP Server', serverId: '' });
+                    setTimeout(() => fitView({ padding: 0.2, duration: 400 }), 50);
+                  }}
+                  className="p-1.5 hover:bg-orange-100 dark:hover:bg-orange-900/50 rounded-md text-orange-600 dark:text-orange-400 transition-colors"
+                  aria-label="Add MCP Server to canvas"
+                >
+                  <PlusCircle className="w-4 h-4" />
+                </button>
+              )}
             </div>
-            {!isSidebarCollapsed && (
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  const state = useStore.getState();
-                  state.addNodeWithAutoPosition('mcp', { name: 'New MCP Server', serverId: '' });
-                  setTimeout(() => fitView({ padding: 0.2, duration: 400 }), 50);
-                }}
-                className="p-1.5 hover:bg-orange-100 dark:hover:bg-orange-900/50 rounded-md text-orange-600 dark:text-orange-400 transition-colors"
-                aria-label="Add MCP Server to canvas"
-              >
-                <PlusCircle className="w-4 h-4" />
-              </button>
-            )}
-          </div>
+          )}
 
           {/* Usability Cards */}
           <div

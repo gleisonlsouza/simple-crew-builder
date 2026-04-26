@@ -41,7 +41,10 @@ export const SimulationLog = ({ logs, isCollapsed, onToggle }: SimulationLogProp
 
     {/* Log Content */}
     {!isCollapsed && (
-      <div className="flex-1 overflow-y-auto p-4 font-mono text-[11px] space-y-3 selection:bg-indigo-500/30">
+      <div 
+        data-testid="simulation-log-container"
+        className="flex-1 overflow-y-auto p-4 font-mono text-[11px] space-y-3 selection:bg-indigo-500/30"
+      >
         <AnimatePresence initial={false}>
           {logs.map((log) => (
             <motion.div

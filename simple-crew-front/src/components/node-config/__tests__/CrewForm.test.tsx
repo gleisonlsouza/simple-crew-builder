@@ -67,6 +67,7 @@ describe('CrewForm', () => {
       { id: 'm1', name: 'GPT-4', model_type: 'LLM', provider: 'openai' },
       { id: 'm2', name: 'Claude 3', model_type: 'LLM', provider: 'anthropic' }
     ] as any,
+    framework: 'crewai',
   };
 
   beforeEach(() => {
